@@ -1,0 +1,168 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Organization {
+  id           String         @id @default(uuid())
+  name         String
+  slug         String?        @unique
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  users        User[]
+  invitations  Invitation[]
+  projects     Project[]
+  tasks        Task[]
+  timesheets   Timesheet[]
+  timeTrackings TimeTracking[]
+}
+
+enum Role {
+  OWNER
+  MEMBER
+  CLIENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model User {
+  id               String            @id @default(uuid())
+  name             String
+  email            String            @unique
+  passwordHash     String
+  role             Role
+  status           UserStatus        @default(ACTIVE)
+  organizationId   String
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  // Relations
+  clientProjects   Project[]         @relation("ProjectClient")
+  managedProjects  Project[]         @relation("ProjectManager")
+  projectAssignees ProjectAssignee[]
+  taskAssignees    TaskAssignee[]
+  timesheets       Timesheet[]
+  timeTrackings    TimeTracking[]
+}
+
+model Invitation {
+  id             String       @id @default(uuid())
+  email          String
+  role           Role
+  token          String       @unique
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accepted       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+}
+
+enum ProjectStatus {
+  PLANNING
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model Project {
+  id                   String            @id @default(uuid())
+  name                 String
+  description          String?
+  notes                String?
+  organizationId       String
+  organization         Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  clientId             String?
+  client               User?             @relation("ProjectClient", fields: [clientId], references: [id], onDelete: SetNull)
+  projectManagerId     String?
+  projectManager       User?             @relation("ProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
+  status               ProjectStatus     @default(PLANNING)
+  startDate            DateTime
+  endDate              DateTime?
+  isOngoing            Boolean           @default(false)
+  totalAllocatedHours  Float?
+  priority             Priority          @default(MEDIUM)
+  createdAt            DateTime          @default(now())
+  
+  // Relations
+  assignees            ProjectAssignee[]
+  tasks                Task[]
+  timeTrackings        TimeTracking[]
+}
+
+model ProjectAssignee {
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+}
+
+model Task {
+  id             String         @id @default(uuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  allocatedHours Float?
+  status         String         @default("TODO") // "TODO", "IN_PROGRESS", "DONE"
+  priority       Priority       @default(MEDIUM)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  
+  // Relations
+  assignees      TaskAssignee[]
+  timeTrackings  TimeTracking[]
+}
+
+model TaskAssignee {
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+}
+
+model Timesheet {
+  id             String       @id @default(uuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date           DateTime
+  hours          Float
+  description    String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+}
+
+model TimeTracking {
+  id             String       @id @default(uuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId         String?
+  task           Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  startTime      DateTime
+  endTime        DateTime?
+  description    String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+}
