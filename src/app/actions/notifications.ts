@@ -27,7 +27,7 @@ export async function createNotification(params: NotificationParams) {
     const owners = await prisma.user.findMany({
       where: { organizationId: params.organizationId, role: 'OWNER' }
     });
-    owners.forEach(o => recipients.add(o.id));
+    owners.forEach((o: any) => recipients.add(o.id));
 
     if (params.projectId) {
       const project = await prisma.project.findUnique({
@@ -36,7 +36,7 @@ export async function createNotification(params: NotificationParams) {
       });
       if (project) {
         if (project.projectManagerId) recipients.add(project.projectManagerId);
-        project.assignees.forEach(a => recipients.add(a.userId));
+        project.assignees.forEach((a: any) => recipients.add(a.userId));
         
         if (params.clientVisible && project.clientId) {
           recipients.add(project.clientId);
@@ -53,7 +53,7 @@ export async function createNotification(params: NotificationParams) {
         if (!params.projectId) params.projectId = task.projectId;
         if (task.project?.projectManagerId) recipients.add(task.project.projectManagerId);
         
-        task.assignees.forEach(a => recipients.add(a.userId));
+        task.assignees.forEach((a: any) => recipients.add(a.userId));
         
         if (params.clientVisible && task.project?.clientId) {
           recipients.add(task.project.clientId);
