@@ -2,7 +2,9 @@
 
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-
+type ProjectIdOnly = {
+      id: string;
+    };
 export async function getDashboardDataAction() {
   try {
     const session = await getSession();
@@ -15,9 +17,7 @@ export async function getDashboardDataAction() {
       status: ProjectStatus | string | null;
     };
 
-    type ProjectIdOnly = {
-      id: string;
-    };
+    
 
     type TimeLog = {
       id: string;
