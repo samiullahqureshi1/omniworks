@@ -3,8 +3,7 @@
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { createNotification } from './notifications';
-import { ProjectStatus, Priority, Role } from '@prisma/client';
-
+import { Priority, Role } from '@prisma/client';
 import { hashPassword } from '@/lib/auth'; // Ensure this is imported
 
 // Quick Client Creation inside project form:
@@ -76,7 +75,7 @@ export async function createProjectAction(data: {
   notes?: string;
   clientId?: string;
   projectManagerId?: string;
-  status: ProjectStatus;
+status: string;
   startDate: string;
   endDate?: string;
   isOngoing: boolean;
@@ -186,7 +185,7 @@ export async function updateProjectAction(
     notes?: string;
     clientId?: string;
     projectManagerId?: string;
-    status: ProjectStatus;
+status: string;
     startDate: string;
     endDate?: string;
     isOngoing: boolean;
