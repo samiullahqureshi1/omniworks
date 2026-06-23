@@ -1,75 +1,84 @@
-'use server';
+"use server";
 
-import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { prisma } from "@/lib/db";
+import { getSession } from "@/lib/auth";
 
 export async function getDashboardDataAction() {
   try {
     const session = await getSession();
-    if (!session) return { error: 'Unauthorized' };
+    if (!session) return { error: "Unauthorized" };
 
     const { role, userId, organizationId } = session;
-type ProjectStatus = 'PLANNING' | 'IN_PROGRESS' | 'ON_HOLD' | 'COMPLETE';
+    type ProjectStatus = "PLANNING" | "IN_PROGRESS" | "ON_HOLD" | "COMPLETE";
 
-type ProjectStatusOnly = {
-  status: ProjectStatus | string | null;
-};
+    type ProjectStatusOnly = {
+      status: ProjectStatus | string | null;
+    };
 
-type ProjectIdOnly = {
-  id: string;
-};
+    type ProjectIdOnly = {
+      id: string;
+    };
 
-type TimeLog = {
-  id: string;
-  activeWorkedDuration: number | null;
-  startTime: Date;
-  endTime: Date | null;
-  notes: string | null;
-  member?: {
-    id?: string;
-    name?: string | null;
-    email?: string | null;
-    role?: string;
-  } | null;
-  project?: {
-    id?: string;
-    name?: string | null;
-  } | null;
-  task?: {
-    id?: string;
-    title?: string | null;
-  } | null;
-};
+    type TimeLog = {
+      id: string;
+      activeWorkedDuration: number | null;
+      startTime: Date;
+      endTime: Date | null;
+      notes: string | null;
+      member?: {
+        id?: string;
+        name?: string | null;
+        email?: string | null;
+        role?: string;
+      } | null;
+      project?: {
+        id?: string;
+        name?: string | null;
+      } | null;
+      task?: {
+        id?: string;
+        title?: string | null;
+      } | null;
+    };
     // 1. Owner Dashboard View
-    if (role === 'OWNER') {
-      const [totalProjects, totalUsers, totalHoursObj, recentLogs] = await Promise.all([
-        prisma.project.count({ where: { organizationId } }),
-        prisma.user.count({ where: { organizationId } }),
-        prisma.timeEntry.aggregate({
-          where: { organizationId },
-          _sum: { activeWorkedDuration: true },
-        }),
-        prisma.timeEntry.findMany({
-          where: { organizationId },
-          include: { member: { select: { name: true, role: true } } },
-          orderBy: { createdAt: 'desc' },
-          take: 5,
-        }),
-      ]);
+    if (role === "OWNER") {
+      const [totalProjects, totalUsers, totalHoursObj, recentLogs] =
+        await Promise.all([
+          prisma.project.count({ where: { organizationId } }),
+          prisma.user.count({ where: { organizationId } }),
+          prisma.timeEntry.aggregate({
+            where: { organizationId },
+            _sum: { activeWorkedDuration: true },
+          }),
+          prisma.timeEntry.findMany({
+            where: { organizationId },
+            include: { member: { select: { name: true, role: true } } },
+            orderBy: { createdAt: "desc" },
+            take: 5,
+          }),
+        ]);
 
       const projects = await prisma.project.findMany({
         where: { organizationId },
         select: { status: true },
       });
-const projectStatusCounts = {
-  PLANNING: projects.filter((p: ProjectStatusOnly) => p.status === 'PLANNING').length,
-  IN_PROGRESS: projects.filter((p: ProjectStatusOnly) => p.status === 'IN_PROGRESS').length,
-  ON_HOLD: projects.filter((p: ProjectStatusOnly) => p.status === 'ON_HOLD').length,
-  COMPLETE: projects.filter((p: ProjectStatusOnly) => p.status === 'COMPLETE').length,
-};
+      const projectStatusCounts = {
+        PLANNING: projects.filter(
+          (p: ProjectStatusOnly) => p.status === "PLANNING",
+        ).length,
+        IN_PROGRESS: projects.filter(
+          (p: ProjectStatusOnly) => p.status === "IN_PROGRESS",
+        ).length,
+        ON_HOLD: projects.filter(
+          (p: ProjectStatusOnly) => p.status === "ON_HOLD",
+        ).length,
+        COMPLETE: projects.filter(
+          (p: ProjectStatusOnly) => p.status === "COMPLETE",
+        ).length,
+      };
       return {
         success: true,
-        view: 'OWNER',
+        view: "OWNER",
         metrics: {
           totalProjects,
           totalUsers,
@@ -81,45 +90,48 @@ const projectStatusCounts = {
     }
 
     // 2. Member/Project Manager Dashboard View
-    if (role === 'MEMBER') {
+    if (role === "MEMBER") {
       // Find projects where user is assigned or is Project Manager
-      const [assignedProjects, myHoursObj, myTasks, recentLogs] = await Promise.all([
-        prisma.project.findMany({
-          where: {
-            organizationId,
-            OR: [
-              { assignees: { some: { userId } } },
-              { projectManagerId: userId },
-            ],
-          },
-          include: {
-            projectManager: { select: { name: true } },
-          },
-        }),
-        prisma.timeEntry.aggregate({
-          where: { memberId: userId, organizationId },
-          _sum: { activeWorkedDuration: true },
-        }),
-        prisma.task.findMany({
-          where: {
-            project: { organizationId },
-            assignees: { some: { userId } },
-          },
-          include: { project: { select: { name: true } }, status: true },
-        }),
-        prisma.timeEntry.findMany({
-          where: { organizationId },
-          orderBy: { createdAt: 'desc' },
-          take: 5,
-        }),
-      ]);
+      const [assignedProjects, myHoursObj, myTasks, recentLogs] =
+        await Promise.all([
+          prisma.project.findMany({
+            where: {
+              organizationId,
+              OR: [
+                { assignees: { some: { userId } } },
+                { projectManagerId: userId },
+              ],
+            },
+            include: {
+              projectManager: { select: { name: true } },
+            },
+          }),
+          prisma.timeEntry.aggregate({
+            where: { memberId: userId, organizationId },
+            _sum: { activeWorkedDuration: true },
+          }),
+          prisma.task.findMany({
+            where: {
+              project: { organizationId },
+              assignees: { some: { userId } },
+            },
+            include: { project: { select: { name: true } }, status: true },
+          }),
+          prisma.timeEntry.findMany({
+            where: { organizationId },
+            orderBy: { createdAt: "desc" },
+            take: 5,
+          }),
+        ]);
 
       // Check if they manage any projects to customize view
       // const managedProjects = assignedProjects.filter((p) => p.projectManagerId === userId);
-const managedProjects = assignedProjects.filter((p: any) => p.projectManagerId === userId);
+      const managedProjects = assignedProjects.filter(
+        (p: any) => p.projectManagerId === userId,
+      );
       return {
         success: true,
-        view: managedProjects.length > 0 ? 'PROJECT_MANAGER' : 'MEMBER',
+        view: managedProjects.length > 0 ? "PROJECT_MANAGER" : "MEMBER",
         metrics: {
           totalProjects: assignedProjects.length,
           totalManagedProjects: managedProjects.length,
@@ -132,7 +144,7 @@ const managedProjects = assignedProjects.filter((p: any) => p.projectManagerId =
     }
 
     // 3. Client Dashboard View
-    if (role === 'CLIENT') {
+    if (role === "CLIENT") {
       // Client only sees projects they are linked to
       const clientProjects = await prisma.project.findMany({
         where: { organizationId, clientId: userId },
@@ -148,7 +160,7 @@ const managedProjects = assignedProjects.filter((p: any) => p.projectManagerId =
       // Sum hours logged by team members on these projects
       // We'll query actual logs to sum up hours
       // const projectIds = clientProjects.map((p) => p.id);
-const projectIds = clientProjects.map((p: ProjectIdOnly) => p.id);
+      const projectIds = clientProjects.map((p: ProjectIdOnly) => p.id);
       // Let's get total hours of tracking for these projects
       const trackingLogs = await prisma.timeEntry.findMany({
         where: {
@@ -159,15 +171,15 @@ const projectIds = clientProjects.map((p: ProjectIdOnly) => p.id);
 
       let totalHours = 0;
       // trackingLogs.forEach((log) => {
-trackingLogs.forEach((log: TimeLog) => {
-      if (log.activeWorkedDuration) {
+      trackingLogs.forEach((log: TimeLog) => {
+        if (log.activeWorkedDuration) {
           totalHours += log.activeWorkedDuration / 3600;
         }
       });
 
       return {
         success: true,
-        view: 'CLIENT',
+        view: "CLIENT",
         metrics: {
           totalProjects: clientProjects.length,
           totalHours: Math.round(totalHours * 100) / 100,
@@ -176,9 +188,9 @@ trackingLogs.forEach((log: TimeLog) => {
       };
     }
 
-    return { error: 'Unknown user role' };
+    return { error: "Unknown user role" };
   } catch (error: any) {
-    return { error: error.message || 'Failed to fetch dashboard statistics.' };
+    return { error: error.message || "Failed to fetch dashboard statistics." };
   }
 }
 
@@ -190,14 +202,14 @@ export async function getReportsDataAction(filter: {
 }) {
   try {
     const session = await getSession();
-    if (!session) return { error: 'Unauthorized' };
+    if (!session) return { error: "Unauthorized" };
 
     const { role, organizationId, userId } = session;
 
     // Filter construction
     let trackingWhereClause: any = { organizationId };
 
-    if (role === 'CLIENT') {
+    if (role === "CLIENT") {
       // Client can only view reports for their own projects
       const clientProjects = await prisma.project.findMany({
         where: { organizationId, clientId: userId },
@@ -205,7 +217,7 @@ export async function getReportsDataAction(filter: {
       });
       const ids = clientProjects.map((p) => p.id);
       trackingWhereClause.projectId = { in: ids };
-    } else if (role === 'MEMBER') {
+    } else if (role === "MEMBER") {
       // Member can see only their own reports or projects they manage
       const memberProjects = await prisma.project.findMany({
         where: {
@@ -218,7 +230,7 @@ export async function getReportsDataAction(filter: {
         select: { id: true },
       });
       // const ids = memberProjects.map((p) => p.id);
-const ids = memberProjects.map((p: ProjectIdOnly) => p.id);
+      const ids = memberProjects.map((p: ProjectIdOnly) => p.id);
       trackingWhereClause.projectId = { in: ids };
 
       // unless filtering by user, they only see their own time logs
@@ -230,7 +242,7 @@ const ids = memberProjects.map((p: ProjectIdOnly) => p.id);
     if (filter.projectId) {
       trackingWhereClause.projectId = filter.projectId;
     }
-    if (filter.userId && role === 'OWNER') {
+    if (filter.userId && role === "OWNER") {
       trackingWhereClause.memberId = filter.userId;
     }
     if (filter.startDate || filter.endDate) {
@@ -253,19 +265,19 @@ const ids = memberProjects.map((p: ProjectIdOnly) => p.id);
         project: { select: { id: true, name: true } },
         task: { select: { id: true, title: true } },
       },
-      orderBy: { startTime: 'desc' },
-    });
+      orderBy: { startTime: "desc" },
+    })
 
     const summaryByProject: Record<string, number> = {};
     const summaryByUser: Record<string, number> = {};
     let totalHours = 0;
 
     // logs.forEach((log) => {
-logs.forEach((log: TimeLog) => {
-    const hours = (log.activeWorkedDuration || 0) / 3600;
-      
-      const pName = log.project?.name || 'Unknown';
-      const uName = log.member?.name || 'Unknown';
+    logs.forEach((log: TimeLog) => {
+      const hours = (log.activeWorkedDuration || 0) / 3600;
+
+      const pName = log.project?.name || "Unknown";
+      const uName = log.member?.name || "Unknown";
 
       summaryByProject[pName] = (summaryByProject[pName] || 0) + hours;
       summaryByUser[uName] = (summaryByUser[uName] || 0) + hours;
@@ -280,19 +292,19 @@ logs.forEach((log: TimeLog) => {
     return {
       success: true,
       // logs: logs.map((l) => {
-logs: logs.map((l: TimeLog) => {
-      const h = l.activeWorkedDuration
+      logs: logs.map((l: TimeLog) => {
+        const h = l.activeWorkedDuration
           ? Math.round((l.activeWorkedDuration / 3600) * 100) / 100
           : 0;
         return {
           id: l.id,
-          userName: l.member?.name || 'Unknown',
+          userName: l.member?.name || "Unknown",
           // projectName: l.project.name,
-projectName: l.project?.name || 'Unknown',
-          taskName: l.task?.title || 'N/A',
+          projectName: l.project?.name || "Unknown",
+          taskName: l.task?.title || "N/A",
           startTime: l.startTime,
           endTime: l.endTime,
-          description: l.notes || '',
+          description: l.notes || "",
           hours: h,
         };
       }),
@@ -300,6 +312,6 @@ projectName: l.project?.name || 'Unknown',
       grandTotalHours: Math.round(totalHours * 100) / 100,
     };
   } catch (error: any) {
-    return { error: error.message || 'Failed to fetch report data.' };
+    return { error: error.message || "Failed to fetch report data." };
   }
 }
