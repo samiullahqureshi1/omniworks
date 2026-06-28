@@ -6,7 +6,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Send, Eye, EyeOff, Hash, User as UserIcon, MessageSquare } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Send, Eye, EyeOff, Hash, User as UserIcon, MessageSquare, MoreVertical, Pencil, Trash2, Check, X } from 'lucide-react';
 
 interface ProjectConversationProps {
   projectId: string;
@@ -28,6 +29,10 @@ export default function ProjectConversation({ projectId, currentUser, organizati
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentions, setMentions] = useState<string[]>([]);
   const [taskMentions, setTaskMentions] = useState<string[]>([]);
+
+  // Edit/Delete state
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -60,7 +65,7 @@ export default function ProjectConversation({ projectId, currentUser, organizati
   }, [projectId]);
 
   useEffect(() => {
-    if (lastEvent?.event === 'message_sent') {
+    if (['message_sent', 'message_edited', 'message_deleted'].includes(lastEvent?.event || '')) {
       fetchMessages();
     }
   }, [lastEvent]);
@@ -134,6 +139,37 @@ export default function ProjectConversation({ projectId, currentUser, organizati
     }
   };
 
+  const handleEditMessage = async (messageId: string) => {
+    if (!editContent.trim()) return;
+    try {
+      const res = await fetch(`/api/projects/${projectId}/messages/${messageId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: editContent.trim() })
+      });
+      if (res.ok) {
+        setEditingMessageId(null);
+        setEditContent('');
+        fetchMessages();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/messages/${messageId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        fetchMessages();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   // Render text with highlights for mentions
   const renderContent = (text: string) => {
     // Basic rendering for @name and #taskId (visual only here)
@@ -175,7 +211,7 @@ export default function ProjectConversation({ projectId, currentUser, organizati
           messages.map((msg) => {
             const isMe = msg.senderId === currentUser.userId;
             return (
-              <div key={msg.id} className={`flex gap-3 max-w-[85%] ${isMe ? 'ml-auto flex-row-reverse' : ''}`}>
+              <div key={msg.id} className={`flex gap-3 max-w-[85%] group ${isMe ? 'ml-auto flex-row-reverse' : ''}`}>
                 <Avatar className="h-8 w-8 mt-1 shrink-0 border border-slate-200">
                   <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">
                     {msg.sender.name.substring(0, 2)}
@@ -187,7 +223,7 @@ export default function ProjectConversation({ projectId, currentUser, organizati
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider">{msg.sender.role}</span>
                     <span className="text-[10px] text-slate-400">{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
-                  <div className={`px-4 py-2.5 rounded-2xl ${
+                  <div className={`px-4 py-2.5 rounded-2xl relative ${
                     isMe 
                       ? 'bg-primary text-primary-foreground rounded-tr-sm shadow-sm' 
                       : 'bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-sm shadow-sm'
@@ -197,9 +233,58 @@ export default function ProjectConversation({ projectId, currentUser, organizati
                         <EyeOff size={10} className="mr-1" /> Internal
                       </Badge>
                     )}
-                    <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
-                      {renderContent(msg.content)}
-                    </p>
+                    
+                    {msg.deletedAt ? (
+                      <p className="text-sm italic opacity-70">This message was deleted.</p>
+                    ) : editingMessageId === msg.id ? (
+                      <div className="flex flex-col gap-2 min-w-[200px]">
+                        <textarea 
+                          value={editContent}
+                          onChange={(e) => setEditContent(e.target.value)}
+                          className="w-full text-sm bg-transparent border-b border-primary-foreground/30 focus:border-primary-foreground focus:outline-none resize-none p-1 placeholder:text-primary-foreground/50 text-white custom-scrollbar"
+                          rows={2}
+                          autoFocus
+                        />
+                        <div className="flex justify-end gap-1">
+                          <Button size="icon" variant="ghost" className="h-6 w-6 hover:bg-primary-foreground/20 text-white" onClick={() => setEditingMessageId(null)}>
+                            <X size={12} />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-6 w-6 hover:bg-primary-foreground/20 text-white" onClick={() => handleEditMessage(msg.id)}>
+                            <Check size={12} />
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+                          {renderContent(msg.content)}
+                        </p>
+                        {msg.isEdited && (
+                          <span className="text-[9px] opacity-60 absolute bottom-1 right-3">(edited)</span>
+                        )}
+                        
+                        {/* Edit/Delete Actions */}
+                        {isMe && (
+                          <div className={`absolute top-2 ${isMe ? '-left-8' : '-right-8'} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                                  <MoreVertical size={14} />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align={isMe ? "end" : "start"} className="w-32">
+                                <DropdownMenuItem onClick={() => { setEditingMessageId(msg.id); setEditContent(msg.content); }}>
+                                  <Pencil size={14} className="mr-2" /> Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDeleteMessage(msg.id)}>
+                                  <Trash2 size={14} className="mr-2" /> Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -217,7 +302,7 @@ export default function ProjectConversation({ projectId, currentUser, organizati
               {suggestionType === 'user' && filteredUsers.map(u => (
                 <div 
                   key={u.id} 
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-\[#fbfaf7\] dark:hover:bg-slate-800 cursor-pointer"
                   onClick={() => insertMention(u.id, u.name.replace(/\s+/g, ''), 'user')}
                 >
                   <Avatar className="h-6 w-6"><AvatarFallback className="text-[10px]">{u.name.substring(0,2)}</AvatarFallback></Avatar>
@@ -230,7 +315,7 @@ export default function ProjectConversation({ projectId, currentUser, organizati
               {suggestionType === 'task' && filteredTasks.map(t => (
                 <div 
                   key={t.id} 
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-\[#fbfaf7\] dark:hover:bg-slate-800 cursor-pointer"
                   onClick={() => insertMention(t.id, t.title.replace(/\s+/g, ''), 'task')}
                 >
                   <Hash className="h-4 w-4 text-muted-foreground" />
@@ -278,7 +363,7 @@ export default function ProjectConversation({ projectId, currentUser, organizati
                   }
                 }}
                 placeholder="Type a message... Use @ to mention someone or # to reference a task"
-                className="w-full min-h-[60px] max-h-32 resize-none rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all custom-scrollbar"
+                className="w-full min-h-[60px] max-h-32 resize-none rounded-xl border border-slate-200 dark:border-slate-800 bg-\[#fbfaf7\] dark:bg-slate-900/50 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all custom-scrollbar"
               />
             </div>
             <Button 

@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>OmniWork Client - Log in</title>
+  <style>
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(to bottom, #e8f4ff, #dcf0ff);
+      color: #333;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    .hidden { display: none !important; }
+    
+    #login-view {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      padding: 20px;
+      position: relative;
+    }
+
+    .form-group {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+      width: 100%;
+      max-width: 320px;
+    }
+    
+    .form-group label {
+      width: 110px;
+      text-align: right;
+      margin-right: 10px;
+      font-size: 14px;
+      color: #555;
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="password"],
+    .form-group input[type="email"] {
+      flex: 1;
+      padding: 6px;
+      border: 1px solid #99c2e8;
+      border-radius: 2px;
+      font-size: 14px;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+      background: #fff;
+    }
+    
+    .form-group input[type="text"]:focus,
+    .form-group input[type="password"]:focus,
+    .form-group input[type="email"]:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      max-width: 320px;
+      margin-bottom: 20px;
+      padding-left: 120px; /* Aligns with input fields */
+      box-sizing: border-box;
+    }
+
+    .checkbox-group input {
+      margin: 0 5px 0 0;
+    }
+
+    .checkbox-group label {
+      font-size: 13px;
+      color: #555;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    button {
+      padding: 8px 24px;
+      border-radius: 4px;
+      border: 1px solid rgba(0,0,0,0.1);
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      color: white;
+      text-shadow: 0 1px 1px rgba(0,0,0,0.2);
+    }
+
+    #login-btn {
+      background: linear-gradient(to bottom, #2398db, #087bc0);
+    }
+    
+    #login-btn:hover {
+      background: linear-gradient(to bottom, #2ba5ed, #0a8edc);
+    }
+
+    #cancel-btn {
+      background: linear-gradient(to bottom, #a0a0a0, #888888);
+    }
+
+    #cancel-btn:hover {
+      background: linear-gradient(to bottom, #b3b3b3, #999999);
+    }
+
+    .links {
+      font-size: 13px;
+      color: #0066cc;
+      text-decoration: none;
+    }
+    
+    .links:hover {
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .settings-icon {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      width: 20px;
+      height: 20px;
+      opacity: 0.5;
+      cursor: pointer;
+    }
+    
+    .settings-icon:hover {
+      opacity: 0.8;
+    }
+
+    /* List Box Styles */
+    .view-container {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      padding: 20px;
+      position: relative;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    
+    .view-title {
+      font-size: 14px;
+      color: #666;
+      margin: 0 0 10px 0;
+      font-weight: normal;
+    }
+
+    .list-box {
+      border: 1px solid #3ca4ff;
+      background: white;
+      flex: 1;
+      overflow-y: auto;
+      margin-bottom: 15px;
+      border-radius: 2px;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .list-item {
+      display: flex;
+      padding: 8px;
+      border-bottom: 1px solid #f0f0f0;
+      cursor: pointer;
+      align-items: center;
+    }
+    
+    .list-item:hover {
+      background-color: #f0f8ff;
+    }
+
+    .list-item.selected {
+      background-color: #d0e8ff;
+    }
+
+    .list-item-icon {
+      width: 32px;
+      height: 32px;
+      margin-right: 12px;
+      background: #eef5fb;
+      border: 1px solid #cce0f5;
+      border-radius: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    
+    .list-item-icon::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 8px;
+      background: #3ca4ff;
+    }
+    .list-item-icon::after {
+      content: "";
+      position: absolute;
+      top: 12px; left: 4px; width: 10px; height: 16px;
+      background: #aab;
+    }
+
+    .list-item-content {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .list-item-title {
+      font-size: 13px;
+      color: #000;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .list-item-subtitle {
+      font-size: 11px;
+      color: #666;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .bottom-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .action-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    
+    #status { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; color: white; }
+    .status-active { background: #10b981; }
+    .status-idle { background: #f59e0b; }
+    .status-stopped { background: #64748b; }
+  </style>
+</head>
+<body>
+  
+  <div id="login-view" class="view-container">
+    <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%;">
+      <div class="form-group">
+        <label>Login or Email</label>
+        <input type="email" id="email" value="" />
+      </div>
+      
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="password" value="" />
+      </div>
+
+      <div class="checkbox-group">
+        <input type="checkbox" id="remember-me" checked />
+        <label for="remember-me">Remember me</label>
+      </div>
+
+      <div class="button-group">
+        <button id="login-btn">Log In</button>
+        <button id="cancel-btn">Cancel</button>
+      </div>
+
+      <a class="links" id="forgot-link">Forget login or password?</a>
+      
+      <p id="error-msg" style="color: #ef4444; font-size: 13px; position: absolute; bottom: 30px;"></p>
+    </div>
+
+    <!-- Gear Icon SVG -->
+    <svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+    </svg>
+  </div>
+
+  <div id="project-select-view" class="view-container hidden">
+    <h3 class="view-title" id="select-title">Please Select your Project</h3>
+    
+    <div class="list-box" id="list-container">
+      <!-- Items generated via JS -->
+    </div>
+
+    <div class="bottom-bar">
+      <div class="checkbox-group" style="margin-bottom: 0; padding-left: 0;">
+        <input type="checkbox" id="make-default" />
+        <label for="make-default" style="font-size: 14px; font-weight: 500; color: #000;">Make the selection default</label>
+      </div>
+
+      <div class="action-buttons">
+        <button id="ok-btn">OK</button>
+        <button id="cancel-select-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="task-select-view" class="view-container hidden">
+    <div style="margin-bottom: 10px;">
+      <div style="font-size: 13px; color: #777;">You have selected project</div>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 5px;">
+        <div id="selected-project-name" style="font-size: 18px; font-weight: bold; color: #333; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Project Name</div>
+        <button id="switch-project-btn" style="padding: 4px 10px; font-size: 11px; background: linear-gradient(to bottom, #2398db, #087bc0); color: white; border: none; border-radius: 4px; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.2);">Switch</button>
+      </div>
+    </div>
+
+    <div style="height: 1px; background: #ddd; margin: 15px 0;"></div>
+
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 5px;">
+      <div style="font-size: 14px; color: #555;">Please select Task</div>
+      <div style="display: flex; gap: 5px;">
+        <button style="padding: 3px 8px; font-size: 11px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; color: #333; cursor: pointer;">Refresh List</button>
+        <button style="padding: 3px 8px; font-size: 11px; background: #ccc; border: 1px solid #aaa; border-radius: 4px; color: #888; cursor: not-allowed;" disabled>Add Task</button>
+      </div>
+    </div>
+    
+    <select id="task-dropdown" style="width: 100%; padding: 6px; font-size: 13px; border: 1px solid #99c2e8; border-radius: 4px; margin: 0 0 15px 0; background: #fff; color: #000; box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);"></select>
+
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 5px;">
+      <div style="font-size: 14px; color: #555;">Enter Task Details (max:500 chars)</div>
+      <button style="padding: 3px 8px; font-size: 11px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; color: #333; cursor: pointer;">Recent Messages</button>
+    </div>
+
+    <textarea id="task-details" style="width: 100%; height: 100px; padding: 8px; font-size: 13px; border: 1px solid #ccc; border-radius: 2px; resize: none; margin-bottom: 15px; box-sizing: border-box;"></textarea>
+
+    <div style="display: flex; align-items: center; margin-bottom: 20px; font-size: 13px; color: #000;">
+      <input type="checkbox" id="remind-me" style="margin: 0 8px 0 0;" />
+      <label for="remind-me" style="margin-right: 8px;">Remind me again in</label>
+      <input type="number" value="30" style="width: 50px; padding: 4px; border: 1px solid #ccc; border-radius: 2px; text-align: center; margin: 0 8px 0 0; background: #fff; color: #000;" />
+      <span>minutes</span>
+    </div>
+
+    <div class="action-buttons">
+      <button id="start-task-btn" style="background: linear-gradient(to bottom, #2398db, #087bc0); padding: 8px 30px;">Start</button>
+      <button id="back-to-project-btn" style="background: linear-gradient(to bottom, #a0a0a0, #888888); padding: 8px 30px;">Back</button>
+    </div>
+  </div>
+
+  <div id="tracker-view" class="view-container hidden" style="align-items: center; justify-content: center;">
+    <h2 id="tracking-title" style="margin-bottom: 30px; text-align: center;">Tracking</h2>
+
+    <div style="margin: 20px 0; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;">
+      <span id="timer-display" style="font-size: 48px; font-family: monospace; color: #333;">00:00:00</span>
+      <span id="status" class="status-active">ACTIVE</span>
+    </div>
+
+    <div style="margin-top: 30px; display: flex; gap: 15px;">
+      <button id="stop-btn" style="background: linear-gradient(to bottom, #e53935, #c62828);">Stop Tracking</button>
+    </div>
+  </div>
+
+  <script>
+    let projectsData = [];
+    let selectedProjectId = null;
+    let selectedTaskId = null;
+    let viewState = 'login'; // login, project, task, tracker
+    
+    // Login
+    document.getElementById('login-btn').addEventListener('click', () => {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      if (!email || !password) {
+        document.getElementById('error-msg').innerText = 'Email and password required.';
+        return;
+      }
+      document.getElementById('error-msg').innerText = 'Logging in...';
+      window.electronAPI.login({ email, password });
+    });
+
+    document.getElementById('cancel-btn').addEventListener('click', () => {
+      document.getElementById('email').value = '';
+      document.getElementById('password').value = '';
+      document.getElementById('error-msg').innerText = '';
+    });
+
+    window.electronAPI.onLoginSuccess((data) => {
+      document.getElementById('login-view').classList.add('hidden');
+      document.getElementById('project-select-view').classList.remove('hidden');
+      projectsData = data.projects;
+      renderProjectList();
+    });
+
+    window.electronAPI.onLoginError((err) => {
+      document.getElementById('error-msg').innerText = err;
+    });
+
+    function renderProjectList() {
+      viewState = 'project';
+      document.getElementById('select-title').innerText = 'Please Select your Project';
+      
+      const container = document.getElementById('list-container');
+      container.innerHTML = '';
+      
+      projectsData.forEach(p => {
+        const div = document.createElement('div');
+        div.className = `list-item ${selectedProjectId === p.id ? 'selected' : ''}`;
+        div.innerHTML = `
+          <div class="list-item-icon"></div>
+          <div class="list-item-content">
+            <div class="list-item-title">${p.name}</div>
+            <div class="list-item-subtitle">${p.tasks.length} tasks available</div>
+          </div>
+        `;
+        div.addEventListener('click', () => {
+          selectedProjectId = p.id;
+          renderProjectList(); // re-render to show selection
+        });
+        container.appendChild(div);
+      });
+    }
+
+    function renderTaskSelectView() {
+      viewState = 'task';
+      const project = projectsData.find(p => p.id === selectedProjectId);
+      if (!project) return;
+      
+      document.getElementById('selected-project-name').innerText = project.name;
+      
+      const dropdown = document.getElementById('task-dropdown');
+      dropdown.innerHTML = '';
+      
+      if (project.tasks.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.innerText = 'No tasks available';
+        dropdown.appendChild(opt);
+        selectedTaskId = null;
+      } else {
+        project.tasks.forEach((t, i) => {
+          const opt = document.createElement('option');
+          opt.value = t.id;
+          opt.innerText = t.title;
+          dropdown.appendChild(opt);
+          if (i === 0) selectedTaskId = t.id; // Select first by default
+        });
+      }
+      
+      document.getElementById('project-select-view').classList.add('hidden');
+      document.getElementById('task-select-view').classList.remove('hidden');
+    }
+
+    document.getElementById('task-dropdown').addEventListener('change', (e) => {
+      selectedTaskId = e.target.value;
+    });
+
+    // Navigation and Selection
+    document.getElementById('ok-btn').addEventListener('click', () => {
+      if (viewState === 'project') {
+        if (!selectedProjectId) return alert('Please select a project first.');
+        renderTaskSelectView();
+      }
+    });
+
+    document.getElementById('cancel-select-btn').addEventListener('click', () => {
+      document.getElementById('project-select-view').classList.add('hidden');
+      document.getElementById('login-view').classList.remove('hidden');
+      selectedProjectId = null;
+      selectedTaskId = null;
+    });
+    
+    document.getElementById('switch-project-btn').addEventListener('click', () => {
+      document.getElementById('task-select-view').classList.add('hidden');
+      document.getElementById('project-select-view').classList.remove('hidden');
+      renderProjectList();
+    });
+
+    document.getElementById('back-to-project-btn').addEventListener('click', () => {
+      document.getElementById('task-select-view').classList.add('hidden');
+      document.getElementById('project-select-view').classList.remove('hidden');
+      renderProjectList();
+    });
+
+    document.getElementById('start-task-btn').addEventListener('click', () => {
+      if (!selectedTaskId) return alert('Please select a task first.');
+      startTracking();
+    });
+
+    function startTracking() {
+      viewState = 'tracker';
+      document.getElementById('task-select-view').classList.add('hidden');
+      document.getElementById('tracker-view').classList.remove('hidden');
+      
+      const project = projectsData.find(p => p.id === selectedProjectId);
+      const task = project.tasks.find(t => t.id === selectedTaskId);
+      document.getElementById('tracking-title').innerText = `${project.name}\n${task ? task.title : 'No Task'}`;
+      
+      window.electronAPI.startTimer({ projectId: selectedProjectId, taskId: selectedTaskId });
+    }
+
+    document.getElementById('stop-btn').addEventListener('click', () => {
+      window.electronAPI.stopTimer();
+      document.getElementById('tracker-view').classList.add('hidden');
+      document.getElementById('project-select-view').classList.remove('hidden');
+      renderProjectList(); // Reset to project selection
+    });
+
+    // Timer Sync
+    window.electronAPI.onTimerTick((timer) => {
+      const totalSeconds = timer.activeWorkedDuration + timer.idleDuration;
+      const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+      const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+      const s = String(totalSeconds % 60).padStart(2, '0');
+      document.getElementById('timer-display').innerText = `${h}:${m}:${s}`;
+    });
+
+    window.electronAPI.onStatusUpdate(({ status }) => {
+      const statusEl = document.getElementById('status');
+      statusEl.innerText = status.toUpperCase();
+      statusEl.className = '';
+      statusEl.classList.add(`status-${status}`);
+    });
+
+    // Global Activity Listener
+    const events = ['mousemove', 'keydown', 'mousedown', 'wheel'];
+    events.forEach(event => {
+      window.addEventListener(event, () => {
+        if (viewState === 'tracker') {
+          window.electronAPI.reportActivity();
+        }
+      });
+    });
+
+  </script>
+</body>
+</html>

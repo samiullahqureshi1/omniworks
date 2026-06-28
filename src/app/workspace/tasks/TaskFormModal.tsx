@@ -16,6 +16,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { createTaskAction, updateTaskAction } from "@/app/actions/tasks";
 import { quickCreateProjectAction } from "@/app/actions/projects";
+import { RichTextEditor } from "@/components/ui/RichTextEditor";
 
 type TaskInput = {
   id: string; // temp unique id
@@ -275,14 +276,14 @@ export default function TaskFormModal({
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
         <DialogContent
-          className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto custom-scrollbar bg-slate-50/50"
+          className="sm:max-w-[700px] p-0 flex flex-col h-[85vh] overflow-hidden bg-background"
           onInteractOutside={(e) => {
             if (isQuickProjectOpen || activeTaskAssigneeIndex !== null)
               e.preventDefault();
           }}
         >
-          <DialogHeader>
-            <DialogTitle>
+          <DialogHeader className="px-6 py-4 border-b shrink-0 bg-background sticky top-0 z-20">
+            <DialogTitle className="text-xl">
               {isEditing
                 ? isLimitedEdit
                   ? "Update Task Status"
@@ -296,8 +297,10 @@ export default function TaskFormModal({
             </DialogDescription>
           </DialogHeader>
 
+          <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
           {(() => {
             const projectTotalHours = selectedProject?.totalAllocatedHours || 0;
+            const projectUsedHours = selectedProject?.usedHours || 0;
             const oldTaskHours =
               isEditing && task ? task.allocatedHours || 0 : 0;
             const alreadyAllocated =
@@ -314,7 +317,7 @@ export default function TaskFormModal({
               projectTotalHours > 0 && draftHours > remainingHours;
 
             return (
-              <form onSubmit={handleSave} className="space-y-6 pt-4">
+              <form id="task-form" onSubmit={handleSave} className="space-y-6">
                 {!isClient && projectTotalHours > 0 && (
                   <div
                     className={`p-4 rounded-lg border text-sm space-y-2 shadow-sm ${isExceeded ? "bg-destructive/10 border-destructive text-destructive" : "bg-muted/30 border-slate-200 dark:border-slate-800"}`}
@@ -343,7 +346,7 @@ export default function TaskFormModal({
 
                 {/* Project Selection (only when creating) */}
                 {!isEditing && (
-                  <div className="space-y-2 bg-white p-4 rounded-lg border shadow-sm">
+                  <div className="space-y-2 bg-white dark:bg-[#1f1f1f] p-4 rounded-lg border shadow-sm">
                     <label className="text-sm font-medium">
                       Project <span className="text-destructive">*</span>
                     </label>
@@ -351,7 +354,7 @@ export default function TaskFormModal({
                       required
                       value={projectId}
                       onChange={handleProjectSelectChange}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+                      className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
                     >
                       <option value="" disabled>
                         Select a project
@@ -375,8 +378,8 @@ export default function TaskFormModal({
 
                 {/* If Member is doing a limited edit */}
                 {isLimitedEdit ? (
-                  <div className="grid grid-cols-2 gap-4 bg-white p-4 rounded-lg border shadow-sm">
-                    <div className="col-span-2 p-3 bg-muted/50 rounded-md border text-sm">
+                  <div className="grid grid-cols-2 gap-4 bg-white dark:bg-[#1f1f1f] p-4 rounded-lg border shadow-sm">
+                    <div className="col-span-2 p-3 bg-muted/50 rounded-xl border text-sm">
                       <strong>Task:</strong> {task.title}
                       <br />
                       <span className="text-muted-foreground">
@@ -390,7 +393,7 @@ export default function TaskFormModal({
                         onChange={(e) =>
                           updateTaskInput(0, "statusId", e.target.value)
                         }
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
                       >
                         <option value="">No Status</option>
                         {taskStatuses.map((s) => (
@@ -419,7 +422,7 @@ export default function TaskFormModal({
                     {tasksInput.map((tInput, index) => (
                       <div
                         key={tInput.id}
-                        className="bg-white p-4 rounded-lg border shadow-sm space-y-4 relative"
+                        className="bg-white dark:bg-[#1f1f1f] p-4 rounded-lg border shadow-sm space-y-4 relative"
                       >
                         {!isEditing && tasksInput.length > 1 && (
                           <Button
@@ -463,7 +466,7 @@ export default function TaskFormModal({
                                   e.target.value,
                                 )
                               }
-                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                              className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
                             >
                               <option value="">No Status</option>
                               {taskStatuses.map((s) => (
@@ -479,14 +482,13 @@ export default function TaskFormModal({
                             <label className="text-sm font-medium">
                               Description
                             </label>
-                            <textarea
-                              className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                              value={tInput.description}
-                              onChange={(e) =>
+                            <RichTextEditor
+                              content={tInput.description}
+                              onChange={(val) =>
                                 updateTaskInput(
                                   index,
                                   "description",
-                                  e.target.value,
+                                  val,
                                 )
                               }
                               placeholder="Task details and instructions..."
@@ -506,7 +508,7 @@ export default function TaskFormModal({
                                   e.target.value,
                                 )
                               }
-                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                              className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
                             >
                               <option value="LOW">Low</option>
                               <option value="MEDIUM">Medium</option>
@@ -580,7 +582,7 @@ export default function TaskFormModal({
                                 Assignees
                               </label>
                             <div
-                              className="min-h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm cursor-pointer hover:border-primary/50 transition-colors flex flex-wrap gap-2 items-center"
+                              className="min-h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm cursor-pointer hover:border-primary/50 transition-colors flex flex-wrap gap-2 items-center"
                               onClick={() => setActiveTaskAssigneeIndex(index)}
                             >
                               {tInput.assignees.length === 0 ? (
@@ -623,11 +625,12 @@ export default function TaskFormModal({
                   </div>
                 )}
 
-                <DialogFooter className="sticky bottom-0 bg-slate-50/50 pt-4 backdrop-blur-md border-t mt-6">
+                <DialogFooter className="px-6 py-4 border-t shrink-0 bg-background sticky bottom-0 z-20">
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => onOpenChange(false)}
+                    className="rounded-full shadow-sm hover:bg-slate-50 transition-colors h-10 px-5 font-semibold text-sm border-slate-200"
                   >
                     Cancel
                   </Button>
@@ -636,6 +639,7 @@ export default function TaskFormModal({
                     disabled={
                       isPending || (!isEditing && !projectId) || isExceeded
                     }
+                    className="rounded-full shadow-sm h-10 px-5 font-semibold text-sm bg-foreground text-background hover:bg-foreground/90 transition-colors"
                   >
                     {isPending
                       ? "Saving..."
@@ -647,6 +651,7 @@ export default function TaskFormModal({
               </form>
             );
           })()}
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -709,7 +714,7 @@ export default function TaskFormModal({
             <DialogDescription>Assign members to this task.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-4">
-            <div className="border rounded-md p-3 max-h-[300px] overflow-y-auto space-y-1 bg-background shadow-inner custom-scrollbar">
+            <div className="border rounded-xl p-3 max-h-[300px] overflow-y-auto space-y-1 bg-background shadow-inner custom-scrollbar">
               {availableAssignees.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic">
                   No members available in this organization.

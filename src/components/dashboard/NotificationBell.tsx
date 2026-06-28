@@ -59,7 +59,7 @@ export function NotificationBell({ userId }: { userId: string }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden rounded-xl border-slate-200 shadow-xl">
-        <div className="flex items-center justify-between px-4 py-3 bg-slate-50/80 backdrop-blur-sm border-b">
+        <div className="flex items-center justify-between px-4 py-3 bg-\[#fbfaf7\]/80 backdrop-blur-sm border-b">
           <span className="font-semibold text-sm">Notifications</span>
           {unreadCount > 0 && (
             <Badge variant="secondary" className="text-xs bg-primary/10 text-primary hover:bg-primary/20">
@@ -79,7 +79,7 @@ export function NotificationBell({ userId }: { userId: string }) {
               <div 
                 key={notif.id}
                 onClick={() => handleRead(notif.id, notif.actionUrl)}
-                className={`p-4 border-b last:border-b-0 cursor-pointer transition-colors hover:bg-slate-50 ${!notif.isRead ? 'bg-primary/5' : ''}`}
+                className={`p-4 border-b last:border-b-0 cursor-pointer transition-colors hover:bg-\[#fbfaf7\] ${!notif.isRead ? 'bg-primary/5' : ''}`}
               >
                 <div className="flex gap-3">
                   <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${!notif.isRead ? 'bg-primary' : 'bg-transparent'}`} />
@@ -100,7 +100,7 @@ export function NotificationBell({ userId }: { userId: string }) {
           )}
         </div>
         
-        <div className="p-2 border-t bg-slate-50/80 backdrop-blur-sm">
+        <div className="p-2 border-t bg-\[#fbfaf7\]/80 backdrop-blur-sm">
           <Link href="/workspace/notifications" onClick={() => setIsOpen(false)}>
             <Button variant="ghost" size="sm" className="w-full text-xs font-medium text-primary hover:text-primary hover:bg-primary/10">
               View all notifications

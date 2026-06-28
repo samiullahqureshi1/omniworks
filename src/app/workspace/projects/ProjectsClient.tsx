@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useTransition } from "react";
+import React, { useState, useTransition, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,9 @@ import {
   ArrowRight,
   X,
   Trash2,
+  LayoutGrid,
+  List as ListIcon,
+  Table as TableIcon,
 } from "lucide-react";
 import {
   Table,
@@ -46,7 +50,10 @@ import {
   createProjectAction,
   deleteProjectAction,
   quickCreateClientAction,
+  updateProjectStatusAction,
 } from "@/app/actions/projects";
+import { RichTextEditor } from "@/components/ui/RichTextEditor";
+import { DndContext, DragEndEvent, useDraggable, useDroppable, DragOverlay } from "@dnd-kit/core";
 
 const formatDate = (dateInput: any) => {
   if (!dateInput) return "";
@@ -61,6 +68,140 @@ const formatDate = (dateInput: any) => {
     return String(dateInput);
   }
 };
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case "PLANNING":
+      return "bg-[#fbfaf7]0/10 text-slate-500 border-slate-500/20";
+    case "IN_PROGRESS":
+      return "bg-blue-500/10 text-blue-500 border-blue-500/20";
+    case "ON_HOLD":
+      return "bg-amber-500/10 text-amber-500 border-amber-500/20";
+    case "COMPLETE":
+      return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20";
+    default:
+      return "bg-[#fbfaf7]0/10 text-slate-500 border-slate-500/20";
+  }
+};
+
+const getPriorityColor = (priority: string) => {
+  switch (priority) {
+    case "LOW":
+      return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
+    case "MEDIUM":
+      return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
+    case "HIGH":
+      return "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400";
+    case "CRITICAL":
+      return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 font-bold";
+    default:
+      return "bg-slate-100 text-slate-600";
+  }
+};
+
+function KanbanColumn({ status, title, count, children }: any) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: status,
+  });
+
+  const getStatusBorderColor = (status: string) => {
+    switch (status) {
+      case "PLANNING": return "border-t-slate-400";
+      case "IN_PROGRESS": return "border-t-blue-500";
+      case "ON_HOLD": return "border-t-amber-500";
+      case "COMPLETE": return "border-t-emerald-500";
+      default: return "border-t-slate-400";
+    }
+  };
+
+  return (
+    <div ref={setNodeRef} className={`flex flex-col min-w-[340px] max-w-[340px] rounded-3xl border border-t-[4px] shadow-sm backdrop-blur-xl p-4 transition-all duration-300 ${getStatusBorderColor(status)} ${isOver ? 'bg-muted/80 border-primary shadow-md scale-[1.01]' : 'bg-muted/30 hover:bg-muted/40'}`}>
+      <div className="flex items-center justify-between mb-4 px-1">
+        <div className="flex items-center gap-2.5">
+          <h3 className="font-bold text-sm tracking-wide uppercase text-foreground/80">{title}</h3>
+          <Badge variant="secondary" className="text-[11px] font-bold h-6 px-2.5 bg-background rounded-full shadow-sm">
+            {count}
+          </Badge>
+        </div>
+      </div>
+      <div className="flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2 flex-1">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function KanbanCard({ project, currentUser, handleDelete }: any) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: project.id,
+    data: project,
+  });
+
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+  } : undefined;
+
+  const priorityHex = getPriorityColor(project.priority).includes("red") ? "#ef4444" : getPriorityColor(project.priority).includes("orange") ? "#f97316" : getPriorityColor(project.priority).includes("blue") ? "#3b82f6" : "#cbd5e1";
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`bg-background border border-border/50 rounded-2xl p-5 shadow-sm hover:shadow-xl hover:border-primary/40 hover:-translate-y-1 transition-all duration-300 group flex flex-col gap-4 cursor-grab active:cursor-grabbing relative overflow-hidden ${isDragging ? 'opacity-40 scale-95 z-50 shadow-2xl' : ''}`}
+      {...attributes}
+      {...listeners}
+    >
+      {/* Decorative Gradient Background on hover */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+      
+      {/* Dynamic Priority Indicator */}
+      <div className="absolute top-0 left-0 w-1.5 h-full rounded-l-2xl transition-all duration-300 group-hover:w-2" style={{ backgroundColor: priorityHex }} />
+      
+      <div className="flex justify-between items-start gap-3 pl-2 relative z-10">
+        <Link href={`/workspace/projects/${project.id}`} className="font-bold text-[15px] leading-tight text-foreground/90 group-hover:text-primary transition-colors line-clamp-2" onPointerDown={(e) => e.stopPropagation()}>
+          {project.name}
+        </Link>
+        {currentUser.role === "OWNER" && (
+          <div onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(project.id); }} className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 hover:bg-destructive/10 text-destructive/70 hover:text-destructive rounded-lg cursor-pointer shrink-0">
+            <Trash2 size={16} />
+          </div>
+        )}
+      </div>
+      
+      {project.client && (
+        <span className="text-[12px] font-medium text-muted-foreground pl-2 truncate relative z-10 flex items-center gap-1.5">
+          <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
+          {project.client.name}
+        </span>
+      )}
+      
+      <div className="flex justify-between items-end mt-auto pt-3 pl-2 border-t border-border/40 relative z-10">
+        <div className="flex -space-x-2 overflow-hidden py-1">
+          {project.projectManager && (
+            <Avatar className="h-7 w-7 border-2 border-background ring-2 ring-purple-500/20 z-10 shadow-sm transition-transform group-hover:scale-110 duration-300">
+              <AvatarFallback className="bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700 text-[10px] font-bold">{project.projectManager.name.substring(0,2).toUpperCase()}</AvatarFallback>
+            </Avatar>
+          )}
+          {project.assignees.slice(0, 3).map((a: any) => (
+            <Avatar key={a.user.id} className="h-7 w-7 border-2 border-background shadow-sm transition-transform group-hover:scale-110 duration-300">
+              <AvatarFallback className="bg-gradient-to-br from-primary/10 to-primary/20 text-primary text-[10px] font-bold">{a.user.name.substring(0,2).toUpperCase()}</AvatarFallback>
+            </Avatar>
+          ))}
+          {project.assignees.length > 3 && (
+            <div className="h-7 w-7 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground shadow-sm z-10">
+              +{project.assignees.length - 3}
+            </div>
+          )}
+        </div>
+        
+        <div className={`text-[11px] font-medium flex items-center gap-1.5 px-2.5 py-1 rounded-full shadow-sm ${project.isOngoing ? 'bg-emerald-500/10 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>
+          {project.isOngoing ? <Clock size={12} className="text-emerald-500 animate-pulse" /> : <Calendar size={12} />}
+          {project.isOngoing ? "Ongoing" : project.endDate ? formatDate(project.endDate) : "No Date"}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ProjectsClient({
   initialProjects,
@@ -81,6 +222,16 @@ export default function ProjectsClient({
   // Modal States
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isQuickClientOpen, setIsQuickClientOpen] = useState(false);
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (searchParams.get('new') === 'true') {
+      setIsCreateOpen(true);
+      router.replace('/workspace/projects');
+    }
+  }, [searchParams, router]);
   const [isMemberSelectOpen, setIsMemberSelectOpen] = useState(false);
 
   // Form States
@@ -96,6 +247,29 @@ export default function ProjectsClient({
     assigneeId: string;
   };
   const [projectTasks, setProjectTasks] = useState<DraftTask[]>([]);
+  const [description, setDescription] = useState("");
+  const [viewMode, setViewMode] = useState<"TABLE" | "KANBAN" | "LIST">("TABLE");
+
+  useEffect(() => {
+    const savedView = localStorage.getItem("omniwork_project_view");
+    if (savedView === "TABLE" || savedView === "KANBAN" || savedView === "LIST") {
+      setViewMode(savedView);
+    }
+  }, []);
+
+  const handleSetViewMode = (mode: "TABLE" | "KANBAN" | "LIST") => {
+    setViewMode(mode);
+    localStorage.setItem("omniwork_project_view", mode);
+  };
+
+  // DND State
+  const [confirmStatusModal, setConfirmStatusModal] = useState<{
+    isOpen: boolean;
+    projectId: string | null;
+    projectName: string;
+    newStatus: string | null;
+  }>({ isOpen: false, projectId: null, projectName: "", newStatus: null });
+  const [activeDragProject, setActiveDragProject] = useState<any>(null);
 
   const clients = users.filter(
     (u) => u.role === "CLIENT" && u.status === "ACTIVE",
@@ -109,14 +283,14 @@ export default function ProjectsClient({
     const matchesSearch = p.name
       .toLowerCase()
       .includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === "ALL" || p.status === statusFilter;
+    const matchesStatus = statusFilter === "ALL" || p.status?.name === statusFilter || p.status?.id === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "PLANNING":
-        return "bg-slate-500/10 text-slate-500 border-slate-500/20";
+        return "bg-[#fbfaf7]0/10 text-slate-500 border-slate-500/20";
       case "IN_PROGRESS":
         return "bg-blue-500/10 text-blue-500 border-blue-500/20";
       case "ON_HOLD":
@@ -124,23 +298,53 @@ export default function ProjectsClient({
       case "COMPLETE":
         return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20";
       default:
-        return "bg-slate-500/10 text-slate-500 border-slate-500/20";
+        return "bg-[#fbfaf7]0/10 text-slate-500 border-slate-500/20";
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "LOW":
-        return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
-      case "MEDIUM":
-        return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
-      case "HIGH":
-        return "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400";
-      case "CRITICAL":
-        return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 font-bold";
-      default:
-        return "bg-slate-100 text-slate-600";
+  const handleDragStart = (e: any) => {
+    setActiveDragProject(e.active.data.current);
+  };
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    setActiveDragProject(null);
+    const { active, over } = e;
+    
+    if (!over) return;
+    
+    const projectId = active.id as string;
+    const project = projects.find(p => p.id === projectId);
+    const newStatus = over.id as string;
+
+    if (project && project.status !== newStatus) {
+      setConfirmStatusModal({
+        isOpen: true,
+        projectId,
+        projectName: project.name,
+        newStatus,
+      });
     }
+  };
+
+  const handleConfirmStatusChange = () => {
+    if (!confirmStatusModal.projectId || !confirmStatusModal.newStatus) return;
+    
+    const { projectId, newStatus } = confirmStatusModal;
+    
+    startTransition(async () => {
+      // Optimistic update
+      setProjects(projects.map(p => p.id === projectId ? { ...p, status: newStatus } : p));
+      setConfirmStatusModal({ isOpen: false, projectId: null, projectName: "", newStatus: null });
+      
+      const res = await updateProjectStatusAction(projectId, newStatus as any);
+      if (res.error) {
+        toast.error(res.error);
+        // Revert optimistic update
+        window.location.reload();
+      } else {
+        toast.success(`Project moved to ${newStatus.replace("_", " ")}`);
+      }
+    });
   };
 
   const handleCreateProject = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -152,7 +356,7 @@ export default function ProjectsClient({
       clientId: (formData.get("clientId") as string) || undefined,
       projectManagerId:
         (formData.get("projectManagerId") as string) || undefined,
-      description: formData.get("description") as string,
+      description: description,
       status: formData.get("status") as any,
       priority: formData.get("priority") as any,
       startDate: formData.get("startDate") as string,
@@ -263,7 +467,7 @@ export default function ProjectsClient({
         )}
       </div>
 
-      {/* Filters */}
+      {/* Filters & Views */}
       <div className="flex flex-col sm:flex-row justify-between gap-4 p-1">
         <div className="relative w-full sm:max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -274,9 +478,42 @@ export default function ProjectsClient({
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex bg-muted/50 p-1 rounded-xl shadow-sm border">
+            <button
+              onClick={() => handleSetViewMode("TABLE")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === "TABLE"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <TableIcon size={14} /> Table
+            </button>
+            <button
+              onClick={() => handleSetViewMode("KANBAN")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === "KANBAN"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <LayoutGrid size={14} /> Kanban
+            </button>
+            <button
+              onClick={() => handleSetViewMode("LIST")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === "LIST"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <ListIcon size={14} /> List
+            </button>
+          </div>
+          
           <select
-            className="flex h-10 rounded-md border bg-background px-3 text-sm shadow-sm focus:ring-1 focus:ring-ring w-[160px]"
+            className="flex h-9 rounded-xl border bg-background px-3 text-sm shadow-sm focus:ring-1 focus:ring-ring min-w-[140px]"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
@@ -289,8 +526,9 @@ export default function ProjectsClient({
         </div>
       </div>
 
-      {/* Projects Table */}
-      <div className="bg-background rounded-xl border shadow-sm overflow-hidden">
+      {/* Projects Views */}
+      {viewMode === "TABLE" && (
+      <div className="bg-background rounded-xl border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/30">
@@ -339,9 +577,10 @@ export default function ProjectsClient({
                   <TableCell>
                     <Badge
                       variant="outline"
-                      className={`${getStatusColor(p.status)} shadow-sm`}
+                      className="shadow-sm border-transparent text-white"
+                      style={{ backgroundColor: p.status?.color || '#cccccc' }}
                     >
-                      {p.status.replace("_", " ")}
+                      {p.status?.name || "No Status"}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -441,23 +680,141 @@ export default function ProjectsClient({
           </TableBody>
         </Table>
       </div>
+      )}
+
+      {viewMode === "KANBAN" && (
+        <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar h-[calc(100vh-220px)] animate-in fade-in zoom-in-95 duration-200">
+            {["PLANNING", "IN_PROGRESS", "ON_HOLD", "COMPLETE"].map((status) => {
+              const statusProjects = filteredProjects.filter(p => p.status === status);
+              return (
+                <KanbanColumn key={status} status={status} title={status.replace("_", " ")} count={statusProjects.length}>
+                  {statusProjects.map(p => (
+                    <KanbanCard key={p.id} project={p} currentUser={currentUser} handleDelete={handleDelete} />
+                  ))}
+                  {statusProjects.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-xl text-muted-foreground text-xs bg-background/50">
+                      No projects
+                    </div>
+                  )}
+                </KanbanColumn>
+              );
+            })}
+          </div>
+          <DragOverlay>
+            {activeDragProject ? (
+              <div className="opacity-80 rotate-2 scale-105 transition-transform cursor-grabbing">
+                <KanbanCard project={activeDragProject} currentUser={currentUser} handleDelete={handleDelete} />
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      )}
+
+      {viewMode === "LIST" && (
+        <div className="flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+          {filteredProjects.length === 0 ? (
+            <div className="h-48 flex flex-col items-center justify-center space-y-3 bg-background rounded-xl border border-dashed">
+              <FolderKanban size={40} className="opacity-20" />
+              <p className="text-muted-foreground text-sm">No projects found.</p>
+            </div>
+          ) : (
+            filteredProjects.map(p => (
+              <div key={p.id} className="bg-background border rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row gap-5 items-start sm:items-center relative overflow-hidden group">
+                <div className="absolute left-0 top-0 w-1.5 h-full" style={{ backgroundColor: getPriorityColor(p.priority).includes("red") ? "#ef4444" : getPriorityColor(p.priority).includes("orange") ? "#f97316" : getPriorityColor(p.priority).includes("blue") ? "#3b82f6" : "#cbd5e1" }} />
+                
+                <div className="flex-1 min-w-0 pl-2">
+                  <div className="flex items-center gap-3 mb-1">
+                    <Link href={`/workspace/projects/${p.id}`} className="text-lg font-bold text-foreground hover:text-primary transition-colors truncate">
+                      {p.name}
+                    </Link>
+                    <Badge variant="outline" className="border-transparent font-medium text-white" style={{ backgroundColor: p.status?.color || '#cccccc' }}>{p.status?.name || "No Status"}</Badge>
+                  </div>
+                  {p.description ? (
+                    <div className="text-sm text-muted-foreground line-clamp-2 max-w-3xl" dangerouslySetInnerHTML={{ __html: p.description }} />
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">No description provided.</p>
+                  )}
+                  {p.client && <p className="text-xs text-muted-foreground mt-2 font-medium">Client: {p.client.name}</p>}
+                </div>
+                
+                <div className="flex items-center gap-6 sm:ml-auto w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0">
+                  <div className="flex flex-col gap-1 min-w-[120px]">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Timeline</span>
+                    <div className="flex flex-col gap-0.5 text-xs font-medium">
+                      <span className="flex items-center gap-1.5 text-foreground"><Calendar size={12} className="text-muted-foreground" /> {formatDate(p.startDate)}</span>
+                      {p.isOngoing ? (
+                        <span className="flex items-center gap-1.5 text-emerald-600"><Clock size={12} /> Ongoing</span>
+                      ) : p.endDate ? (
+                        <span className="flex items-center gap-1.5 text-foreground"><ArrowRight size={12} className="text-muted-foreground" /> {formatDate(p.endDate)}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col gap-1 min-w-[120px]">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Team</span>
+                    <div className="flex -space-x-2 overflow-hidden py-1">
+                      {p.projectManager && (
+                        <Avatar className="h-8 w-8 border-2 border-background ring-2 ring-purple-500 z-10" title={`PM: ${p.projectManager.name}`}>
+                          <AvatarFallback className="bg-purple-100 text-purple-700 text-xs">{p.projectManager.name.substring(0,2)}</AvatarFallback>
+                        </Avatar>
+                      )}
+                      {p.assignees.slice(0, 4).map((a: any) => (
+                        <Avatar key={a.user.id} className="h-8 w-8 border-2 border-background" title={a.user.name}>
+                          <AvatarFallback className="bg-primary/10 text-primary text-xs">{a.user.name.substring(0,2)}</AvatarFallback>
+                        </Avatar>
+                      ))}
+                      {p.assignees.length > 4 && (
+                        <div className="h-8 w-8 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-medium text-muted-foreground z-10">
+                          +{p.assignees.length - 4}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 pl-4 border-l border-border/50">
+                    <Button variant="outline" size="sm" asChild className="h-9 font-medium shadow-sm">
+                      <Link href={`/workspace/projects/${p.id}`}>View</Link>
+                    </Button>
+                    {currentUser.role === "OWNER" && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-9 w-9">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={() => handleDelete(p.id)}>
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete Project
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {/* Create Project Modal */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent
-          className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto custom-scrollbar"
+          className="sm:max-w-[700px] h-[90vh] p-0 flex flex-col overflow-hidden"
           onInteractOutside={(e) => {
             if (isMemberSelectOpen || isQuickClientOpen) e.preventDefault();
           }}
         >
-          <DialogHeader>
+          <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shrink-0 shadow-sm">
             <DialogTitle>Create New Project</DialogTitle>
             <DialogDescription>
               Setup a new project workspace, assign a PM, and configure
               timelines.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreateProject} className="space-y-6 pt-4">
+          <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+            <form onSubmit={handleCreateProject} className="space-y-6 pb-6">
             {/* Basics */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2 col-span-2">
@@ -472,11 +829,11 @@ export default function ProjectsClient({
               </div>
               <div className="space-y-2 col-span-2">
                 <label className="text-sm font-medium">Description</label>
-                <textarea
-                  name="description"
-                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                <RichTextEditor
+                  content={description}
+                  onChange={setDescription}
                   placeholder="Brief overview of the project..."
-                ></textarea>
+                />
               </div>
             </div>
 
@@ -494,7 +851,7 @@ export default function ProjectsClient({
                 </div>
                 <select
                   name="clientId"
-                  className="flex h-9 w-full rounded-md border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                  className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
                 >
                   <option value="">No Client (Internal)</option>
                   {clients.map((c) => (
@@ -513,7 +870,7 @@ export default function ProjectsClient({
                 </label>
                 <select
                   name="projectManagerId"
-                  className="flex h-9 w-full rounded-md border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                  className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
                 >
                   <option value="">Unassigned</option>
                   {members.map((m) => (
@@ -531,7 +888,7 @@ export default function ProjectsClient({
                 <label className="text-sm font-medium">Status</label>
                 <select
                   name="status"
-                  className="flex h-9 w-full rounded-md border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                  className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
                 >
                   <option value="PLANNING">Planning</option>
                   <option value="IN_PROGRESS">In Progress</option>
@@ -544,7 +901,7 @@ export default function ProjectsClient({
                 <select
                   name="priority"
                   defaultValue="MEDIUM"
-                  className="flex h-9 w-full rounded-md border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                  className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
                 >
                   <option value="LOW">Low</option>
                   <option value="MEDIUM">Medium</option>
@@ -584,7 +941,7 @@ export default function ProjectsClient({
                 {!isOngoing ? (
                   <Input name="endDate" type="date" required={!isOngoing} />
                 ) : (
-                  <div className="flex h-9 w-full items-center justify-center rounded-md border bg-muted/50 text-xs text-muted-foreground italic">
+                  <div className="flex h-9 w-full items-center justify-center rounded-xl border bg-muted/50 text-xs text-muted-foreground italic">
                     Project has no end date
                   </div>
                 )}
@@ -628,7 +985,7 @@ export default function ProjectsClient({
               <label className="text-sm font-medium">Assign Team Members</label>
               <div
                 onClick={() => setIsMemberSelectOpen(true)}
-                className="flex min-h-[40px] w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm cursor-pointer hover:bg-muted/50 transition-colors"
+                className="flex min-h-[40px] w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-sm cursor-pointer hover:bg-muted/50 transition-colors"
               >
                 {selectedAssignees.length === 0 ? (
                   <span className="text-muted-foreground">
@@ -691,7 +1048,7 @@ export default function ProjectsClient({
                   {projectTasks.map((task, index) => (
                     <div
                       key={task.id}
-                      className="p-3 border rounded-md bg-muted/20 space-y-3 relative group"
+                      className="p-3 border rounded-xl bg-muted/20 space-y-3 relative group"
                     >
                       <button
                         type="button"
@@ -740,7 +1097,7 @@ export default function ProjectsClient({
                             newTasks[index].status = e.target.value;
                             setProjectTasks(newTasks);
                           }}
-                          className="flex h-8 w-full rounded-md border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
+                          className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
                         >
                           <option value="TODO">To Do</option>
                           <option value="IN_PROGRESS">In Progress</option>
@@ -754,7 +1111,7 @@ export default function ProjectsClient({
                             newTasks[index].priority = e.target.value as any;
                             setProjectTasks(newTasks);
                           }}
-                          className="flex h-8 w-full rounded-md border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
+                          className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
                         >
                           <option value="LOW">Low</option>
                           <option value="MEDIUM">Medium</option>
@@ -769,7 +1126,7 @@ export default function ProjectsClient({
                             newTasks[index].assigneeId = e.target.value;
                             setProjectTasks(newTasks);
                           }}
-                          className="flex h-8 w-full rounded-md border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
+                          className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
                         >
                           <option value="">Unassigned</option>
                           {members.map((m) => (
@@ -785,7 +1142,7 @@ export default function ProjectsClient({
               )}
             </div>
 
-            <DialogFooter className="pt-4 border-t mt-6">
+            <DialogFooter className="pt-4 border-t mt-6 sticky bottom-0 bg-background pb-2">
               <Button
                 type="button"
                 variant="outline"
@@ -798,6 +1155,7 @@ export default function ProjectsClient({
               </Button>
             </DialogFooter>
           </form>
+          </div>
 
           {/* Quick Create Client Modal */}
           <Dialog open={isQuickClientOpen} onOpenChange={setIsQuickClientOpen}>
@@ -876,7 +1234,7 @@ export default function ProjectsClient({
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 pt-4">
-                <div className="border rounded-md p-3 max-h-[300px] overflow-y-auto space-y-1 bg-background shadow-inner custom-scrollbar">
+                <div className="border rounded-xl p-3 max-h-[300px] overflow-y-auto space-y-1 bg-background shadow-inner custom-scrollbar">
                   {members.length === 0 ? (
                     <p className="text-sm text-muted-foreground italic">
                       No members available to assign.
@@ -915,6 +1273,25 @@ export default function ProjectsClient({
               </div>
             </DialogContent>
           </Dialog>
+        </DialogContent>
+      </Dialog>
+      {/* Status Confirmation Modal */}
+      <Dialog open={confirmStatusModal.isOpen} onOpenChange={(isOpen) => !isOpen && setConfirmStatusModal({ isOpen: false, projectId: null, projectName: "", newStatus: null })}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Confirm Status Change</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to move <strong>{confirmStatusModal.projectName}</strong> to <strong>{confirmStatusModal.newStatus?.replace("_", " ")}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6">
+            <Button variant="outline" onClick={() => setConfirmStatusModal({ isOpen: false, projectId: null, projectName: "", newStatus: null })} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmStatusChange} disabled={isPending}>
+              {isPending ? "Moving..." : "Confirm Move"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

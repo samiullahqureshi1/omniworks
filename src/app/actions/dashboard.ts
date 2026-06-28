@@ -41,7 +41,7 @@ export async function getDashboardDataAction() {
    
     // 1. Owner Dashboard View
     if (role === "OWNER") {
-      const [totalProjects, totalUsers, totalHoursObj, recentLogs] =
+      const [totalProjects, totalUsers, totalHoursObj, recentLogs, recentTasks, pendingPastDueCount, totalCompleteTasks, totalPendingTasks] =
         await Promise.all([
           prisma.project.count({ where: { organizationId } }),
           prisma.user.count({ where: { organizationId } }),
@@ -55,24 +55,47 @@ export async function getDashboardDataAction() {
             orderBy: { createdAt: "desc" },
             take: 5,
           }),
+          prisma.task.findMany({
+            where: { organizationId },
+            include: {
+              project: { select: { name: true } },
+              assignees: { include: { user: { select: { name: true } } } },
+              status: true
+            },
+            orderBy: { createdAt: "desc" },
+            take: 10,
+          }),
+          prisma.task.count({
+            where: {
+              organizationId,
+              dueDate: { lt: new Date() },
+              status: { name: { not: "Done" } } // Approximation
+            }
+          }),
+          prisma.task.count({
+            where: { organizationId, status: { name: { in: ["Done", "Completed"] } } }
+          }),
+          prisma.task.count({
+            where: { organizationId, status: { name: { notIn: ["Done", "Completed"] } } }
+          })
         ]);
 
       const projects = await prisma.project.findMany({
         where: { organizationId },
-        select: { status: true },
+        include: { status: true },
       });
       const projectStatusCounts = {
         PLANNING: projects.filter(
-          (p: ProjectStatusOnly) => p.status === "PLANNING",
+          (p: any) => !p.status?.name || p.status?.name?.toLowerCase().includes('plan') || p.status?.name?.toLowerCase().includes('backlog')
         ).length,
         IN_PROGRESS: projects.filter(
-          (p: ProjectStatusOnly) => p.status === "IN_PROGRESS",
+          (p: any) => p.status?.name?.toLowerCase().includes('progress') || p.status?.name?.toLowerCase().includes('active')
         ).length,
         ON_HOLD: projects.filter(
-          (p: ProjectStatusOnly) => p.status === "ON_HOLD",
+          (p: any) => p.status?.name?.toLowerCase().includes('hold') || p.status?.name?.toLowerCase().includes('pause')
         ).length,
         COMPLETE: projects.filter(
-          (p: ProjectStatusOnly) => p.status === "COMPLETE",
+          (p: any) => p.status?.name?.toLowerCase().includes('complete') || p.status?.name?.toLowerCase().includes('done')
         ).length,
       };
       return {
@@ -84,6 +107,10 @@ export async function getDashboardDataAction() {
           totalHours: (totalHoursObj._sum.activeWorkedDuration || 0) / 3600,
           projectStatusCounts,
           recentLogs,
+          recentTasks,
+          pendingPastDueCount,
+          totalCompleteTasks,
+          totalPendingTasks
         },
       };
     }

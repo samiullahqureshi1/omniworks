@@ -85,24 +85,56 @@ export async function stopTimerAction(notes?: string) {
 
     const stopTime = new Date();
     
-    // Create TimeEntry
-    const entry = await prisma.timeEntry.create({
-      data: {
-        organizationId: session.organizationId,
+    const startOfDay = new Date(activeTimer.startTime);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(activeTimer.startTime);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    let entry = await prisma.timeEntry.findFirst({
+      where: {
+        memberId: session.userId,
         projectId: activeTimer.projectId,
         taskId: activeTimer.taskId,
-        memberId: session.userId,
-        startTime: activeTimer.startTime,
-        endTime: stopTime,
-        duration: (activeTimer.activeWorkedDuration + activeTimer.idleDuration) / 3600,
-        activeWorkedDuration: activeTimer.activeWorkedDuration,
-        idleDuration: activeTimer.idleDuration,
-        entryType: TimeEntryType.TIMER,
-        status: TimeEntryStatus.SAVED,
-        notes: notes || '',
-        createdBy: session.userId,
+        startTime: {
+          gte: startOfDay,
+          lte: endOfDay,
+        }
       }
     });
+
+    const addedDuration = (activeTimer.activeWorkedDuration + activeTimer.idleDuration) / 3600;
+
+    if (entry) {
+      entry = await prisma.timeEntry.update({
+        where: { id: entry.id },
+        data: {
+          endTime: stopTime,
+          duration: (entry.duration || 0) + addedDuration,
+          activeWorkedDuration: (entry.activeWorkedDuration || 0) + activeTimer.activeWorkedDuration,
+          idleDuration: (entry.idleDuration || 0) + activeTimer.idleDuration,
+          notes: notes ? (entry.notes ? `${entry.notes}\n${notes}` : notes) : entry.notes,
+        }
+      });
+    } else {
+      entry = await prisma.timeEntry.create({
+        data: {
+          organizationId: session.organizationId,
+          projectId: activeTimer.projectId,
+          taskId: activeTimer.taskId,
+          memberId: session.userId,
+          startTime: activeTimer.startTime,
+          endTime: stopTime,
+          duration: addedDuration,
+          activeWorkedDuration: activeTimer.activeWorkedDuration,
+          idleDuration: activeTimer.idleDuration,
+          entryType: TimeEntryType.TIMER,
+          status: TimeEntryStatus.SAVED,
+          notes: notes || '',
+          createdBy: session.userId,
+        }
+      });
+    }
 
     // Update Task trackedHours
     if (activeTimer.taskId) {

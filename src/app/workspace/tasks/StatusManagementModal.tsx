@@ -90,12 +90,12 @@ export default function StatusManagementModal({
         </DialogHeader>
         
         <div className="space-y-4 pt-4">
-          <div className="space-y-2 border rounded-md p-2 max-h-[300px] overflow-y-auto">
+          <div className="space-y-2 border rounded-xl p-2 max-h-[300px] overflow-y-auto">
             {taskStatuses.length === 0 && !isCreating && !editingId && (
               <p className="text-sm text-muted-foreground text-center py-4">No statuses defined yet.</p>
             )}
             {taskStatuses.map(status => (
-              <div key={status.id} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md border bg-card">
+              <div key={status.id} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-xl border bg-card">
                 <div className="flex items-center gap-3">
                   <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
                   <Badge variant="outline" style={{ borderColor: status.color, color: status.color, backgroundColor: `${status.color}10` }}>
@@ -117,7 +117,7 @@ export default function StatusManagementModal({
           </div>
 
           {(isCreating || editingId) ? (
-            <div className="border rounded-md p-4 bg-muted/30 space-y-4">
+            <div className="border rounded-xl p-4 bg-muted/30 space-y-4">
               <h4 className="text-sm font-medium">{editingId ? 'Edit Status' : 'New Status'}</h4>
               <div className="grid grid-cols-[1fr_auto] gap-4">
                 <div className="space-y-2">

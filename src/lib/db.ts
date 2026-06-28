@@ -11,12 +11,11 @@ if (globalForPrisma.prisma) {
 } else {
   const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/omnitrack?schema=public';
   
-  // Set up pg Pool
   const pool = new pg.Pool({
     connectionString,
-    max: 10,
+    max: 20,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
+    connectionTimeoutMillis: 30000,
   });
 
   const adapter = new PrismaPg(pool);

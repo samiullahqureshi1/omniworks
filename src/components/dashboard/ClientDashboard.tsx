@@ -2,11 +2,11 @@
 
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { FolderKanban, Clock, ShieldAlert } from 'lucide-react';
+import { FolderKanban, Clock, Users, Activity, ExternalLink, ListTodo, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { formatHours } from '@/lib/utils';
 
 export default function ClientDashboard({ metrics }: { metrics: any }) {
   const container = {
@@ -22,99 +22,82 @@ export default function ClientDashboard({ metrics }: { metrics: any }) {
     show: { opacity: 1, y: 0, transition: { duration: 0.4 } }
   };
 
-  return (
-    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 mt-6">
-      
-      {/* Mini Stats Row */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <motion.div variants={item}>
-          <Card className="border-none shadow-sm bg-white dark:bg-slate-900 overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -mr-16 -mt-16"></div>
-            <CardContent className="p-5 flex items-center justify-between relative z-10">
-              <div>
-                <p className="text-sm font-medium text-slate-500 mb-1">Active Projects</p>
-                <p className="text-3xl font-extrabold text-slate-800">{metrics.totalProjects || 0}</p>
-              </div>
-              <div className="h-12 w-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 border border-blue-100">
-                <FolderKanban size={20} />
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-        
-        <motion.div variants={item}>
-          <Card className="border-none shadow-sm bg-white dark:bg-slate-900 overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full -mr-16 -mt-16"></div>
-            <CardContent className="p-5 flex items-center justify-between relative z-10">
-              <div>
-                <p className="text-sm font-medium text-slate-500 mb-1">Total Hours Billed</p>
-                <p className="text-3xl font-extrabold text-slate-800">{metrics.totalHours || 0}</p>
-              </div>
-              <div className="h-12 w-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 border border-emerald-100">
-                <Clock size={20} />
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
+  // Prepare dynamic data
+  const totalProjects = metrics?.totalProjects || 0;
+  const totalHours = metrics?.totalHours || 0;
+  const projects = metrics?.projects || [];
+  
+  // Extract all tasks from all client projects
+  const clientTasks = projects.flatMap((p: any) => p.tasks || []);
+  const completedTasks = clientTasks.filter((t: any) => t.statusId === 'COMPLETE' || t.status?.name === 'DONE').length;
 
-      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
+  return (
+    <motion.div variants={container} initial="hidden" animate="show" className="flex flex-col xl:flex-row gap-6 mt-2">
+      {/* Left Column: ~30% */}
+      <div className="xl:w-[340px] shrink-0 flex flex-col gap-6">
         
-        {/* Project Portfolios */}
-        <motion.div variants={item} className="lg:col-span-3 flex flex-col">
-          <Card className="border-none shadow-sm bg-white dark:bg-slate-900 flex-1">
-            <CardHeader className="pb-4 border-b border-slate-100 dark:border-slate-800">
-              <CardTitle>Project Portfolios</CardTitle>
-              <CardDescription>Status and financial health of your active projects.</CardDescription>
+        {/* Activity / Hours Logged Large Card */}
+        <motion.div variants={item}>
+          <Card className="h-full border-none shadow-sm relative overflow-hidden flex flex-col bg-white dark:bg-[#1f1f1f] rounded-[32px] p-2">
+            <CardHeader className="flex flex-row items-center justify-between pb-2 z-10 relative">
+              <CardTitle className="text-xl font-bold flex items-center gap-3 text-slate-900 dark:text-white">
+                <Clock className="h-6 w-6" /> Activity
+              </CardTitle>
+              <div className="px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1f1f1f] text-sm font-semibold flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                <Activity className="h-4 w-4" /> Overall
+              </div>
             </CardHeader>
-            <CardContent className="p-0">
-              {(!metrics.projects || metrics.projects.length === 0) ? (
-                <div className="flex flex-col items-center justify-center h-48 text-center p-8">
-                  <FolderKanban size={32} className="text-slate-300 mb-3" />
-                  <p className="text-sm font-semibold text-slate-600">No active projects</p>
-                  <p className="text-xs text-slate-400 mt-1">We are currently setting up your workspaces.</p>
+            <CardContent className="z-10 relative flex-1 flex flex-col pt-4">
+              <div className="flex items-baseline gap-2 mb-10">
+                <span className="text-[56px] font-bold text-slate-900 dark:text-white leading-none tracking-tight">{formatHours(totalHours)}</span>
+                <span className="text-base text-slate-500 font-medium">Hours</span>
+              </div>
+              
+              {/* Dynamic Summary Representation */}
+              <div className="flex items-end justify-between h-[180px] w-full mt-auto mb-2 px-1">
+                <div className="flex flex-col justify-end items-center gap-4 w-full">
+                  <div className="w-full flex justify-between px-4 font-semibold text-slate-500 mb-2">
+                    <span>{clientTasks.length} Total Tasks</span>
+                    <span>{completedTasks} Completed</span>
+                  </div>
+                  <div className="w-full h-8 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                    <div 
+                      className="h-full bg-[#ef6b33] transition-all duration-1000 ease-out" 
+                      style={{ width: `${clientTasks.length > 0 ? (completedTasks / clientTasks.length) * 100 : 0}%` }}
+                    ></div>
+                  </div>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Client Projects List */}
+        <motion.div variants={item}>
+          <Card className="border-none shadow-sm bg-white dark:bg-[#1f1f1f] rounded-[32px] p-2">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-xl font-bold flex items-center gap-3 text-slate-900 dark:text-white">
+                <FolderKanban className="h-6 w-6" /> My Projects
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {projects.length === 0 ? (
+                <div className="text-center py-6 text-sm text-slate-500">No projects found</div>
               ) : (
-                <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {metrics.projects.map((project: any) => {
-                    const trackedHours = 0; // The logic for exact project-level hours isn't in metrics.projects by default, 
-                    // but we can show allocated hours.
+                <div className="space-y-4">
+                  {projects.slice(0, 4).map((project: any, idx: number) => {
+                    const iconBg = idx % 4 === 0 ? 'bg-orange-50 dark:bg-orange-900/20 text-orange-500' :
+                                   idx % 4 === 1 ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-500' :
+                                   idx % 4 === 2 ? 'bg-green-50 dark:bg-green-900/20 text-green-500' :
+                                   'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-500';
                     return (
-                      <div key={project.id} className="p-6 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                          <div className="space-y-1">
-                            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">
-                              <Link href={`/workspace/projects/${project.id}`} className="hover:text-primary transition-colors">
-                                {project.name}
-                              </Link>
-                            </h3>
-                            <div className="flex items-center gap-3 text-sm text-slate-500">
-                              <span className="flex items-center gap-1"><Clock size={14}/> Started: {new Date(project.startDate).toLocaleDateString()}</span>
-                              <Badge variant="secondary" className="font-normal">{project.status.replace('_', ' ')}</Badge>
-                            </div>
-                          </div>
-                          
-                          <div className="flex flex-col items-start sm:items-end w-full sm:w-64 gap-2">
-                            {project.totalAllocatedHours ? (
-                              <div className="w-full">
-                                <div className="flex justify-between text-xs font-medium mb-1.5">
-                                  <span className="text-slate-500">Budget</span>
-                                  <span className="text-slate-800">{project.totalAllocatedHours} hrs</span>
-                                </div>
-                                <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                  <div className="h-full bg-primary rounded-full w-[0%] transition-all" />
-                                </div>
-                              </div>
-                            ) : (
-                              <Badge variant="outline" className="text-slate-500 bg-slate-50 border-slate-200 shadow-sm">
-                                Open Budget
-                              </Badge>
-                            )}
-                            
-                            <Button variant="ghost" size="sm" asChild className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-8 -mr-3 mt-1">
-                              <Link href={`/workspace/projects/${project.id}`}>View Details &rarr;</Link>
-                            </Button>
-                          </div>
+                      <div key={project.id} className="flex items-center gap-4 p-4 bg-white dark:bg-[#181818] rounded-[24px] border border-slate-100 dark:border-white/5 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+                        <div className={`h-12 w-12 shrink-0 rounded-[16px] flex items-center justify-center ${iconBg}`}>
+                          <FolderKanban size={20} />
+                        </div>
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <span className="text-base font-bold text-slate-900 dark:text-white truncate">{project.name}</span>
+                          <span className="text-sm text-slate-400 truncate font-medium">{project.status?.replace('_', ' ') || 'ACTIVE'}</span>
                         </div>
                       </div>
                     );
@@ -124,6 +107,131 @@ export default function ClientDashboard({ metrics }: { metrics: any }) {
             </CardContent>
           </Card>
         </motion.div>
+      </div>
+
+      {/* Right Column: ~70% */}
+      <div className="flex-1 flex flex-col gap-6 min-w-0">
+        
+        {/* Top Row: Stat Cards */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <motion.div variants={item}>
+            <Card className="h-full border-none shadow-sm flex flex-col justify-center bg-white dark:bg-[#1f1f1f] rounded-[28px]">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <span className="text-base font-semibold text-slate-900 dark:text-slate-100">Total Project</span>
+
+                </div>
+                <div className="flex items-end justify-between">
+                  <span className="text-[40px] font-bold text-slate-900 dark:text-white leading-none">{totalProjects}</span>
+                  <span className="text-emerald-500 text-sm font-bold bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 rounded-full">+Active</span>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={item}>
+            <Card className="h-full border-none shadow-sm flex flex-col justify-center bg-white dark:bg-[#1f1f1f] rounded-[28px]">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <span className="text-base font-semibold text-slate-900 dark:text-slate-100">Total Tasks</span>
+
+                </div>
+                <div className="flex items-end justify-between">
+                  <span className="text-[40px] font-bold text-slate-900 dark:text-white leading-none">{clientTasks.length}</span>
+                  <span className="text-emerald-500 text-sm font-bold bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 rounded-full">Overall</span>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={item}>
+            <Card className="h-full border-none shadow-sm flex flex-col justify-center bg-white dark:bg-[#1f1f1f] rounded-[28px]">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <span className="text-base font-semibold text-slate-900 dark:text-slate-100">Total Hours</span>
+
+                </div>
+                <div className="flex items-end justify-between">
+                  <span className="text-[40px] font-bold text-slate-900 dark:text-white leading-none">{formatHours(totalHours)}</span>
+                  <span className="text-blue-500 text-sm font-bold bg-blue-50 dark:bg-blue-500/10 px-2.5 py-1 rounded-full">Logged</span>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={item}>
+            <Card className="h-full border-none shadow-sm overflow-hidden relative bg-white dark:bg-[#1f1f1f] rounded-[28px]">
+              <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-[#f1a46e] rounded-full opacity-40 blur-2xl pointer-events-none"></div>
+              <CardContent className="p-6 flex flex-col justify-start h-full relative z-10">
+                <span className="text-sm font-bold text-slate-500 mb-1">Nadi AI</span>
+                <span className="text-[17px] leading-snug font-bold text-slate-900 dark:text-white max-w-[120px]">
+                  Experience The<br/>Power Of Simplicity
+                </span>
+                <div className="absolute right-0 bottom-0 w-24 h-24 bg-[#ef6b33] rounded-tl-full opacity-90 shadow-inner overflow-hidden">
+                   <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-yellow-300/30 to-transparent"></div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+
+        {/* Middle Row: Task Timeline (Client Projects) */}
+        <motion.div variants={item}>
+          <Card className="border-none shadow-sm bg-white dark:bg-[#1f1f1f] rounded-[32px] p-2">
+            <CardHeader className="flex flex-row items-center justify-between pb-6">
+              <CardTitle className="text-xl font-bold flex items-center gap-3 text-slate-900 dark:text-white">
+                <ListTodo className="h-6 w-6" /> Project Timeline
+              </CardTitle>
+
+            </CardHeader>
+            <CardContent>
+              <div className="relative h-[240px] w-full pt-4">
+                {/* Background Grid */}
+                <div className="absolute inset-0 flex justify-between px-4">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="h-full w-px bg-slate-100 dark:bg-slate-800/50 border-r border-dashed border-slate-200 dark:border-slate-800"></div>
+                  ))}
+                </div>
+
+                {projects.length === 0 ? (
+                  <div className="relative z-10 h-full flex items-center justify-center text-slate-500">No active projects to display.</div>
+                ) : (
+                  <div className="relative z-10 h-full flex flex-col justify-around py-4">
+                    {projects.map((project: any, idx: number) => {
+                      const getStyle = (s: string) => {
+                        switch(s) {
+                          case 'PLANNING': return 'bg-[#fdf2e9] dark:bg-[#e08936]/20 text-[#e08936] border-[#e08936]/30';
+                          case 'IN_PROGRESS': return 'bg-[#fdf4db] dark:bg-[#d69f12]/20 text-[#d69f12] border-[#d69f12]/30';
+                          case 'ON_HOLD': return 'bg-[#ffebee] dark:bg-[#e53935]/20 text-[#e53935] border-[#e53935]/30';
+                          case 'COMPLETE': return 'bg-[#e9faef] dark:bg-[#2db366]/20 text-[#2db366] border-[#2db366]/30';
+                          default: return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700';
+                        }
+                      };
+
+                      // Fake dynamic percentage for straight bar visual
+                      const widthPercent = [80, 50, 60, 40][idx % 4];
+
+                      return (
+                        <div key={project.id} className="relative w-full h-14 group flex items-center">
+                          <div 
+                            className={`h-[40px] rounded-full flex items-center px-4 justify-between border shadow-sm transition-all duration-300 hover:shadow-md hover:scale-[1.01] ${getStyle(project.status)}`}
+                            style={{ width: `${widthPercent}%`, minWidth: 'fit-content' }}
+                          >
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              <span className="text-sm font-bold truncate leading-none">{project.name}</span>
+                            </div>
+                            <span className="font-bold text-[10px] uppercase tracking-wider bg-white/50 dark:bg-black/20 px-2 py-1 rounded-full shrink-0 ml-3">{project.status?.replace('_', ' ')}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
 
       </div>
     </motion.div>

@@ -1,0 +1,600 @@
+"use client";
+
+import React, { useState, useTransition, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Plus, Users, Trash2, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { createProjectAction, quickCreateClientAction } from "@/app/actions/projects";
+import { getProjectFormDataAction } from "@/app/actions/getProjectFormDataAction";
+import { RichTextEditor } from "@/components/ui/RichTextEditor";
+
+export default function GlobalCreateProjectModal({
+  isOpen,
+  setIsOpen,
+}: {
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [users, setUsers] = useState<any[]>([]);
+  const [projectStatuses, setProjectStatuses] = useState<any[]>([]);
+
+  // Modal States
+  const [isQuickClientOpen, setIsQuickClientOpen] = useState(false);
+  const [isMemberSelectOpen, setIsMemberSelectOpen] = useState(false);
+
+  // Form States
+  const [description, setDescription] = useState("");
+  const [isOngoing, setIsOngoing] = useState(false);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [projectTasks, setProjectTasks] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      getProjectFormDataAction().then((res) => {
+        if (res.success && res.users) {
+          setUsers(res.users);
+        }
+        if (res.projectStatuses) {
+          setProjectStatuses(res.projectStatuses);
+        }
+      });
+    }
+  }, [isOpen]);
+
+  const clients = users.filter((u) => u.role === "CLIENT");
+  const members = users.filter((u) => u.role !== "CLIENT");
+
+  const handleCreateProject = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    const data = {
+      name: formData.get("name") as string,
+      clientId: (formData.get("clientId") as string) || undefined,
+      projectManagerId:
+        (formData.get("projectManagerId") as string) || undefined,
+      description: description,
+      statusId: (formData.get("statusId") as string) || undefined,
+      priority: formData.get("priority") as any,
+      startDate: formData.get("startDate") as string,
+      endDate: formData.get("endDate") as string,
+      isOngoing,
+      projectBudget: formData.get("projectBudget")
+        ? Number(formData.get("projectBudget"))
+        : undefined,
+      totalAllocatedHours: formData.get("totalAllocatedHours")
+        ? Number(formData.get("totalAllocatedHours"))
+        : undefined,
+      notes: formData.get("notes") as string,
+      assigneeIds: selectedAssignees,
+      tasks: projectTasks
+        .filter((t) => t.title.trim() !== "")
+        .map((t) => ({
+          title: t.title,
+          description: t.description,
+          priority: t.priority as any,
+          status: t.status as any,
+          assigneeIds: t.assigneeId ? [t.assigneeId] : [],
+        })),
+    };
+
+    startTransition(async () => {
+      const res = await createProjectAction(data);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("Project created successfully");
+        setIsOpen(false);
+        // Reset state
+        setDescription("");
+        setIsOngoing(false);
+        setSelectedAssignees([]);
+        setProjectTasks([]);
+        window.location.reload();
+      }
+    });
+  };
+
+  const handleQuickCreateClient = async (
+    e: React.FormEvent<HTMLFormElement>,
+  ) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const name = formData.get("name") as string;
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+
+    startTransition(async () => {
+      const res = await quickCreateClientAction(name, email, password);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("Client created successfully");
+        setIsQuickClientOpen(false);
+        setUsers([...users, res.client]);
+      }
+    });
+  };
+
+  return (
+    <>
+      {/* Create Project Modal */}
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent
+          className="sm:max-w-[700px] h-[90vh] p-0 flex flex-col overflow-hidden"
+          onInteractOutside={(e) => {
+            if (isMemberSelectOpen || isQuickClientOpen) e.preventDefault();
+          }}
+        >
+          <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shrink-0 shadow-sm">
+            <DialogTitle>Create New Project</DialogTitle>
+            <DialogDescription>
+              Setup a new project workspace, assign a PM, and configure
+              timelines.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+            <form onSubmit={handleCreateProject} className="space-y-6 pb-6">
+              {/* Basics */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2 col-span-2">
+                  <label className="text-sm font-medium">
+                    Project Name <span className="text-destructive">*</span>
+                  </label>
+                  <Input
+                    name="name"
+                    required
+                    placeholder="e.g. Website Redesign"
+                  />
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <label className="text-sm font-medium">Description</label>
+                  <RichTextEditor
+                    content={description}
+                    onChange={setDescription}
+                    placeholder="Brief overview of the project..."
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg border">
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-sm font-medium">Client</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsQuickClientOpen(true)}
+                      className="text-[10px] font-semibold text-primary hover:underline flex items-center"
+                    >
+                      <Plus size={10} className="mr-0.5" /> Quick Add
+                    </button>
+                  </div>
+                  <select
+                    name="clientId"
+                    className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                  >
+                    <option value="">No Client (Internal)</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Project Manager{" "}
+                    <span className="text-xs text-muted-foreground font-normal">
+                      (Members only)
+                    </span>
+                  </label>
+                  <select
+                    name="projectManagerId"
+                    className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                  >
+                    <option value="">Unassigned</option>
+                    {members.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Configuration */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Status</label>
+                  <select
+                    name="statusId"
+                    className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                  >
+                    <option value="">No Status</option>
+                    {projectStatuses.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Priority</label>
+                  <select
+                    name="priority"
+                    defaultValue="MEDIUM"
+                    className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                  >
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High</option>
+                    <option value="CRITICAL">Critical</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Timeline */}
+              <div className="grid grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg border">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Start Date <span className="text-destructive">*</span>
+                  </label>
+                  <Input name="startDate" type="date" required />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-sm font-medium">End Date</label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        id="ongoing"
+                        checked={isOngoing}
+                        onChange={(e) => setIsOngoing(e.target.checked)}
+                        className="rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <label
+                        htmlFor="ongoing"
+                        className="text-xs text-muted-foreground cursor-pointer"
+                      >
+                        Ongoing
+                      </label>
+                    </div>
+                  </div>
+                  {!isOngoing ? (
+                    <Input name="endDate" type="date" required={!isOngoing} />
+                  ) : (
+                    <div className="flex h-9 w-full items-center justify-center rounded-xl border bg-muted/50 text-xs text-muted-foreground italic">
+                      Project has no end date
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Resources */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Project Budget ($){" "}
+                    <span className="text-xs text-muted-foreground font-normal">
+                      (Optional)
+                    </span>
+                  </label>
+                  <Input
+                    name="projectBudget"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="e.g. 5000"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Total Allocated Hours{" "}
+                    <span className="text-destructive">*</span>
+                  </label>
+                  <Input
+                    name="totalAllocatedHours"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    required
+                    placeholder="e.g. 120"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Assign Team Members</label>
+                <div
+                  onClick={() => setIsMemberSelectOpen(true)}
+                  className="flex min-h-[40px] w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-sm cursor-pointer hover:bg-muted/50 transition-colors"
+                >
+                  {selectedAssignees.length === 0 ? (
+                    <span className="text-muted-foreground">
+                      Click to select members...
+                    </span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {selectedAssignees.map((id) => {
+                        const member = members.find((m) => m.id === id);
+                        return member ? (
+                          <Badge
+                            variant="secondary"
+                            key={id}
+                            className="text-xs font-normal"
+                          >
+                            {member.name}
+                          </Badge>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
+                  <Users className="h-4 w-4 text-muted-foreground ml-2 flex-shrink-0" />
+                </div>
+              </div>
+
+              {/* Project Tasks */}
+              <div className="space-y-3 pt-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-sm font-medium">
+                    Initial Tasks{" "}
+                    <span className="text-xs text-muted-foreground font-normal">
+                      (Optional)
+                    </span>
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setProjectTasks([
+                        ...projectTasks,
+                        {
+                          id: Math.random().toString(),
+                          title: "",
+                          description: "",
+                          status: "TODO",
+                          priority: "MEDIUM",
+                          assigneeId: "",
+                        },
+                      ])
+                    }
+                    className="h-8 text-xs"
+                  >
+                    <Plus className="mr-1 h-3 w-3" /> Add Task
+                  </Button>
+                </div>
+
+                {projectTasks.length > 0 && (
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+                    {projectTasks.map((task, index) => (
+                      <div
+                        key={task.id}
+                        className="p-3 border rounded-xl bg-muted/20 space-y-3 relative group"
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setProjectTasks(
+                              projectTasks.filter((t) => t.id !== task.id),
+                            )
+                          }
+                          className="absolute right-2 top-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+
+                        <div className="space-y-1.5 pr-6">
+                          <Input
+                            placeholder="Task Title *"
+                            value={task.title}
+                            onChange={(e) => {
+                              const newTasks = [...projectTasks];
+                              newTasks[index].title = e.target.value;
+                              setProjectTasks(newTasks);
+                            }}
+                            className="h-8 text-sm bg-background"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Input
+                            placeholder="Description (Optional)"
+                            value={task.description}
+                            onChange={(e) => {
+                              const newTasks = [...projectTasks];
+                              newTasks[index].description = e.target.value;
+                              setProjectTasks(newTasks);
+                            }}
+                            className="h-8 text-sm bg-background"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2">
+                          <select
+                            value={task.status}
+                            onChange={(e) => {
+                              const newTasks = [...projectTasks];
+                              newTasks[index].status = e.target.value;
+                              setProjectTasks(newTasks);
+                            }}
+                            className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
+                          >
+                            <option value="TODO">To Do</option>
+                            <option value="IN_PROGRESS">In Progress</option>
+                            <option value="DONE">Done</option>
+                          </select>
+
+                          <select
+                            value={task.priority}
+                            onChange={(e) => {
+                              const newTasks = [...projectTasks];
+                              newTasks[index].priority = e.target.value as any;
+                              setProjectTasks(newTasks);
+                            }}
+                            className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
+                          >
+                            <option value="LOW">Low</option>
+                            <option value="MEDIUM">Medium</option>
+                            <option value="HIGH">High</option>
+                            <option value="CRITICAL">Critical</option>
+                          </select>
+
+                          <select
+                            value={task.assigneeId}
+                            onChange={(e) => {
+                              const newTasks = [...projectTasks];
+                              newTasks[index].assigneeId = e.target.value;
+                              setProjectTasks(newTasks);
+                            }}
+                            className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
+                          >
+                            <option value="">Unassigned</option>
+                            {members.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter className="pt-4 border-t mt-6 sticky bottom-0 bg-background pb-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isPending}>
+                  {isPending ? "Creating..." : "Create Project"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Create Client Modal */}
+      <Dialog open={isQuickClientOpen} onOpenChange={setIsQuickClientOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Quick Add Client</DialogTitle>
+            <DialogDescription>
+              Create a client record instantly to assign to this project.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={handleQuickCreateClient}
+            className="space-y-4 pt-4"
+          >
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Client Name</label>
+              <Input name="name" required placeholder="Acme Corp" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Client Email</label>
+              <Input
+                name="email"
+                type="email"
+                required
+                placeholder="contact@acme.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Client Password</label>
+              <Input
+                name="password"
+                type="password"
+                required
+                placeholder="Temporary password"
+              />
+            </div>
+            <DialogFooter className="pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsQuickClientOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending ? "Creating..." : "Create Client"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Member Selection Dialog */}
+      <Dialog open={isMemberSelectOpen} onOpenChange={setIsMemberSelectOpen}>
+        <DialogContent className="sm:max-w-[400px] p-0">
+          <DialogHeader className="px-4 py-3 border-b">
+            <DialogTitle>Select Assignees</DialogTitle>
+          </DialogHeader>
+          <div className="p-2 space-y-1 max-h-[300px] overflow-y-auto">
+            {members.map((member) => (
+              <label
+                key={member.id}
+                className="flex items-center space-x-3 p-2 hover:bg-muted/50 rounded-lg cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedAssignees.includes(member.id)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedAssignees([...selectedAssignees, member.id]);
+                    } else {
+                      setSelectedAssignees(
+                        selectedAssignees.filter((id) => id !== member.id),
+                      );
+                    }
+                  }}
+                  className="rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">{member.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {member.email}
+                  </span>
+                </div>
+              </label>
+            ))}
+            {members.length === 0 && (
+              <div className="p-4 text-center text-sm text-muted-foreground">
+                No members found in your organization.
+              </div>
+            )}
+          </div>
+          <div className="p-3 border-t bg-muted/20 flex justify-end">
+            <Button
+              size="sm"
+              onClick={() => setIsMemberSelectOpen(false)}
+            >
+              Done
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

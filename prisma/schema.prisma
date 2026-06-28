@@ -17,9 +17,12 @@ model Organization {
   projects     Project[]
   tasks        Task[]
   taskStatuses TaskStatus[]
+  projectStatuses ProjectStatus[]
   timeEntries  TimeEntry[]
   activeTimers ActiveTimer[]
   timeScreenshots TimeScreenshot[]
+  activityLogs    ActivityLog[]
+  idlePeriods     IdlePeriod[]
   settings     Setting[]
   reports      Report[]
   notifications Notification[]
@@ -46,6 +49,8 @@ model User {
   status           UserStatus        @default(ACTIVE)
   organizationId   String
   organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  twoFactorSecret  String?
+  twoFactorEnabled Boolean           @default(false)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
@@ -57,6 +62,8 @@ model User {
   timeEntries      TimeEntry[]
   activeTimers     ActiveTimer[]
   timeScreenshots  TimeScreenshot[]
+  activityLogs     ActivityLog[]
+  idlePeriods      IdlePeriod[]
   notificationsReceived Notification[] @relation("NotificationRecipient")
   notificationsActed    Notification[] @relation("NotificationActor")
   messagesSent          ProjectMessage[] @relation("MessageSender")
@@ -77,11 +84,18 @@ model Invitation {
   createdAt      DateTime     @default(now())
 }
 
-enum ProjectStatus {
-  PLANNING
-  IN_PROGRESS
-  ON_HOLD
-  COMPLETE
+model ProjectStatus {
+  id             String       @id @default(uuid())
+  name           String
+  color          String       @default("#cccccc")
+  order          Int          @default(0)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdByOwner Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  projects       Project[]
 }
 
 enum Priority {
@@ -102,7 +116,8 @@ model Project {
   client               User?             @relation("ProjectClient", fields: [clientId], references: [id], onDelete: SetNull)
   projectManagerId     String?
   projectManager       User?             @relation("ProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
-  status               ProjectStatus     @default(PLANNING)
+  statusId             String?
+  status               ProjectStatus?    @relation(fields: [statusId], references: [id], onDelete: SetNull)
   startDate            DateTime
   endDate              DateTime?
   isOngoing            Boolean           @default(false)
@@ -214,6 +229,8 @@ model TimeEntry {
   updatedAt            DateTime        @updatedAt
 
   screenshots          TimeScreenshot[]
+  activityLogs         ActivityLog[]
+  idlePeriods          IdlePeriod[]
   notifications        Notification[]
 }
 
@@ -237,6 +254,7 @@ model ActiveTimer {
   updatedAt            DateTime        @updatedAt
 
   screenshots          TimeScreenshot[]
+  activityLogs         ActivityLog[]
 
   @@unique([memberId])
 }
@@ -259,6 +277,38 @@ model TimeScreenshot {
   capturedAt      DateTime
   activityLevel   Int            @default(100)
   createdAt       DateTime       @default(now())
+}
+
+model ActivityLog {
+  id              String         @id @default(uuid())
+  organizationId  String
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberId        String
+  member          User           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  timeEntryId     String?
+  timeEntry       TimeEntry?     @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
+  activeTimerId   String?
+  activeTimer     ActiveTimer?   @relation(fields: [activeTimerId], references: [id], onDelete: Cascade)
+  timestamp       DateTime
+  keystrokes      Int            @default(0)
+  mouseMovements  Int            @default(0)
+  activityPercentage Int         @default(0)
+  createdAt       DateTime       @default(now())
+}
+
+model IdlePeriod {
+  id              String         @id @default(uuid())
+  organizationId  String
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberId        String
+  member          User           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  timeEntryId     String?
+  timeEntry       TimeEntry?     @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
+  startTime       DateTime
+  endTime         DateTime?
+  duration        Float?         // in seconds
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 }
 
 model Setting {

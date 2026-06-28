@@ -76,23 +76,53 @@ export async function POST(req: NextRequest) {
        actualEndTime = tempEnd;
     }
 
-    const entry = await prisma.timeEntry.create({
-      data: {
-        organizationId,
+    const startOfDay = new Date(actualStartTime);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(actualStartTime);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    let entry = await prisma.timeEntry.findFirst({
+      where: {
+        memberId,
         projectId,
         taskId,
-        memberId,
-        startTime: actualStartTime,
-        endTime: actualEndTime,
-        duration: duration,
-        activeWorkedDuration: duration * 3600,
-        idleDuration: 0,
-        entryType: TimeEntryType.MANUAL,
-        status: TimeEntryStatus.SAVED,
-        notes: notes || '',
-        createdBy: session.userId,
+        startTime: {
+          gte: startOfDay,
+          lte: endOfDay,
+        }
       }
     });
+
+    if (entry) {
+      entry = await prisma.timeEntry.update({
+        where: { id: entry.id },
+        data: {
+          endTime: actualEndTime > (entry.endTime || new Date(0)) ? actualEndTime : entry.endTime,
+          duration: (entry.duration || 0) + duration,
+          activeWorkedDuration: (entry.activeWorkedDuration || 0) + (duration * 3600),
+          notes: notes ? (entry.notes ? `${entry.notes}\n${notes}` : notes) : entry.notes,
+        }
+      });
+    } else {
+      entry = await prisma.timeEntry.create({
+        data: {
+          organizationId,
+          projectId,
+          taskId,
+          memberId,
+          startTime: actualStartTime,
+          endTime: actualEndTime,
+          duration: duration,
+          activeWorkedDuration: duration * 3600,
+          idleDuration: 0,
+          entryType: TimeEntryType.MANUAL,
+          status: TimeEntryStatus.SAVED,
+          notes: notes || '',
+          createdBy: session.userId,
+        }
+      });
+    }
 
     const updatedTask = await prisma.task.update({
       where: { id: taskId },

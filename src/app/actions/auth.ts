@@ -83,13 +83,46 @@ export async function loginAction(formData: FormData) {
       return { error: 'Invalid email or password.' };
     }
 
-    // Create Session
+    // Create Session if 2FA is not enabled
+    if (user.twoFactorEnabled) {
+      return { requiresTwoFactor: true, userId: user.id };
+    }
+
     await createSession(user);
 
     return { success: true };
   } catch (error: any) {
     console.error('Login error:', error);
     return { error: error.message || 'Failed to log in.' };
+  }
+}
+
+export async function verifyTwoFactorLoginAction(userId: string, token: string) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user || !user.twoFactorEnabled || !user.twoFactorSecret) {
+      return { error: 'Invalid 2FA state' };
+    }
+
+    const speakeasy = (await import('speakeasy')).default;
+    const isValid = speakeasy.totp.verify({
+      secret: user.twoFactorSecret,
+      encoding: 'base32',
+      token: token,
+      window: 1
+    });
+
+    if (!isValid) {
+      return { error: 'Invalid verification code' };
+    }
+
+    await createSession(user);
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message || 'Failed to verify 2FA' };
   }
 }
 

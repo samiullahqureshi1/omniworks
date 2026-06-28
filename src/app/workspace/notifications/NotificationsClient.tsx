@@ -68,7 +68,7 @@ export default function NotificationsClient({ initialNotifications }: { initialN
                 <div 
                   key={notif.id} 
                   onClick={() => handleRead(notif.id, notif.actionUrl)}
-                  className={`p-4 sm:p-5 flex gap-4 transition-colors cursor-pointer hover:bg-slate-50 ${!notif.isRead ? 'bg-primary/[0.03]' : ''}`}
+                  className={`p-4 sm:p-5 flex gap-4 transition-colors cursor-pointer hover:bg-\[#fbfaf7\] ${!notif.isRead ? 'bg-primary/[0.03]' : ''}`}
                 >
                   <div className="mt-1">
                     <div className={`h-2.5 w-2.5 rounded-full shadow-sm ${!notif.isRead ? 'bg-primary' : 'bg-slate-200'}`} />

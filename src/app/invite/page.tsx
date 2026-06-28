@@ -39,7 +39,7 @@ function InviteContent() {
 
   if (!token) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-zinc-950 p-4">
+      <div className="flex min-h-screen items-center justify-center bg-[#fbfaf7] dark:bg-zinc-950 p-4">
         <div className="text-center space-y-4">
           <h1 className="text-2xl font-bold">Invalid or Missing Link</h1>
           <p className="text-muted-foreground">It looks like the invitation link is broken or expired.</p>
@@ -49,8 +49,8 @@ function InviteContent() {
   }
 
   return (
-    <div className="flex min-h-[80vh] items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-8 bg-white dark:bg-zinc-900 p-8 rounded-2xl shadow-xl border border-gray-100 dark:border-zinc-800">
+    <div className="flex min-h-screen items-center justify-center bg-[#fbfaf7] dark:bg-[#181818] p-4">
+      <div className="w-full max-w-md space-y-8 bg-white dark:bg-zinc-900 p-10 rounded-[34px] shadow-[0_25px_70px_rgba(0,0,0,0.08)] border border-black/5 dark:border-zinc-800">
         <div className="text-center">
           <div className="mx-auto h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
             <span className="text-primary font-bold text-xl">OT</span>
@@ -75,7 +75,7 @@ function InviteContent() {
               name="name"
               defaultValue={initialName}
               required
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              className="flex h-11 w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-[#ffad0d] focus:border-transparent transition-all"
               placeholder="Your Name"
             />
           </div>
@@ -86,7 +86,7 @@ function InviteContent() {
               type="password"
               name="password"
               required
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              className="flex h-11 w-full rounded-xl border border-black/10 bg-white px-4 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-[#ffad0d] focus:border-transparent transition-all"
               placeholder="••••••••"
             />
           </div>
@@ -94,7 +94,7 @@ function InviteContent() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+            className="w-full inline-flex h-12 items-center justify-center rounded-full bg-black px-4 py-2 text-sm font-medium text-white hover:bg-[#222] focus:outline-none focus:ring-2 focus:ring-[#ffad0d] focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none transition-all shadow-[0_10px_25px_rgba(0,0,0,0.18)]"
           >
             {loading ? 'Activating...' : 'Join Workspace'}
           </button>

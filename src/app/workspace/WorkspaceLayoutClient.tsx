@@ -8,70 +8,77 @@ import {
   LayoutDashboard,
   FolderKanban,
   Timer,
-  CalendarDays,
   Users as UsersIcon,
   BarChart3,
   Settings,
   Search,
-  Bell,
   Menu,
   X,
-  ChevronLeft,
-  ChevronRight,
   LogOut,
   Command,
   CheckSquare,
   FileText,
+  Moon,
+  Sun,
+  ChevronDown,
+  User,
+  Shield
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { logoutAction } from '@/app/actions/auth';
-import { OrganizationSwitcher } from '@/components/dashboard/OrganizationSwitcher';
+import { logoutAction, switchOrganizationAction } from '@/app/actions/auth';
 import { NotificationBell } from '@/components/dashboard/NotificationBell';
+import { useTheme } from '@/components/ThemeProvider';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function WorkspaceLayoutClient({
   children,
   user,
+  userOrganizations = [],
 }: {
   children: React.ReactNode;
   user: any;
+  userOrganizations?: Array<{id: string, name: string, role: string}>;
 }) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     setMounted(true);
-    const savedState = localStorage.getItem('omnitrack_sidebar_expanded');
-    if (savedState !== null) {
-      setIsSidebarOpen(savedState === 'true');
-    }
   }, []);
-
-  const toggleSidebar = () => {
-    const newState = !isSidebarOpen;
-    setIsSidebarOpen(newState);
-    localStorage.setItem('omnitrack_sidebar_expanded', String(newState));
-  };
 
   const handleLogout = async () => {
     await logoutAction();
     router.push('/login');
   };
 
-  // Determine effective role for sidebar visibility
+  const handleOrgSwitch = async (orgId: string) => {
+    if (orgId === user.organizationId) return;
+    const res = await switchOrganizationAction(orgId);
+    if (res.success) {
+      window.location.reload();
+    } else {
+      alert(res.error || 'Failed to switch organization');
+    }
+  };
+
   const effectiveRole = user.role === 'MEMBER' && user.isPM ? 'PM' : user.role;
 
-  // Strict role-based navigation filtering as per requirements
   const allNavItems = [
-    { name: 'Dashboard', href: '/workspace', icon: LayoutDashboard, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
+    { name: 'Overview', href: '/workspace', icon: LayoutDashboard, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'Projects', href: '/workspace/projects', icon: FolderKanban, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'Tasks', href: '/workspace/tasks', icon: CheckSquare, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
-    { name: 'Time Tracking', href: '/workspace/time', icon: Timer, exact: false, roles: ['OWNER', 'PM', 'MEMBER'] },
+    { name: 'Time', href: '/workspace/time', icon: Timer, exact: false, roles: ['OWNER', 'PM', 'MEMBER'] },
     { name: 'Timesheet', href: '/workspace/timesheet', icon: FileText, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'Users', href: '/workspace/users', icon: UsersIcon, exact: false, roles: ['OWNER'] },
     { name: 'Reports', href: '/workspace/reports', icon: BarChart3, exact: false, roles: ['OWNER', 'PM'] },
@@ -81,27 +88,27 @@ export default function WorkspaceLayoutClient({
   const navItems = allNavItems.filter(item => item.roles.includes(effectiveRole));
 
   const SidebarContent = () => (
-    <div className="flex h-full flex-col bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 transition-all duration-300 border-r border-slate-200 dark:border-slate-800 shadow-[2px_0_8px_-4px_rgba(0,0,0,0.05)]">
-      
-      {/* Top Section: App Logo & Org Name */}
-      <div className={`flex h-16 shrink-0 items-center px-4 border-b border-slate-200 dark:border-slate-800/50 ${!isSidebarOpen && 'justify-center'}`}>
-        <div className="flex items-center gap-3 w-full">
-          {/* Logo Icon */}
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-blue-600 text-white shadow-sm font-bold">
-            <LayoutDashboard size={18} className="text-white" />
-          </div>
-          {isSidebarOpen && (
-            <div className="flex flex-col flex-1 overflow-hidden">
-              <span className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-tight">OmniTrack</span>
-              <span className="text-[11px] font-medium text-slate-500 truncate leading-tight">{user.organizationName}</span>
-            </div>
-          )}
-        </div>
+    <div className="flex h-full w-[80px] flex-col items-center py-2 bg-white dark:bg-transparent md:bg-transparent shadow-xl md:shadow-none transition-colors">
+      {/* Theme Toggle */}
+      <div className="flex flex-col items-center gap-2 p-1.5 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm mb-4 md:mb-6 transition-colors border border-black/5 dark:border-white/10">
+        <button 
+          onClick={() => setTheme('light')}
+          className={`p-2 rounded-full transition-colors ${theme === 'light' ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+        >
+          <Sun size={18} />
+        </button>
+        <button 
+          onClick={() => setTheme('dark')}
+          className={`p-2 rounded-full transition-colors ${theme === 'dark' ? 'bg-black text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'}`}
+        >
+          <Moon size={18} />
+        </button>
       </div>
 
-      {/* Main Navigation */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar py-6 px-3">
-        <nav className="space-y-1">
+      {/* Grouped Nav & Settings Pills */}
+      <div className="flex flex-col items-center gap-4">
+        {/* Navigation */}
+        <nav className="flex flex-col items-center gap-2 bg-white dark:bg-[#1f1f1f] px-1.5 py-3 rounded-[32px] shadow-sm w-max transition-colors border border-black/5 dark:border-white/10">
           {navItems.map((item) => {
             const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
             return (
@@ -110,58 +117,44 @@ export default function WorkspaceLayoutClient({
                   <Link
                     href={item.href}
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    className={`group relative flex h-10 w-10 items-center justify-center rounded-full transition-all ${
                       isActive 
-                        ? 'text-primary' 
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-900'
-                    } ${!isSidebarOpen && 'justify-center px-0'}`}
+                        ? (theme === 'dark' ? 'bg-white text-black shadow-md' : 'bg-black text-white shadow-md')
+                        : 'text-slate-400 hover:text-black dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10'
+                    }`}
                   >
-                    {isActive && (
-                      <motion.div
-                        layoutId="active-nav"
-                        className="absolute inset-0 rounded-lg bg-primary/10 dark:bg-primary/20"
-                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                      />
-                    )}
-                    <item.icon size={18} className={`relative z-10 shrink-0 ${isActive ? 'text-primary' : 'text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300'}`} />
-                    {isSidebarOpen && (
-                      <span className="relative z-10 truncate">{item.name}</span>
-                    )}
+                    <item.icon size={18} className="relative z-10 shrink-0" />
                   </Link>
                 </TooltipTrigger>
-                {!isSidebarOpen && <TooltipContent side="right">{item.name}</TooltipContent>}
+                <TooltipContent side="right" className="dark:bg-black dark:text-white dark:border-white/20">{item.name}</TooltipContent>
               </Tooltip>
             );
           })}
         </nav>
-      </div>
 
-      {/* Bottom Section: User Profile & Logout */}
-      <div className="shrink-0 p-4 border-t border-slate-200 dark:border-slate-800/50 mt-auto bg-slate-100/50 dark:bg-slate-900/20">
-        <div className={`flex w-full items-center ${!isSidebarOpen && 'justify-center flex-col gap-4'}`}>
-          <Avatar className={`shrink-0 border border-slate-200 dark:border-slate-700 shadow-sm ${isSidebarOpen ? 'h-9 w-9' : 'h-8 w-8'}`}>
-            <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-              {user.name.substring(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          
-          {isSidebarOpen && (
-            <div className="flex flex-1 flex-col items-start overflow-hidden ml-3">
-              <span className="text-sm font-semibold text-slate-900 dark:text-slate-200 truncate w-full">{user.name}</span>
-              <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">{effectiveRole.replace('_', ' ')}</span>
-            </div>
-          )}
-
+        {/* Settings / Logout */}
+        <div className="flex flex-col items-center gap-2 bg-white dark:bg-[#1f1f1f] px-1.5 py-3 rounded-[28px] shadow-sm transition-colors border border-black/5 dark:border-white/10">
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Link 
+                href="/workspace/profile"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 hover:text-black dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+              >
+                <User size={18} />
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="dark:bg-black dark:text-white dark:border-white/20">My Profile</TooltipContent>
+          </Tooltip>
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
               <button 
                 onClick={handleLogout}
-                className={`flex shrink-0 items-center justify-center rounded-md text-slate-400 hover:text-destructive hover:bg-destructive/10 transition-colors ${isSidebarOpen ? 'h-8 w-8 ml-2' : 'h-8 w-8'}`}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 hover:text-destructive hover:bg-destructive/10 transition-colors"
               >
-                <LogOut size={16} />
+                <LogOut size={18} />
               </button>
             </TooltipTrigger>
-            <TooltipContent side={isSidebarOpen ? 'top' : 'right'}>Logout</TooltipContent>
+            <TooltipContent side="right" className="dark:bg-black dark:text-white dark:border-white/20">Logout</TooltipContent>
           </Tooltip>
         </div>
       </div>
@@ -170,100 +163,167 @@ export default function WorkspaceLayoutClient({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex h-screen w-full bg-background overflow-hidden">
+      <div className="flex flex-col h-screen w-full bg-[#f4f4f2] dark:bg-[#0f0f0f] overflow-hidden p-2 md:p-4 gap-2 md:gap-4 transition-colors">
         
-        {/* Desktop Sidebar */}
-        <motion.aside
-          initial={false}
-          animate={{ width: mounted && isSidebarOpen ? 260 : 72 }}
-          className="hidden md:flex flex-col z-20 relative bg-slate-50 dark:bg-slate-950"
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        >
-          <SidebarContent />
-          {mounted && (
+        {/* Full-width Top Navbar */}
+        <header className="flex h-16 shrink-0 items-center justify-between w-full">
+          <div className="flex items-center gap-3 flex-1">
             <button
-              onClick={toggleSidebar}
-              className="absolute -right-3 top-7 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-400 hover:text-slate-900 dark:hover:text-white shadow-sm z-50 transition-all hover:scale-110"
+              className="md:hidden text-slate-500 hover:text-black dark:hover:text-white p-2 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5 dark:border-white/10"
+              onClick={() => setIsMobileMenuOpen(true)}
             >
-              {isSidebarOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+              <Menu size={20} />
             </button>
-          )}
-        </motion.aside>
 
-        {/* Mobile Sidebar */}
-        <AnimatePresence>
-          {isMobileMenuOpen && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
-              />
-              <motion.aside
-                initial={{ x: '-100%' }}
-                animate={{ x: 0 }}
-                exit={{ x: '-100%' }}
-                transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
-                className="fixed inset-y-0 left-0 z-50 w-72 md:hidden shadow-2xl bg-white dark:bg-slate-950"
-              >
-                <SidebarContent />
-                <button
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="absolute right-4 top-4 text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 rounded-full p-1"
-                >
-                  <X size={18} />
-                </button>
-              </motion.aside>
-            </>
-          )}
-        </AnimatePresence>
-
-        {/* Main Content Area */}
-        <div className="flex flex-1 flex-col min-w-0 bg-background">
-          
-          {/* Top Header */}
-          <header className="sticky top-0 z-10 flex h-16 shrink-0 items-center justify-between border-b border-slate-100 dark:border-slate-800/60 bg-white/80 dark:bg-background/80 px-4 md:px-6 backdrop-blur-md">
-            <div className="flex items-center gap-4 flex-1">
-              <button
-                className="md:hidden text-muted-foreground hover:text-foreground p-1"
-                onClick={() => setIsMobileMenuOpen(true)}
-              >
-                <Menu size={20} />
-              </button>
-
-              <div className="hidden sm:block">
-                <OrganizationSwitcher user={user} />
+            <div className="hidden lg:flex items-center gap-2.5 bg-white dark:bg-[#1f1f1f] pr-5 pl-1.5 py-1.5 rounded-full shadow-sm shrink-0 transition-colors border border-black/5 dark:border-white/10">
+              <div className="flex items-center justify-center h-9 w-9 bg-[#ff4d29] rounded-full text-white font-extrabold shadow-sm">
+                <span className="text-lg leading-none">C</span>
               </div>
-
-              {/* Global Search */}
-              <div className="hidden sm:flex max-w-md flex-1 relative group items-center">
-                <Search className="absolute left-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                <Input
-                  type="text"
-                  placeholder="Search across your workspace..."
-                  className="w-full h-9 pl-9 pr-12 bg-slate-100/50 dark:bg-muted/50 border-transparent hover:border-slate-200 dark:hover:border-border focus-visible:bg-white dark:focus-visible:bg-background focus-visible:ring-1 transition-all rounded-md text-sm shadow-inner"
-                />
-                <div className="absolute right-2 flex items-center gap-1 pointer-events-none text-muted-foreground opacity-60">
-                  <Command size={12} />
-                  <span className="text-[10px] font-medium leading-none">K</span>
-                </div>
-              </div>
+              <span className="text-base font-bold text-slate-900 dark:text-white tracking-tight">Collabix</span>
             </div>
 
-            <div className="flex items-center gap-3">
-              {/* Notifications */}
+            <div className="hidden lg:flex items-center gap-2 bg-white dark:bg-[#1f1f1f] px-2 py-1.5 rounded-full shadow-sm transition-colors border border-black/5 dark:border-white/10">
+              {navItems.filter(item => item.name !== 'Reports' && item.name !== 'Settings').map((item) => {
+                const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={`relative px-5 py-2.5 rounded-full text-sm font-semibold transition-all ${
+                      isActive 
+                        ? 'text-black dark:text-white bg-slate-100 dark:bg-white/10' 
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                    }`}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="active-top-nav"
+                        className="absolute inset-0 rounded-full bg-slate-100 dark:bg-white/10"
+                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                      />
+                    )}
+                    <span className="relative z-10">{item.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="hidden sm:flex items-center">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-2 h-12 px-5 bg-white dark:bg-[#1f1f1f] border border-black/5 dark:border-white/10 shadow-sm hover:bg-slate-50 dark:hover:bg-white/5 transition-all rounded-full text-sm font-bold text-slate-700 dark:text-slate-200">
+                    <div className="w-5 h-5 rounded bg-purple-100 dark:bg-purple-900/30 text-[#8b5cf6] flex items-center justify-center mr-1 shrink-0">
+                      <span className="text-[10px] font-black leading-none">{user.organizationName ? user.organizationName.substring(0, 1).toUpperCase() : 'O'}</span>
+                    </div>
+                    <span className="truncate max-w-[120px]">{user.organizationName || 'Select Org'}</span>
+                    <ChevronDown size={14} className="text-slate-400 ml-1 shrink-0" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-2">
+                  <div className="px-2 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Your Organizations</div>
+                  {userOrganizations.map(org => (
+                    <DropdownMenuItem 
+                      key={org.id} 
+                      onClick={() => handleOrgSwitch(org.id)}
+                      className={`cursor-pointer rounded-lg px-3 py-2 mb-1 last:mb-0 hover:bg-slate-50 dark:hover:bg-white/5 ${user.organizationId === org.id ? 'bg-purple-50 dark:bg-purple-900/20' : ''}`}
+                    >
+                      <div className="flex flex-col">
+                        <span className={`font-semibold ${user.organizationId === org.id ? 'text-[#8b5cf6]' : 'text-slate-700 dark:text-slate-200'}`}>{org.name}</span>
+                        <span className="text-[10px] text-slate-400 font-medium">{org.role}</span>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            <div className="flex items-center justify-center h-12 w-12 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5 dark:border-white/10 transition-colors">
               <NotificationBell userId={user.id} />
             </div>
-          </header>
 
-          {/* Page Content */}
-          <main className="flex-1 overflow-y-auto bg-[#FAFAFA] dark:bg-background custom-scrollbar">
-            <div className="container mx-auto p-4 md:p-8 max-w-[1400px]">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-3 bg-white dark:bg-[#1f1f1f] pl-2 pr-4 py-1.5 rounded-full shadow-sm border border-black/5 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer outline-none">
+                  <Avatar className="h-9 w-9 shrink-0 border border-black/5 dark:border-white/10">
+                    <AvatarFallback className="bg-[#f0bd5e]/20 text-[#ffad0d] text-xs font-bold">
+                      {user.name.substring(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="hidden sm:flex flex-col text-left">
+                    <span className="text-sm font-bold text-slate-900 dark:text-white leading-none">{user.name.split(' ')[0]}</span>
+                  </div>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-2">
+                <DropdownMenuItem asChild className="cursor-pointer rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-white/5 mb-1">
+                  <Link href="/workspace/profile" className="flex items-center text-slate-700 dark:text-slate-200 font-semibold">
+                    <User size={16} className="mr-2 text-slate-400" />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="cursor-pointer rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-white/5 mb-1">
+                  <Link href="/workspace/settings" className="flex items-center text-slate-700 dark:text-slate-200 font-semibold">
+                    <Shield size={16} className="mr-2 text-slate-400" />
+                    Security
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-black/5 dark:bg-white/10 my-1" />
+                <DropdownMenuItem 
+                  onClick={handleLogout}
+                  className="cursor-pointer rounded-lg px-3 py-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 font-semibold"
+                >
+                  <div className="flex items-center">
+                    <LogOut size={16} className="mr-2" />
+                    Logout
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+
+        {/* Lower Row: Sidebar + Main Content */}
+        <div className="flex flex-1 min-h-0 gap-2 md:gap-4">
+          <aside className="hidden md:flex flex-col z-20 shrink-0">
+            <SidebarContent />
+          </aside>
+
+          <AnimatePresence>
+            {isMobileMenuOpen && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
+                />
+                <motion.aside
+                  initial={{ x: '-100%' }}
+                  animate={{ x: 0 }}
+                  exit={{ x: '-100%' }}
+                  transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
+                  className="fixed inset-y-0 left-0 z-50 w-24 md:hidden"
+                >
+                  <SidebarContent />
+                  <button
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="absolute right-[-40px] top-4 text-white bg-black/50 rounded-full p-2"
+                  >
+                    <X size={20} />
+                  </button>
+                </motion.aside>
+              </>
+            )}
+          </AnimatePresence>
+
+          <div className="flex flex-1 flex-col min-w-0 bg-[#fbfaf7] dark:bg-[#181818] rounded-[32px] shadow-sm overflow-hidden border border-black/5 dark:border-white/10 transition-colors">
+            <main className="flex-1 overflow-y-auto px-6 md:px-10 py-8 custom-scrollbar">
               {children}
-            </div>
-          </main>
+            </main>
+          </div>
         </div>
       </div>
     </TooltipProvider>

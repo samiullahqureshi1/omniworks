@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useState, useTransition, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Search, UserPlus, Users as UsersIcon, Mail, ShieldAlert, MoreHorizontal, Key, UserX, UserCheck, Pencil } from 'lucide-react';
@@ -25,6 +26,17 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
   const [editUser, setEditUser] = useState<any>(null);
   const [resetUser, setResetUser] = useState<any>(null);
   const [deactivateUser, setDeactivateUser] = useState<any>(null);
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (searchParams.get('invite') === 'true') {
+      setIsAddModalOpen(true);
+      // Clean up the URL
+      router.replace('/workspace/users');
+    }
+  }, [searchParams, router]);
 
   // Filtered Users
   const filteredUsers = users.filter(u => {
@@ -152,7 +164,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
         </div>
         <div className="flex gap-2">
           <select 
-            className="flex h-10 items-center justify-between rounded-md border bg-background px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 w-[140px]"
+            className="flex h-10 items-center justify-between rounded-xl border bg-background px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 w-[140px]"
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
           >
@@ -291,7 +303,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Role</label>
-              <select name="role" required className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <select name="role" required className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <option value="MEMBER">Member</option>
                 <option value="OWNER">Owner</option>
                 <option value="CLIENT">Client</option>
@@ -325,7 +337,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Role</label>
-                  <select name="role" defaultValue={editUser.role} required className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <select name="role" defaultValue={editUser.role} required className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <option value="MEMBER">Member</option>
                     <option value="OWNER">Owner</option>
                     <option value="CLIENT">Client</option>
@@ -333,7 +345,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Status</label>
-                  <select name="status" defaultValue={editUser.status} required className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <select name="status" defaultValue={editUser.status} required className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <option value="ACTIVE">Active</option>
                     <option value="INACTIVE">Inactive</option>
                   </select>

@@ -122,7 +122,7 @@ export function ManualTimeModal({
             {!isMember && (
               <div className="space-y-2">
                 <label className="text-sm font-medium">Project <span className="text-destructive">*</span></label>
-                <select value={projectId} onChange={e => setProjectId(e.target.value)} required className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <select value={projectId} onChange={e => setProjectId(e.target.value)} required className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <option value="">Select a project...</option>
                   {availableProjects.map((p: any) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
@@ -133,7 +133,7 @@ export function ManualTimeModal({
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Task <span className="text-destructive">*</span></label>
-              <select value={taskId} onChange={e => handleTaskChange(e.target.value)} required className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <select value={taskId} onChange={e => handleTaskChange(e.target.value)} required className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <option value="">Select a task...</option>
                 {availableTasks.map((t: any) => (
                   <option key={t.id} value={t.id}>{t.title} {!isMember ? '' : `(${t.project?.name || ''})`}</option>
@@ -152,7 +152,7 @@ export function ManualTimeModal({
             {!isMember && (
               <div className="space-y-2">
                 <label className="text-sm font-medium">Member <span className="text-destructive">*</span></label>
-                <select value={memberId} onChange={e => setMemberId(e.target.value)} required className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <select value={memberId} onChange={e => setMemberId(e.target.value)} required className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <option value="">Select a member...</option>
                   {availableUsers.map((u: any) => (
                     <option key={u.id} value={u.id}>{u.name}</option>

@@ -103,7 +103,7 @@ export async function createProjectAction(data: {
       notes,
       clientId,
       projectManagerId,
-      status,
+      statusId,
       startDate,
       endDate,
       isOngoing,
@@ -130,7 +130,7 @@ export async function createProjectAction(data: {
         organizationId: session.organizationId,
         clientId: clientId || null,
         projectManagerId: projectManagerId || null,
-        status,
+        statusId: statusId || null,
         startDate: new Date(startDate),
         endDate: isOngoing || !endDate ? null : new Date(endDate),
         isOngoing,
@@ -274,6 +274,30 @@ export async function updateProjectAction(
     return { success: true, project: updated };
   } catch (error: any) {
     return { error: error.message || 'Failed to update project.' };
+  }
+}
+
+export async function updateProjectStatusAction(projectId: string, status: Prisma.ProjectCreateInput["status"]) {
+  try {
+    const session = await getSession();
+    if (!session) return { error: 'Unauthorized' };
+
+    // Check project tenant isolation
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, organizationId: session.organizationId },
+    });
+
+    if (!project) return { error: 'Project not found.' };
+
+    // Update status
+    const updated = await prisma.project.update({
+      where: { id: projectId },
+      data: { status },
+    });
+
+    return { success: true, project: updated };
+  } catch (error: any) {
+    return { error: error.message || 'Failed to update project status.' };
   }
 }
 

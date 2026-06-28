@@ -1,5 +1,7 @@
 'use server';
 
+import nodemailer from 'nodemailer';
+
 import { prisma } from '@/lib/db';
 import { getSession, hashPassword } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
@@ -43,10 +45,9 @@ export async function addUserAction(formData: FormData) {
 
     const name = formData.get('name') as string;
     const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
     const roleString = formData.get('role') as string;
 
-    if (!name || !email || !password || !roleString) {
+    if (!name || !email || !roleString) {
       return { error: 'All fields are required.' };
     }
 
@@ -66,8 +67,9 @@ export async function addUserAction(formData: FormData) {
       return { error: 'A user with this email already exists.' };
     }
 
-    // Hash password & create user
-    const passwordHash = await hashPassword(password);
+    // Generate random password
+    const rawPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4).toUpperCase();
+    const passwordHash = await hashPassword(rawPassword);
     
     await prisma.user.create({
       data: {
@@ -80,8 +82,44 @@ export async function addUserAction(formData: FormData) {
       },
     });
 
+    // Send email with credentials
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+      try {
+        const transporter = nodemailer.createTransport({
+          service: 'gmail', // You can change this if using another provider
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+          },
+        });
+
+        await transporter.sendMail({
+          from: `"OmniWork" <${process.env.EMAIL_USER}>`,
+          to: email,
+          subject: 'Your OmniWork Account Credentials',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #333;">Welcome to OmniWork!</h2>
+              <p>Hi ${name},</p>
+              <p>An account has been created for you. Here are your login credentials:</p>
+              <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <p style="margin: 0;"><strong>Email:</strong> ${email}</p>
+                <p style="margin: 5px 0 0 0;"><strong>Password:</strong> ${rawPassword}</p>
+              </div>
+              <p style="color: #666; font-size: 14px;">
+                <em>Please log in and change your password from the security page as soon as possible.</em>
+              </p>
+            </div>
+          `,
+        });
+      } catch (emailError) {
+        console.error('Failed to send email:', emailError);
+        // We don't return an error here because the user was created successfully
+      }
+    }
+
     revalidatePath('/workspace/users');
-    return { success: true, message: 'User added successfully.' };
+    return { success: true, message: 'User added successfully. An email with credentials has been sent.' };
   } catch (error: any) {
     console.error('Add user error:', error);
     return { error: error.message || 'Failed to add user.' };

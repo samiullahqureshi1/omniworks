@@ -4,9 +4,11 @@ import React, { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { formatHours } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Search, Plus, Settings, Calendar, Clock, LayoutGrid, List } from 'lucide-react';
+import { Search, Plus, Settings, Calendar, Clock, LayoutGrid, List, Columns } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, Edit, Trash2 } from 'lucide-react';
 import { deleteTaskAction } from '@/app/actions/tasks';
@@ -42,7 +44,20 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
   const [selectedStatusId, setSelectedStatusId] = useState<string>('all');
   const [selectedAssigneeId, setSelectedAssigneeId] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'kanban' | 'list'>('table');
+
+  React.useEffect(() => {
+    const savedView = localStorage.getItem("omniwork_task_view");
+    if (savedView === "table" || savedView === "kanban" || savedView === "list") {
+      setViewMode(savedView as any);
+    }
+  }, []);
+
+  const handleSetViewMode = (mode: 'table' | 'kanban' | 'list') => {
+    setViewMode(mode);
+    localStorage.setItem("omniwork_task_view", mode);
+  };
+
   const [isPending, startTransition] = useTransition();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -160,7 +175,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
         <select 
           value={selectedProjectId} 
           onChange={(e) => setSelectedProjectId(e.target.value)}
-          className="flex h-10 w-full md:w-[180px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          className="flex h-10 w-full md:w-[180px] rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
         >
           <option value="all">All Projects</option>
           {projects.map(p => (
@@ -171,7 +186,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
         <select 
           value={selectedStatusId} 
           onChange={(e) => setSelectedStatusId(e.target.value)}
-          className="flex h-10 w-full md:w-[180px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+          className="flex h-10 w-full md:w-[180px] rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <option value="all">All Statuses</option>
           {taskStatuses.map(s => (
@@ -182,7 +197,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
         <select 
           value={selectedAssigneeId} 
           onChange={(e) => setSelectedAssigneeId(e.target.value)}
-          className="flex h-10 w-full md:w-[180px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+          className="flex h-10 w-full md:w-[180px] rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <option value="all">All Assignees</option>
           {availableUsers.map(u => (
@@ -190,17 +205,20 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
           ))}
         </select>
 
-        <div className="flex items-center gap-1 bg-muted p-1 rounded-md">
-          <Button variant={viewMode === 'table' ? 'secondary' : 'ghost'} size="sm" className="px-2" onClick={() => setViewMode('table')}>
+        <div className="flex items-center gap-1 bg-muted p-1 rounded-xl">
+          <Button variant={viewMode === 'table' ? 'secondary' : 'ghost'} size="sm" className="px-2" onClick={() => handleSetViewMode('table')}>
             <List className="w-4 h-4" />
           </Button>
-          <Button variant={viewMode === 'card' ? 'secondary' : 'ghost'} size="sm" className="px-2" onClick={() => setViewMode('card')}>
+          <Button variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} size="sm" className="px-2" onClick={() => handleSetViewMode('kanban')}>
+            <Columns className="w-4 h-4" />
+          </Button>
+          <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} size="sm" className="px-2" onClick={() => handleSetViewMode('list')}>
             <LayoutGrid className="w-4 h-4" />
           </Button>
         </div>
       </div>
 
-      {viewMode === 'table' ? (
+      {viewMode === 'table' && (
         <div className="border rounded-lg bg-card shadow-sm overflow-hidden">
           <Table>
             <TableHeader className="bg-muted/50">
@@ -258,8 +276,8 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                     </TableCell>
                     <TableCell>
                       <div className="text-xs">
-                        <span className="font-medium text-emerald-600">{task.trackedHours || 0}h</span>
-                        <span className="text-muted-foreground"> / {task.allocatedHours || '-'}h</span>
+                        <span className="font-medium text-emerald-600">{formatHours(task.trackedHours)}</span>
+                        <span className="text-muted-foreground"> / {task.allocatedHours ? formatHours(task.allocatedHours) : '-'}</span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -287,7 +305,106 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
             </TableBody>
           </Table>
         </div>
-      ) : (
+      )}
+
+      {viewMode === 'kanban' && (
+        <div className="flex gap-5 overflow-x-auto pb-6 pt-2 custom-scrollbar min-h-[calc(100vh-220px)] animate-in fade-in zoom-in-95 duration-200 px-2">
+          {taskStatuses.map((status) => {
+            const statusTasks = filteredTasks.filter(t => t.statusId === status.id);
+            return (
+              <div key={status.id} className="flex flex-col min-w-[340px] max-w-[340px] rounded-2xl shadow-sm border border-border/50 bg-slate-50/50 dark:bg-slate-900/50 transition-all duration-300">
+                <div className="flex items-center justify-between mb-4 px-4 pt-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full shadow-inner" style={{ backgroundColor: status.color || '#94a3b8' }} />
+                    <h3 className="font-bold text-[13px] tracking-wide uppercase text-foreground/80">{status.name}</h3>
+                    <Badge variant="secondary" className="text-[11px] font-bold h-5 px-2 bg-white dark:bg-slate-800 rounded-full shadow-sm text-muted-foreground border-border/50 border">
+                      {statusTasks.length}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-3 overflow-y-auto custom-scrollbar px-3 pb-3 flex-1">
+                  {statusTasks.map(task => {
+                    const priorityHex = task.priority === 'CRITICAL' ? '#ef4444' : task.priority === 'HIGH' ? '#f97316' : task.priority === 'MEDIUM' ? '#3b82f6' : '#cbd5e1';
+                    return (
+                      <div key={task.id} className="bg-background border border-border/40 rounded-xl p-4 shadow-sm hover:shadow-lg hover:border-primary/30 transition-all duration-300 group flex flex-col gap-3 cursor-pointer relative overflow-hidden">
+                        
+                        {/* Priority Line */}
+                        <div className="absolute top-0 left-0 w-[4px] h-full transition-all duration-300 group-hover:w-[6px]" style={{ backgroundColor: priorityHex }} />
+                        
+                        <div className="flex justify-between items-start gap-3 pl-2">
+                          <span className="font-semibold text-[14px] leading-snug text-foreground/90 transition-colors line-clamp-2">
+                            {task.title}
+                          </span>
+                          {currentUser.role !== 'CLIENT' && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <div className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-muted rounded-md cursor-pointer shrink-0">
+                                  <MoreHorizontal size={14} className="text-muted-foreground hover:text-foreground" />
+                                </div>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem onClick={() => openEdit(task)} className="cursor-pointer">
+                                  <Edit className="w-4 h-4 mr-2" /> Edit Task
+                                </DropdownMenuItem>
+                                {(currentUser.role === 'OWNER' || task.project.projectManagerId === currentUser.userId) && (
+                                  <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={() => handleDelete(task.id)}>
+                                    <Trash2 className="w-4 h-4 mr-2" /> Delete Task
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </div>
+                        
+                        <div className="pl-2 flex items-center justify-between">
+                          <span className="text-[12px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded flex items-center hover:bg-primary/20 transition-colors" onClick={() => router.push(`/workspace/projects/${task.projectId}`)}>
+                            {task.project.name}
+                          </span>
+                          
+                          {task.dueDate && (
+                            <div className="text-[11px] font-semibold flex items-center gap-1.5 text-muted-foreground">
+                              <Calendar size={12} className="opacity-70" /> {formatDate(task.dueDate)}
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex justify-between items-center mt-2 pl-2">
+                          <div className="flex -space-x-2 overflow-hidden py-1">
+                            {task.assignees.map((a: any) => (
+                              <div key={a.userId} className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-background shadow-sm transition-transform group-hover:scale-110 duration-200 flex items-center justify-center font-bold text-slate-600 dark:text-slate-300 text-[9px]" title={a.user.name}>
+                                {a.user.name.charAt(0).toUpperCase()}
+                              </div>
+                            ))}
+                            {task.assignees.length === 0 && (
+                              <div className="w-6 h-6 rounded-full bg-slate-50 dark:bg-slate-900 border-2 border-background border-dashed flex items-center justify-center">
+                                <Plus size={10} className="text-muted-foreground" />
+                              </div>
+                            )}
+                          </div>
+                          
+                          {task.allocatedHours > 0 && (
+                            <div className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                              <Clock size={12} className="opacity-70" />
+                              <span>{formatHours(task.trackedHours || 0)} / {task.allocatedHours}h</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {statusTasks.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-20 border-2 border-dashed border-border/50 rounded-xl text-muted-foreground text-[12px] font-medium bg-background/30">
+                      Drag tasks here
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {viewMode === 'list' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredTasks.length === 0 ? (
              <div className="col-span-full text-center py-12 text-muted-foreground border rounded-lg bg-card">
@@ -344,8 +461,8 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                       ))}
                     </div>
                     <div className="flex flex-col items-end">
-                      <span className="font-medium text-emerald-600">{task.trackedHours || 0}h</span>
-                      <span className="text-muted-foreground">of {task.allocatedHours || '-'}h</span>
+                      <span className="font-medium text-emerald-600">{formatHours(task.trackedHours)}</span>
+                      <span className="text-muted-foreground">of {task.allocatedHours ? formatHours(task.allocatedHours) : '-'}</span>
                     </div>
                   </div>
                   

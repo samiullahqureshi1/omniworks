@@ -77,7 +77,7 @@ export function OrganizationSwitcher({ user }: { user: any }) {
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
-            className="w-[200px] justify-between h-9 truncate px-3 bg-white hover:bg-slate-50 dark:bg-slate-950 dark:hover:bg-slate-900 border-slate-200 dark:border-slate-800"
+            className="w-[200px] justify-between h-9 truncate px-3 bg-white hover:bg-\[#fbfaf7\] dark:bg-slate-950 dark:hover:bg-slate-900 border-slate-200 dark:border-slate-800"
           >
             <div className="flex items-center gap-2 truncate">
               <Building2 size={14} className="text-muted-foreground shrink-0" />
