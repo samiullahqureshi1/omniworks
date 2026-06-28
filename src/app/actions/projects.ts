@@ -54,12 +54,17 @@ export async function quickCreateProjectAction(name: string) {
     }
     if (!name) return { error: 'Project name is required.' };
 
+    const defaultStatus = await prisma.projectStatus.findFirst({
+      where: { organizationId: session.organizationId },
+      orderBy: { order: 'asc' }
+    });
+
     const project = await prisma.project.create({
       data: {
         name,
         organizationId: session.organizationId,
         startDate: new Date(),
-        status: 'PLANNING',
+        statusId: defaultStatus?.id || null,
         priority: 'MEDIUM',
       },
     });
@@ -75,7 +80,7 @@ export async function createProjectAction(data: {
   notes?: string;
   clientId?: string;
   projectManagerId?: string;
-  status: Prisma.ProjectCreateInput["status"];
+  statusId?: string;
   startDate: string;
   endDate?: string;
   isOngoing: boolean;
@@ -87,7 +92,7 @@ export async function createProjectAction(data: {
     title: string;
     description?: string;
     priority: Prisma.ProjectCreateInput["priority"];
-    status: Prisma.ProjectCreateInput["status"];
+    statusId?: string;
     assigneeIds: string[];
   }[];
 }) {
@@ -147,6 +152,7 @@ export async function createProjectAction(data: {
             title: task.title,
             description: task.description || null,
             priority: task.priority,
+            statusId: task.statusId || null,
             organizationId: session.organizationId,
             assignees: {
               create: task.assigneeIds.map((userId) => ({
