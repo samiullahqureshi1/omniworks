@@ -47,3 +47,4 @@ node_modules/
 desktop/node_modules/
 test_query.js
 test_sync.js
+desktop/dist/
