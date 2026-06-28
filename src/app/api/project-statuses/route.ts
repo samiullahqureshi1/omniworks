@@ -19,7 +19,7 @@ export async function GET(req: Request) {
     // Verify user belongs to org
     const orgUser = await prisma.user.findFirst({
       where: {
-        id: user.id,
+        id: user.userId,
         organizationId: orgId
       }
     });
