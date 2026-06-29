@@ -12,6 +12,13 @@ model Organization {
   slug         String?        @unique
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
+  ownerUserId  String?
+  parentOrganizationId String?
+  
+  owner                User?          @relation("OrganizationOwner", fields: [ownerUserId], references: [id])
+  parentOrganization   Organization?  @relation("ChildOrganizations", fields: [parentOrganizationId], references: [id])
+  childOrganizations   Organization[] @relation("ChildOrganizations")
+
   users        User[]
   invitations  Invitation[]
   projects     Project[]
@@ -55,6 +62,7 @@ model User {
   updatedAt        DateTime          @updatedAt
 
   // Relations
+  ownedOrganizations Organization[]  @relation("OrganizationOwner")
   clientProjects   Project[]         @relation("ProjectClient")
   managedProjects  Project[]         @relation("ProjectManager")
   projectAssignees ProjectAssignee[]

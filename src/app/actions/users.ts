@@ -94,22 +94,38 @@ export async function addUserAction(formData: FormData) {
         });
 
         await transporter.sendMail({
-          from: `"OmniWork" <${process.env.EMAIL_USER}>`,
+          from: `"OmniWork Support" <${process.env.EMAIL_USER}>`,
           to: email,
+          replyTo: process.env.EMAIL_USER,
           subject: 'Your OmniWork Account Credentials',
+          text: `Hi ${name},\n\nAn account has been created for you at OmniWork. Here are your login credentials:\n\nEmail: ${email}\nPassword: ${rawPassword}\n\nPlease log in and change your password from the security page as soon as possible.\n\nBest,\nThe OmniWork Team`,
           html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #333;">Welcome to OmniWork!</h2>
-              <p>Hi ${name},</p>
-              <p>An account has been created for you. Here are your login credentials:</p>
-              <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                <p style="margin: 0;"><strong>Email:</strong> ${email}</p>
-                <p style="margin: 5px 0 0 0;"><strong>Password:</strong> ${rawPassword}</p>
-              </div>
-              <p style="color: #666; font-size: 14px;">
-                <em>Please log in and change your password from the security page as soon as possible.</em>
-              </p>
-            </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your OmniWork Account Credentials</title>
+</head>
+<body style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 20px;">
+  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+    <h2 style="color: #333333; margin-top: 0;">Welcome to OmniWork!</h2>
+    <p style="color: #555555; font-size: 16px;">Hi ${name},</p>
+    <p style="color: #555555; font-size: 16px;">An account has been created for you. Here are your login credentials:</p>
+    <div style="background-color: #f5f5f5; padding: 20px; border-radius: 6px; margin: 25px 0; border: 1px solid #eeeeee;">
+      <p style="margin: 0; color: #333333; font-size: 15px;"><strong>Email:</strong> ${email}</p>
+      <p style="margin: 10px 0 0 0; color: #333333; font-size: 15px;"><strong>Password:</strong> ${rawPassword}</p>
+    </div>
+    <p style="color: #777777; font-size: 14px; line-height: 1.5;">
+      <em>Please log in and change your password from the security page as soon as possible.</em>
+    </p>
+    <hr style="border: none; border-top: 1px solid #eeeeee; margin: 30px 0 20px 0;" />
+    <p style="color: #999999; font-size: 12px; text-align: center; margin: 0;">
+      © ${new Date().getFullYear()} OmniWork. All rights reserved.
+    </p>
+  </div>
+</body>
+</html>
           `,
         });
       } catch (emailError) {
@@ -277,4 +293,39 @@ export async function resetUserPasswordAction(id: string, formData: FormData) {
 
 export async function acceptInvitationAction(formData: FormData): Promise<{ success?: boolean; error?: string }> {
   return { success: true };
+}
+
+// Delete User
+export async function deleteUserAction(id: string) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== 'OWNER') {
+      return { error: 'Unauthorized: Only owners can delete users.' };
+    }
+
+    if (id === session.userId) {
+      return { error: 'You cannot delete your own account.' };
+    }
+
+    const targetUser = await prisma.user.findFirst({
+      where: { id, organizationId: session.organizationId }
+    });
+
+    if (!targetUser) {
+      return { error: 'User not found.' };
+    }
+
+    if (targetUser.role === 'OWNER') {
+      return { error: 'Owner cannot be deleted.' };
+    }
+
+    await prisma.user.delete({
+      where: { id }
+    });
+
+    revalidatePath('/workspace/users');
+    return { success: true, message: 'User deleted successfully.' };
+  } catch (error: any) {
+    return { error: error.message || 'Failed to delete user.' };
+  }
 }

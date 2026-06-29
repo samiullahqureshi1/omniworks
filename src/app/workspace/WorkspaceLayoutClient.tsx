@@ -22,12 +22,14 @@ import {
   Sun,
   ChevronDown,
   User,
-  Shield
+  Shield,
+  Trash2,
+  Plus
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { logoutAction, switchOrganizationAction } from '@/app/actions/auth';
+import { logoutAction, switchOrganizationAction, deleteOrganizationAction } from '@/app/actions/auth';
 import { NotificationBell } from '@/components/dashboard/NotificationBell';
 import { useTheme } from '@/components/ThemeProvider';
 import {
@@ -45,9 +47,14 @@ export default function WorkspaceLayoutClient({
 }: {
   children: React.ReactNode;
   user: any;
-  userOrganizations?: Array<{id: string, name: string, role: string}>;
+  userOrganizations?: Array<{id: string, name: string, role: string, isChild: boolean}>;
 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isCreateChildModalOpen, setIsCreateChildModalOpen] = useState(false);
+  const [newChildOrgName, setNewChildOrgName] = useState('');
+  const [isCreatingChildOrg, setIsCreatingChildOrg] = useState(false);
+  const [deleteOrg, setDeleteOrg] = useState<any>(null);
+  const [isDeletingOrg, setIsDeletingOrg] = useState(false);
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
@@ -64,11 +71,60 @@ export default function WorkspaceLayoutClient({
 
   const handleOrgSwitch = async (orgId: string) => {
     if (orgId === user.organizationId) return;
-    const res = await switchOrganizationAction(orgId);
-    if (res.success) {
+    const res = await fetch('/api/organizations/switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ organizationId: orgId })
+    });
+    const data = await res.json();
+    if (data.success) {
       window.location.reload();
     } else {
-      alert(res.error || 'Failed to switch organization');
+      alert(data.error || 'Failed to switch organization');
+    }
+  };
+
+  const handleCreateChildOrg = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newChildOrgName.trim()) return;
+    setIsCreatingChildOrg(true);
+    try {
+      const res = await fetch('/api/organizations/child', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newChildOrgName })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsCreateChildModalOpen(false);
+        setNewChildOrgName("");
+        // Automatically switch to the newly created org
+        await handleOrgSwitch(data.organization.id);
+      } else {
+        alert(data.error || 'Failed to create child organization');
+      }
+    } catch (error) {
+      alert('An error occurred while creating the organization.');
+    } finally {
+      setIsCreatingChildOrg(false);
+    }
+  };
+
+  const handleDeleteOrg = async () => {
+    if (!deleteOrg) return;
+    setIsDeletingOrg(true);
+    try {
+      const res = await deleteOrganizationAction(deleteOrg.id);
+      if (res.error) {
+        alert(res.error);
+      } else {
+        setDeleteOrg(null);
+        window.location.reload();
+      }
+    } catch (error) {
+      alert('An error occurred while deleting the organization.');
+    } finally {
+      setIsDeletingOrg(false);
     }
   };
 
@@ -224,17 +280,42 @@ export default function WorkspaceLayoutClient({
                 <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-2">
                   <div className="px-2 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Your Organizations</div>
                   {userOrganizations.map(org => (
-                    <DropdownMenuItem 
-                      key={org.id} 
-                      onClick={() => handleOrgSwitch(org.id)}
-                      className={`cursor-pointer rounded-lg px-3 py-2 mb-1 last:mb-0 hover:bg-slate-50 dark:hover:bg-white/5 ${user.organizationId === org.id ? 'bg-purple-50 dark:bg-purple-900/20' : ''}`}
-                    >
-                      <div className="flex flex-col">
-                        <span className={`font-semibold ${user.organizationId === org.id ? 'text-[#8b5cf6]' : 'text-slate-700 dark:text-slate-200'}`}>{org.name}</span>
-                        <span className="text-[10px] text-slate-400 font-medium">{org.role}</span>
-                      </div>
-                    </DropdownMenuItem>
+                    <div key={org.id} className="relative group flex items-center mb-1 last:mb-0">
+                      <DropdownMenuItem 
+                        onClick={() => handleOrgSwitch(org.id)}
+                        className={`flex-1 cursor-pointer rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-white/5 ${user.organizationId === org.id ? 'bg-purple-50 dark:bg-purple-900/20' : ''}`}
+                      >
+                        <div className="flex flex-col pr-8">
+                          <span className={`font-semibold ${user.organizationId === org.id ? 'text-[#8b5cf6]' : 'text-slate-700 dark:text-slate-200'}`}>{org.name}</span>
+                          <span className="text-[10px] text-slate-400 font-medium">{org.role}{org.isChild ? ' (Child)' : ' (Base)'}</span>
+                        </div>
+                      </DropdownMenuItem>
+                      {org.role === 'OWNER' && (
+                        <button 
+                          className="absolute right-2 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDeleteOrg(org);
+                          }}
+                          title="Delete Organization"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
                   ))}
+                  {user.role === 'OWNER' && (
+                    <>
+                      <DropdownMenuSeparator className="bg-black/5 dark:bg-white/10 my-1" />
+                      <DropdownMenuItem 
+                        className="cursor-pointer rounded-lg px-3 py-2 text-[#8b5cf6] font-semibold hover:bg-purple-50 dark:hover:bg-purple-900/20 flex items-center gap-2"
+                        onClick={() => setIsCreateChildModalOpen(true)}
+                      >
+                        <Plus size={16} /> Create
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -326,6 +407,81 @@ export default function WorkspaceLayoutClient({
           </div>
         </div>
       </div>
+      {/* Create Child Organization Modal */}
+      {isCreateChildModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-[#1f1f1f] rounded-2xl shadow-xl border border-black/5 dark:border-white/10 w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-black/5 dark:border-white/10">
+              <h2 className="text-xl font-bold">Create Child Organization</h2>
+              <p className="text-sm text-slate-500 mt-1">Create a separate workspace for a team, client, or department.</p>
+            </div>
+            <form onSubmit={handleCreateChildOrg} className="p-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Organization Name</label>
+                  <Input 
+                    placeholder="e.g. Design Team" 
+                    value={newChildOrgName}
+                    onChange={(e) => setNewChildOrgName(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <div className="mt-8 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateChildModalOpen(false)}
+                  className="px-4 py-2 text-sm font-semibold rounded-full hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+                  disabled={isCreatingChildOrg}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingChildOrg || !newChildOrgName.trim()}
+                  className="px-6 py-2 text-sm font-semibold rounded-full bg-[#8b5cf6] text-white hover:bg-[#7c3aed] transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {isCreatingChildOrg ? 'Creating...' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Organization Modal */}
+      {deleteOrg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-[#1f1f1f] rounded-2xl shadow-xl border border-black/5 dark:border-white/10 w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-black/5 dark:border-white/10">
+              <h2 className="text-xl font-bold text-red-600">Delete Organization</h2>
+              <p className="text-sm text-slate-500 mt-1">
+                Are you sure you want to completely delete <strong>{deleteOrg.name}</strong>? 
+                This will also permanently delete all its projects, tasks, and members.
+              </p>
+            </div>
+            <div className="p-6 flex justify-end gap-3 bg-slate-50 dark:bg-black/20">
+              <button
+                type="button"
+                onClick={() => setDeleteOrg(null)}
+                className="px-4 py-2 text-sm font-semibold rounded-full hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
+                disabled={isDeletingOrg}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteOrg}
+                className="px-4 py-2 text-sm font-semibold rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
+                disabled={isDeletingOrg}
+              >
+                {isDeletingOrg ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </TooltipProvider>
   );
 }

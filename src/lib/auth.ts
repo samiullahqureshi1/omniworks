@@ -70,14 +70,38 @@ export async function getSession(): Promise<UserSession | null> {
     // Verify user and organization still exist and user is ACTIVE
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: { status: true, organizationId: true },
+      select: { 
+        id: true,
+        status: true, 
+        organizationId: true,
+        ownedOrganizations: { select: { id: true } }
+      },
     });
 
     if (!user || user.status !== 'ACTIVE' || user.organizationId !== decoded.organizationId) {
-      // Invalid session: User deleted, deactivated, or DB was reset.
-      // We do not delete the cookie here because this is often called inside Server Components (layout.tsx),
-      // which throws an error if we try to mutate cookies. We let the layout redirect to /logout instead.
       return null;
+    }
+
+    // Check for active organization override
+    const activeOrgCookie = cookieStore.get('omniwork_active_org')?.value;
+    if (activeOrgCookie && activeOrgCookie !== decoded.organizationId) {
+      // Validate that the user owns this active org or it's a child of their base org
+      const activeOrg = await prisma.organization.findFirst({
+        where: {
+          id: activeOrgCookie,
+          OR: [
+            { ownerUserId: user.id },
+            { parentOrganizationId: decoded.organizationId }, // Allow if it's a child of the base org
+            { id: decoded.organizationId } // Self
+          ]
+        },
+        select: { id: true, name: true }
+      });
+
+      if (activeOrg) {
+        decoded.organizationId = activeOrg.id;
+        decoded.organizationName = activeOrg.name;
+      }
     }
 
     return decoded;

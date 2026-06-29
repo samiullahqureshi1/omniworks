@@ -32,11 +32,27 @@ export default async function WorkspaceLayout({
     include: { organization: true }
   });
 
-  const userOrganizations = userRecords.map(u => ({
+  const baseOrganizations = userRecords.map(u => ({
     id: u.organization.id,
     name: u.organization.name,
-    role: u.role
+    role: u.role,
+    isChild: false
   }));
+
+  // Fetch child organizations for any org where the user is an OWNER
+  const ownedOrgIds = userRecords.filter(u => u.role === 'OWNER').map(u => u.organization.id);
+  const childOrgs = await prisma.organization.findMany({
+    where: { parentOrganizationId: { in: ownedOrgIds } }
+  });
+
+  const childOrganizations = childOrgs.map(org => ({
+    id: org.id,
+    name: org.name,
+    role: 'OWNER',
+    isChild: true
+  }));
+
+  const userOrganizations = [...baseOrganizations, ...childOrganizations];
 
   return (
     <ThemeProvider>

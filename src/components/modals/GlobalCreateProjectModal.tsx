@@ -34,13 +34,20 @@ export default function GlobalCreateProjectModal({
 
   // Modal States
   const [isQuickClientOpen, setIsQuickClientOpen] = useState(false);
-  const [isMemberSelectOpen, setIsMemberSelectOpen] = useState(false);
 
   // Form States
   const [description, setDescription] = useState("");
   const [isOngoing, setIsOngoing] = useState(false);
-  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
-  const [projectTasks, setProjectTasks] = useState<any[]>([]);
+  const [projectTasks, setProjectTasks] = useState<
+    {
+      id: string;
+      title: string;
+      description: string;
+      status: string;
+      priority: string;
+      assigneeId: string;
+    }[]
+  >([]);
 
   // Inline Status Creation States
   const [isCreatingStatus, setIsCreatingStatus] = useState(false);
@@ -111,7 +118,7 @@ export default function GlobalCreateProjectModal({
         ? Number(formData.get("totalAllocatedHours"))
         : undefined,
       notes: formData.get("notes") as string,
-      assigneeIds: selectedAssignees,
+      assigneeIds: [],
       tasks: projectTasks
         .filter((t) => t.title.trim() !== "")
         .map((t) => ({
@@ -133,7 +140,6 @@ export default function GlobalCreateProjectModal({
         // Reset state
         setDescription("");
         setIsOngoing(false);
-        setSelectedAssignees([]);
         setProjectTasks([]);
         window.location.reload();
       }
@@ -168,7 +174,7 @@ export default function GlobalCreateProjectModal({
         <DialogContent
           className="sm:max-w-[700px] h-[90vh] p-0 flex flex-col overflow-hidden"
           onInteractOutside={(e) => {
-            if (isMemberSelectOpen || isQuickClientOpen) e.preventDefault();
+            if (isQuickClientOpen) e.preventDefault();
           }}
         >
           <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shrink-0 shadow-sm">
@@ -389,36 +395,6 @@ export default function GlobalCreateProjectModal({
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Assign Team Members</label>
-                <div
-                  onClick={() => setIsMemberSelectOpen(true)}
-                  className="flex min-h-[40px] w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-sm cursor-pointer hover:bg-muted/50 transition-colors"
-                >
-                  {selectedAssignees.length === 0 ? (
-                    <span className="text-muted-foreground">
-                      Click to select members...
-                    </span>
-                  ) : (
-                    <div className="flex flex-wrap gap-1">
-                      {selectedAssignees.map((id) => {
-                        const member = members.find((m) => m.id === id);
-                        return member ? (
-                          <Badge
-                            variant="secondary"
-                            key={id}
-                            className="text-xs font-normal"
-                          >
-                            {member.name}
-                          </Badge>
-                        ) : null;
-                      })}
-                    </div>
-                  )}
-                  <Users className="h-4 w-4 text-muted-foreground ml-2 flex-shrink-0" />
-                </div>
-              </div>
-
               {/* Project Tasks */}
               <div className="space-y-3 pt-2">
                 <div className="flex justify-between items-center">
@@ -618,56 +594,7 @@ export default function GlobalCreateProjectModal({
         </DialogContent>
       </Dialog>
 
-      {/* Member Selection Dialog */}
-      <Dialog open={isMemberSelectOpen} onOpenChange={setIsMemberSelectOpen}>
-        <DialogContent className="sm:max-w-[400px] p-0">
-          <DialogHeader className="px-4 py-3 border-b">
-            <DialogTitle>Select Assignees</DialogTitle>
-          </DialogHeader>
-          <div className="p-2 space-y-1 max-h-[300px] overflow-y-auto">
-            {members.map((member) => (
-              <label
-                key={member.id}
-                className="flex items-center space-x-3 p-2 hover:bg-muted/50 rounded-lg cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedAssignees.includes(member.id)}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedAssignees([...selectedAssignees, member.id]);
-                    } else {
-                      setSelectedAssignees(
-                        selectedAssignees.filter((id) => id !== member.id),
-                      );
-                    }
-                  }}
-                  className="rounded border-gray-300 text-primary focus:ring-primary"
-                />
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">{member.name}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {member.email}
-                  </span>
-                </div>
-              </label>
-            ))}
-            {members.length === 0 && (
-              <div className="p-4 text-center text-sm text-muted-foreground">
-                No members found in your organization.
-              </div>
-            )}
-          </div>
-          <div className="p-3 border-t bg-muted/20 flex justify-end">
-            <Button
-              size="sm"
-              onClick={() => setIsMemberSelectOpen(false)}
-            >
-              Done
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+
     </>
   );
 }

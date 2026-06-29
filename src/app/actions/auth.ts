@@ -25,9 +25,9 @@ export async function signupAction(formData: FormData) {
       return { error: 'User with this email already exists. Log in and create an organization from the dashboard instead.' };
     }
 
-    // Create organization
+    // Create organization first (without ownerUserId)
     const slug = companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now().toString().slice(-4);
-    const org = await prisma.organization.create({
+    let org = await prisma.organization.create({
       data: {
         name: companyName,
         slug,
@@ -44,6 +44,12 @@ export async function signupAction(formData: FormData) {
         role: 'OWNER',
         organizationId: org.id,
       },
+    });
+
+    // Update organization with the newly created ownerUserId
+    org = await prisma.organization.update({
+      where: { id: org.id },
+      data: { ownerUserId: user.id }
     });
 
     // Create Session
@@ -214,4 +220,29 @@ export async function logoutAction() {
 
 export async function getCurrentUser() {
   return await getSession();
+}
+
+export async function deleteOrganizationAction(id: string) {
+  try {
+    const session = await getSession();
+    if (!session) return { error: 'Unauthorized' };
+
+    const targetOrg = await prisma.organization.findUnique({
+      where: { id }
+    });
+
+    if (!targetOrg) return { error: 'Organization not found' };
+
+    if (targetOrg.ownerUserId !== session.userId) {
+      return { error: 'Only the organization owner can delete it.' };
+    }
+
+    await prisma.organization.delete({
+      where: { id }
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message || 'Failed to delete organization.' };
+  }
 }

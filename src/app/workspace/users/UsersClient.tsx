@@ -4,14 +4,15 @@ import React, { useState, useTransition, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, UserPlus, Users as UsersIcon, Mail, ShieldAlert, MoreHorizontal, Key, UserX, UserCheck, Pencil } from 'lucide-react';
+import { Search, UserPlus, Users as UsersIcon, Mail, ShieldAlert, MoreHorizontal, Key, UserX, UserCheck, Pencil, Trash2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { addUserAction, editUserAction, deactivateUserAction, activateUserAction, resetUserPasswordAction } from '@/app/actions/users';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { addUserAction, editUserAction, deactivateUserAction, activateUserAction, resetUserPasswordAction, deleteUserAction } from '@/app/actions/users';
 
 export default function UsersClient({ initialUsers, currentUser }: { initialUsers: any[], currentUser: any }) {
   const [users, setUsers] = useState(initialUsers);
@@ -19,13 +20,14 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState('ALL');
+  const [activeTab, setActiveTab] = useState('members');
 
   // Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editUser, setEditUser] = useState<any>(null);
   const [resetUser, setResetUser] = useState<any>(null);
   const [deactivateUser, setDeactivateUser] = useState<any>(null);
+  const [deleteUser, setDeleteUser] = useState<any>(null);
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -41,21 +43,16 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
   // Filtered Users
   const filteredUsers = users.filter(u => {
     const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
-    return matchesSearch && matchesRole;
+    const matchesTab = activeTab === 'members' 
+      ? (u.role === 'OWNER' || u.role === 'MEMBER')
+      : (u.role === 'CLIENT');
+    return matchesSearch && matchesTab;
   });
 
   // Handle Add User
   const handleAddSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const pwd = formData.get('password') as string;
-    const confirmPwd = formData.get('confirmPassword') as string;
-
-    if (pwd !== confirmPwd) {
-      toast.error('Passwords do not match');
-      return;
-    }
 
     startTransition(async () => {
       const res = await addUserAction(formData);
@@ -132,6 +129,20 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
     });
   };
 
+  // Handle Delete
+  const handleDeleteSubmit = async (userToDelete: any) => {
+    startTransition(async () => {
+      const res = await deleteUserAction(userToDelete.id);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success(res.message);
+        setDeleteUser(null);
+        window.location.reload();
+      }
+    });
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header Area */}
@@ -163,16 +174,16 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
           />
         </div>
         <div className="flex gap-2">
-          <select 
-            className="flex h-10 items-center justify-between rounded-xl border bg-background px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 w-[140px]"
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-          >
-            <option value="ALL">All Roles</option>
-            <option value="OWNER">Owner</option>
-            <option value="MEMBER">Member</option>
-            <option value="CLIENT">Client</option>
-          </select>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="bg-muted/30 border border-slate-200/60 shadow-sm p-1.5 rounded-xl h-10">
+              <TabsTrigger value="members" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm px-4">
+                Members
+              </TabsTrigger>
+              <TabsTrigger value="clients" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm px-4">
+                Clients
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
       </div>
 
@@ -262,6 +273,14 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
                               <UserCheck className="mr-2 h-4 w-4" /> Reactivate User
                             </DropdownMenuItem>
                           )}
+                          {u.role !== 'OWNER' && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => setDeleteUser(u)} className="text-destructive focus:text-destructive cursor-pointer">
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete User
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}
@@ -290,16 +309,6 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
             <div className="space-y-2">
               <label className="text-sm font-medium">Email</label>
               <Input name="email" type="email" required placeholder="john@example.com" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Password</label>
-                <Input name="password" type="password" required />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Confirm Password</label>
-                <Input name="confirmPassword" type="password" required />
-              </div>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Role</label>
@@ -399,6 +408,24 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
             <Button type="button" variant="outline" onClick={() => setDeactivateUser(null)}>Cancel</Button>
             <Button type="button" variant="destructive" disabled={isPending} onClick={() => handleToggleStatus(deactivateUser)}>
               {isPending ? 'Deactivating...' : 'Yes, Deactivate'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={!!deleteUser} onOpenChange={(open) => !open && setDeleteUser(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Delete User</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to completely delete <strong>{deleteUser?.name}</strong>? This action cannot be undone and will remove them from the organization entirely.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="pt-4">
+            <Button type="button" variant="outline" onClick={() => setDeleteUser(null)}>Cancel</Button>
+            <Button type="button" variant="destructive" disabled={isPending} onClick={() => handleDeleteSubmit(deleteUser)}>
+              {isPending ? 'Deleting...' : 'Yes, Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

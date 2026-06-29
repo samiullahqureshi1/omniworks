@@ -287,36 +287,7 @@
     </svg>
   </div>
 
-  <div id="project-select-view" class="view-container hidden">
-    <h3 class="view-title" id="select-title">Please Select your Project</h3>
-    
-    <div class="list-box" id="list-container">
-      <!-- Items generated via JS -->
-    </div>
-
-    <div class="bottom-bar">
-      <div class="checkbox-group" style="margin-bottom: 0; padding-left: 0;">
-        <input type="checkbox" id="make-default" />
-        <label for="make-default" style="font-size: 14px; font-weight: 500; color: #000;">Make the selection default</label>
-      </div>
-
-      <div class="action-buttons">
-        <button id="ok-btn" style="background: linear-gradient(to bottom, #2398db, #087bc0); padding: 8px 30px;">OK</button>
-        <button id="cancel-select-btn" style="background: linear-gradient(to bottom, #a0a0a0, #888888); padding: 8px 30px;">Cancel</button>
-      </div>
-    </div>
-  </div>
-
   <div id="task-select-view" class="view-container hidden">
-    <div style="margin-bottom: 10px;">
-      <div style="font-size: 13px; color: #777;">You have selected project</div>
-      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 5px;">
-        <div id="selected-project-name" style="font-size: 18px; font-weight: bold; color: #333; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Project Name</div>
-        <button id="switch-project-btn" style="padding: 4px 10px; font-size: 11px; background: linear-gradient(to bottom, #2398db, #087bc0); color: white; border: none; border-radius: 4px; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.2);">Switch</button>
-      </div>
-    </div>
-
-    <div style="height: 1px; background: #ddd; margin: 15px 0;"></div>
 
     <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 5px;">
       <div style="font-size: 14px; color: #555;">Please select Task</div>
@@ -354,7 +325,7 @@
 
     <div class="action-buttons">
       <button id="start-task-btn" style="background: linear-gradient(to bottom, #2398db, #087bc0); padding: 8px 30px;">Start</button>
-      <button id="back-to-project-btn" style="background: linear-gradient(to bottom, #a0a0a0, #888888); padding: 8px 30px;">Back</button>
+      <button id="logout-btn" style="background: linear-gradient(to bottom, #a0a0a0, #888888); padding: 8px 30px;">Log Out</button>
     </div>
   </div>
 
@@ -397,99 +368,61 @@
 
     window.electronAPI.onLoginSuccess((data) => {
       document.getElementById('login-view').classList.add('hidden');
-      document.getElementById('project-select-view').classList.remove('hidden');
       projectsData = data.projects;
-      renderProjectList();
+      renderTaskSelectView();
     });
 
     window.electronAPI.onLoginError((err) => {
       document.getElementById('error-msg').innerText = err;
     });
 
-    function renderProjectList() {
-      viewState = 'project';
-      document.getElementById('select-title').innerText = 'Please Select your Project';
-      
-      const container = document.getElementById('list-container');
-      container.innerHTML = '';
-      
-      projectsData.forEach(p => {
-        const div = document.createElement('div');
-        div.className = `list-item ${selectedProjectId === p.id ? 'selected' : ''}`;
-        div.innerHTML = `
-          <div class="list-item-icon"></div>
-          <div class="list-item-content">
-            <div class="list-item-title">${p.name}</div>
-            <div class="list-item-subtitle">${p.tasks.length} tasks available</div>
-          </div>
-        `;
-        div.addEventListener('click', () => {
-          selectedProjectId = p.id;
-          renderProjectList(); // re-render to show selection
-        });
-        container.appendChild(div);
-      });
-    }
-
     function renderTaskSelectView() {
       viewState = 'task';
-      const project = projectsData.find(p => p.id === selectedProjectId);
-      if (!project) return;
-      
-      document.getElementById('selected-project-name').innerText = project.name;
-      
       const dropdown = document.getElementById('task-dropdown');
       dropdown.innerHTML = '';
       
-      if (project.tasks.length === 0) {
+      let allTasks = [];
+      projectsData.forEach(p => {
+        p.tasks.forEach(t => {
+          allTasks.push({ ...t, projectName: p.name, projectId: p.id });
+        });
+      });
+      
+      if (allTasks.length === 0) {
         const opt = document.createElement('option');
         opt.value = '';
         opt.innerText = 'No tasks available';
         dropdown.appendChild(opt);
         selectedTaskId = null;
+        selectedProjectId = null;
       } else {
-        project.tasks.forEach((t, i) => {
+        allTasks.forEach((t, i) => {
           const opt = document.createElement('option');
-          opt.value = t.id;
-          opt.innerText = t.title;
+          opt.value = JSON.stringify({ taskId: t.id, projectId: t.projectId });
+          opt.innerText = `${t.projectName} - ${t.title}`;
           dropdown.appendChild(opt);
-          if (i === 0) selectedTaskId = t.id; // Select first by default
+          if (i === 0) {
+            selectedTaskId = t.id;
+            selectedProjectId = t.projectId;
+          }
         });
       }
       
-      document.getElementById('project-select-view').classList.add('hidden');
       document.getElementById('task-select-view').classList.remove('hidden');
     }
 
     document.getElementById('task-dropdown').addEventListener('change', (e) => {
-      selectedTaskId = e.target.value;
+      if (!e.target.value) return;
+      const val = JSON.parse(e.target.value);
+      selectedTaskId = val.taskId;
+      selectedProjectId = val.projectId;
     });
 
-    // Navigation and Selection
-    document.getElementById('ok-btn').addEventListener('click', () => {
-      if (viewState === 'project') {
-        if (!selectedProjectId) return alert('Please select a project first.');
-        renderTaskSelectView();
-      }
-    });
-
-    document.getElementById('cancel-select-btn').addEventListener('click', () => {
-      document.getElementById('project-select-view').classList.add('hidden');
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      document.getElementById('task-select-view').classList.add('hidden');
       document.getElementById('login-view').classList.remove('hidden');
       selectedProjectId = null;
       selectedTaskId = null;
-    });
-    
-    document.getElementById('switch-project-btn').addEventListener('click', () => {
-      document.getElementById('task-select-view').classList.add('hidden');
-      document.getElementById('project-select-view').classList.remove('hidden');
-      renderProjectList();
-    });
-
-    document.getElementById('back-to-project-btn').addEventListener('click', () => {
-      document.getElementById('task-select-view').classList.add('hidden');
-      document.getElementById('project-select-view').classList.remove('hidden');
-      renderProjectList();
     });
 
     document.getElementById('start-task-btn').addEventListener('click', () => {
