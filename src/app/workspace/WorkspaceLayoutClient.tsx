@@ -166,7 +166,7 @@ export default function WorkspaceLayoutClient({
         {/* Navigation */}
         <nav className="flex flex-col items-center gap-2 bg-white dark:bg-[#1f1f1f] px-1.5 py-3 rounded-[32px] shadow-sm w-max transition-colors border border-black/5 dark:border-white/10">
           {navItems.map((item) => {
-            const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+            const isActive = item.exact ? pathname === item.href : (pathname === item.href || pathname.startsWith(item.href + '/'));
             return (
               <Tooltip key={item.name} delayDuration={0}>
                 <TooltipTrigger asChild>
@@ -240,7 +240,7 @@ export default function WorkspaceLayoutClient({
 
             <div className="hidden lg:flex items-center gap-2 bg-white dark:bg-[#1f1f1f] px-2 py-1.5 rounded-full shadow-sm transition-colors border border-black/5 dark:border-white/10">
               {navItems.filter(item => item.name !== 'Reports' && item.name !== 'Settings').map((item) => {
-                const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+                const isActive = item.exact ? pathname === item.href : (pathname === item.href || pathname.startsWith(item.href + '/'));
                 return (
                   <Link
                     key={item.name}
