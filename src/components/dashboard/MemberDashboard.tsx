@@ -276,11 +276,7 @@ export default function MemberDashboard({ metrics }: { metrics: any }) {
                   })}
                 </tbody>
               </table>
-              <div className="p-4 border-t border-slate-100 dark:border-slate-800/50">
-                <button className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-semibold text-sm hover:underline" onClick={() => router.push('/workspace/tasks')}>
-                  <Plus size={16} /> Add new task
-                </button>
-              </div>
+
             </CardContent>
           </Card>
         </motion.div>

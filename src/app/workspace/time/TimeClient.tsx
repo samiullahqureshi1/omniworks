@@ -27,17 +27,6 @@ export default function TimeClient({
   organizationId: string
 }) {
   
-  if (userRole === 'OWNER') {
-    return (
-      <OwnerTimeDashboard 
-        timeEntries={initialTimeEntries} 
-        allUsers={allUsers} 
-        allProjects={allProjects} 
-        allTasks={allTasks}
-      />
-    );
-  }
-
   if (userRole === 'CLIENT') {
     return (
       <ClientTimeReports 
@@ -47,10 +36,15 @@ export default function TimeClient({
     );
   }
 
+  // Both OWNER, PM, and MEMBER will see the new dashboard view
   return (
-    <MemberTimeTracker 
+    <OwnerTimeDashboard 
       timeEntries={initialTimeEntries} 
-      assignedTasks={assignedTasks} 
+      allUsers={allUsers} 
+      allProjects={allProjects} 
+      allTasks={allTasks}
+      userRole={userRole}
+      currentUserId={userId}
     />
   );
 }

@@ -7,12 +7,15 @@ import { getDailyWorksnapsDataAction } from '@/app/actions/tracking';
 import { ChevronLeft, ChevronRight, Plus, Monitor, Clock, Image as ImageIcon } from 'lucide-react';
 import AddManualTimeModal from '@/components/modals/AddManualTimeModal';
 
-export default function OwnerTimeDashboard({ timeEntries, allUsers, allProjects, allTasks }: any) {
+export default function OwnerTimeDashboard({ timeEntries, allUsers, allProjects, allTasks, userRole, currentUserId }: any) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   
-  // Start with the first user as default if available
-  const [filterUser, setFilterUser] = useState(allUsers.length > 0 ? allUsers[0].id : '');
+  // Start with current user if member, else first user
+  const [filterUser, setFilterUser] = useState(() => {
+    if (userRole === 'MEMBER') return currentUserId;
+    return allUsers.length > 0 ? allUsers[0].id : '';
+  });
   const [filterProject, setFilterProject] = useState('all');
   const [filterTask, setFilterTask] = useState('all');
 
@@ -100,9 +103,11 @@ export default function OwnerTimeDashboard({ timeEntries, allUsers, allProjects,
         </div>
         
         <div className="flex items-center gap-4">
-          <Button className="rounded shadow-md hover:shadow-lg transition-all" onClick={() => setIsModalOpen(true)}>
-            <Plus size={16} className="mr-2" /> Add Manual Time
-          </Button>
+          {userRole !== 'MEMBER' && (
+            <Button className="rounded shadow-md hover:shadow-lg transition-all" onClick={() => setIsModalOpen(true)}>
+              <Plus size={16} className="mr-2" /> Add Manual Time
+            </Button>
+          )}
         </div>
       </div>
 
@@ -145,10 +150,14 @@ export default function OwnerTimeDashboard({ timeEntries, allUsers, allProjects,
             value={filterUser}
             onChange={(e) => setFilterUser(e.target.value)}
             className="border-gray-300 rounded text-sm h-8"
+            disabled={userRole === 'MEMBER'}
           >
-            {allUsers.map((u: any) => (
-              <option key={u.id} value={u.id}>{u.name}</option>
-            ))}
+            {userRole === 'MEMBER' 
+              ? <option value={currentUserId}>{allUsers.find((u: any) => u.id === currentUserId)?.name || 'You'}</option>
+              : allUsers.map((u: any) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))
+            }
           </select>
         </div>
 

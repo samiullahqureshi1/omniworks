@@ -199,6 +199,7 @@ model Task {
   timeScreenshots TimeScreenshot[]
   notifications   Notification[]
   messageMentions MessageTaskMention[]
+  messages        ProjectMessage[]
 
   @@index([organizationId])
   @@index([projectId])
@@ -409,6 +410,9 @@ model ProjectMessage {
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  taskId    String?
+  task      Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   senderId String
   sender   User   @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)

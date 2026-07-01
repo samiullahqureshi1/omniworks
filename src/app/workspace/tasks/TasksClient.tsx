@@ -52,11 +52,11 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => openEdit(task)} className="cursor-pointer">
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEdit(task); }} className="cursor-pointer">
                 <Edit className="w-4 h-4 mr-2" /> Edit Task
               </DropdownMenuItem>
               {(currentUser.role === 'OWNER' || task.project?.projectManagerId === currentUser.userId) && (
-                <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={() => handleDelete(task.id)}>
+                <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={(e) => { e.stopPropagation(); handleDelete(task.id); }}>
                   <Trash2 className="w-4 h-4 mr-2" /> Delete Task
                 </DropdownMenuItem>
               )}
@@ -66,7 +66,7 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
       </div>
       
       <div className="pl-2 flex items-center justify-between">
-        <span className="text-[12px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded flex items-center hover:bg-primary/20 transition-colors cursor-pointer" onPointerDown={(e) => e.stopPropagation()} onClick={() => router.push(`/workspace/projects/${task.projectId}`)}>
+        <span className="text-[12px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded flex items-center hover:bg-primary/20 transition-colors cursor-pointer" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); router.push(`/workspace/projects/${task.projectId}`); }}>
           {task.project?.name}
         </span>
         
@@ -102,38 +102,39 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
   );
 }
 
-function KanbanColumn({ status, statusTasks, currentUser, openEdit, handleDelete, router }: any) {
+function KanbanColumn({ status, statusTasks, currentUser, openEdit, handleDelete, router, setSelectedTaskForChat }: any) {
   const { setNodeRef } = useDroppable({
     id: status.id,
     data: status,
   });
 
   return (
-    <div className="flex flex-col min-w-[340px] max-w-[340px] rounded-2xl shadow-sm border border-border/50 bg-slate-50/50 dark:bg-slate-900/50 transition-all duration-300">
-      <div className="flex items-center justify-between mb-4 px-4 pt-4">
-        <div className="flex items-center gap-3">
-          <div className="w-3 h-3 rounded-full shadow-inner" style={{ backgroundColor: status.color || '#94a3b8' }} />
-          <h3 className="font-bold text-[13px] tracking-wide uppercase text-foreground/80">{status.name}</h3>
-          <Badge variant="secondary" className="text-[11px] font-bold h-5 px-2 bg-white dark:bg-slate-800 rounded-full shadow-sm text-muted-foreground border-border/50 border">
-            {statusTasks.length}
-          </Badge>
+    <div className="flex flex-col w-[320px] shrink-0 bg-muted/30 rounded-2xl border border-border/50">
+      <div className="flex items-center justify-between p-4 pb-2">
+        <div className="flex items-center gap-2">
+          <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: status.color }} />
+          <h3 className="font-semibold text-sm text-foreground/80 tracking-wide uppercase">{status.name}</h3>
+          <span className="text-xs font-medium bg-background border px-1.5 py-0.5 rounded-md text-muted-foreground">{statusTasks.length}</span>
         </div>
       </div>
-      <div ref={setNodeRef} className="flex flex-col gap-3 overflow-y-auto custom-scrollbar px-3 pb-3 flex-1 min-h-[150px]">
-        {statusTasks.map((task: any) => (
-          <KanbanTaskCard 
-            key={task.id} 
-            task={task} 
-            currentUser={currentUser}
-            openEdit={openEdit}
-            handleDelete={handleDelete}
-            router={router}
-          />
-        ))}
-        {statusTasks.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-20 border-2 border-dashed border-border/50 rounded-xl text-muted-foreground text-[12px] font-medium bg-background/30">
+      
+      <div ref={setNodeRef} className="flex-1 p-3 flex flex-col gap-3 min-h-[150px] transition-colors rounded-b-2xl">
+        {statusTasks.length === 0 ? (
+          <div className="h-24 border-2 border-dashed border-border/50 rounded-xl flex items-center justify-center text-xs font-medium text-muted-foreground/60 bg-background/30">
             Drag tasks here
           </div>
+        ) : (
+          statusTasks.map((task: any) => (
+            <KanbanTaskCard 
+              key={task.id} 
+              task={task} 
+              currentUser={currentUser}
+              openEdit={openEdit}
+              handleDelete={handleDelete}
+              router={router}
+              setSelectedTaskForChat={setSelectedTaskForChat}
+            />
+          ))
         )}
       </div>
     </div>
@@ -350,7 +351,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
           onChange={(e) => setSelectedProjectId(e.target.value)}
           className="flex h-10 w-full md:w-[180px] rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
         >
-          <option value="all">All Projects</option>
+          <option value="all">All Tasks</option>
           {projects.map(p => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
@@ -412,7 +413,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredTasks.map(task => (
+                filteredTasks.map((task: any) => (
                   <TableRow key={task.id} className="group hover:bg-muted/30">
                     <TableCell>
                       <div className="font-medium">{task.title}</div>
