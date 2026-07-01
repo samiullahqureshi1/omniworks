@@ -113,7 +113,7 @@ export default function TaskFormModal({
 
   // Available assignees based on selected project
   // We show all members of the organization, except clients.
-  const availableAssignees = users.filter((u) => u.role !== "CLIENT");
+  const availableAssignees = users.filter((u) => u.role === "MEMBER");
 
   const handleProjectSelectChange = (
     e: React.ChangeEvent<HTMLSelectElement>,
@@ -612,16 +612,7 @@ export default function TaskFormModal({
                       </div>
                     ))}
 
-                    {!isEditing && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full border-dashed"
-                        onClick={addTask}
-                      >
-                        <Plus className="w-4 h-4 mr-2" /> Add Another Task
-                      </Button>
-                    )}
+
                   </div>
                 )}
 

@@ -26,6 +26,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     include: {
       client: { select: { id: true, name: true, email: true } },
       projectManager: { select: { id: true, name: true, email: true } },
+      status: true,
       assignees: {
         include: {
           user: { select: { id: true, name: true, email: true, role: true } },

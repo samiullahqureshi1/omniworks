@@ -10,10 +10,14 @@ export default async function ProjectsPage() {
   const currentUser = await getCurrentUser();
   if (!currentUser) redirect('/login');
 
-  const [projectsRes, usersRes, projectStatuses] = await Promise.all([
+  const [projectsRes, usersRes, projectStatuses, taskStatuses] = await Promise.all([
     getProjectsAction(),
     getUsersAction(), // We need users to populate the PM/Client dropdowns for Owners
     prisma.projectStatus.findMany({
+      where: { organizationId: currentUser.organizationId },
+      orderBy: { order: 'asc' }
+    }),
+    prisma.taskStatus.findMany({
       where: { organizationId: currentUser.organizationId },
       orderBy: { order: 'asc' }
     })
@@ -26,5 +30,5 @@ export default async function ProjectsPage() {
   const projects = projectsRes.projects || [];
   const users = usersRes.success ? (usersRes.users || []) : [];
 
-  return <ProjectsClient initialProjects={projects} users={users} currentUser={currentUser} projectStatuses={projectStatuses} />;
+  return <ProjectsClient initialProjects={projects} users={users} currentUser={currentUser} projectStatuses={projectStatuses} taskStatuses={taskStatuses} />;
 }

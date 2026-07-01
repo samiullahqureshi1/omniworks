@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useState, useTransition, useEffect } from 'react';
 import Link from 'next/link';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
@@ -20,6 +21,7 @@ import { toast } from 'sonner';
 import { createTaskAction, updateTaskAction, deleteTaskAction } from '@/app/actions/tasks';
 import { updateProjectAction } from '@/app/actions/projects';
 import ProjectConversation from './ProjectConversation';
+import { RichTextEditor } from "@/components/ui/RichTextEditor";
 
 export default function ProjectDetailClient({ project, currentUser, users = [], taskStatuses = [], projectStatuses = [] }: { project: any, currentUser: any, users?: any[], taskStatuses?: any[], projectStatuses?: any[] }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -36,6 +38,21 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
   // Project Edit
   const [isEditProjectOpen, setIsEditProjectOpen] = useState(false);
   const [editIsOngoing, setEditIsOngoing] = useState(project.isOngoing);
+  const [editDescription, setEditDescription] = useState(project.description || '');
+  
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (searchParams.get('edit') === 'true') {
+      setIsEditProjectOpen(true);
+      // Clean up the URL
+      const newParams = new URLSearchParams(searchParams.toString());
+      newParams.delete('edit');
+      router.replace(`${pathname}${newParams.toString() ? `?${newParams.toString()}` : ''}`, { scroll: false });
+    }
+  }, [searchParams, pathname, router]);
   
   const clients = users.filter((u: any) => u.role === 'CLIENT' && u.status === 'ACTIVE');
   const members = users.filter((u: any) => u.role === 'MEMBER' && u.status === 'ACTIVE');
@@ -94,7 +111,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
     startTransition(async () => {
       const res = await updateProjectAction(project.id, {
         name: formData.get('name') as string,
-        description: formData.get('description') as string,
+        description: editDescription,
         notes: project.notes,
         clientId: formData.get('clientId') as string || undefined,
         projectManagerId: formData.get('projectManagerId') as string || undefined,
@@ -158,14 +175,17 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
     });
   };
 
-  const getStatusColor = (status: string) => {
-    switch(status) {
-      case 'PLANNING': return 'bg-\[#fbfaf7\]0/10 text-slate-500 border-slate-500/20';
-      case 'IN_PROGRESS': return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
-      case 'ON_HOLD': return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
-      case 'COMPLETE': return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
-      default: return 'bg-\[#fbfaf7\]0/10 text-slate-500 border-slate-500/20';
+  const getStatusColor = (status: any) => {
+    if (typeof status === 'string') {
+      switch(status) {
+        case 'PLANNING': return 'bg-\[#fbfaf7\]0/10 text-slate-500 border-slate-500/20';
+        case 'IN_PROGRESS': return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
+        case 'ON_HOLD': return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+        case 'COMPLETE': return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
+        default: return 'bg-\[#fbfaf7\]0/10 text-slate-500 border-slate-500/20';
+      }
     }
+    return '';
   };
 
   const getPriorityColor = (priority: string) => {
@@ -192,8 +212,18 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-extrabold tracking-tight text-foreground">{project.name}</h1>
-              <Badge variant="outline" className={getStatusColor(project.status)}>
-                {project.status.replace('_', ' ')}
+              <Badge 
+                variant="outline" 
+                className={typeof project.status === 'string' ? getStatusColor(project.status) : ''}
+                style={typeof project.status !== 'string' && project.status ? { 
+                  backgroundColor: `${project.status.color}20`, 
+                  color: project.status.color, 
+                  borderColor: `${project.status.color}40` 
+                } : {}}
+              >
+                {typeof project.status === 'string' 
+                  ? project.status.replace('_', ' ') 
+                  : project.status?.name || 'No Status'}
               </Badge>
               <Badge variant="secondary" className={getPriorityColor(project.priority)}>
                 {project.priority}
@@ -215,20 +245,25 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                     <Settings className="mr-2 h-4 w-4" /> Edit Project
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto custom-scrollbar">
-                  <DialogHeader>
+                <DialogContent className="sm:max-w-[700px] h-[90vh] p-0 flex flex-col overflow-hidden">
+                  <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shrink-0 shadow-sm">
                     <DialogTitle>Edit Project</DialogTitle>
                   </DialogHeader>
-                  <form onSubmit={handleUpdateProject} className="space-y-6 pt-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2 sm:col-span-2">
-                        <label className="text-sm font-medium">Project Name <span className="text-destructive">*</span></label>
-                        <Input name="name" required defaultValue={project.name} />
-                      </div>
-                      <div className="space-y-2 sm:col-span-2">
-                        <label className="text-sm font-medium">Description</label>
-                        <Input name="description" defaultValue={project.description || ''} />
-                      </div>
+                  <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+                    <form onSubmit={handleUpdateProject} className="space-y-6 pb-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2 sm:col-span-2">
+                          <label className="text-sm font-medium">Project Name <span className="text-destructive">*</span></label>
+                          <Input name="name" required defaultValue={project.name} />
+                        </div>
+                        <div className="space-y-2 sm:col-span-2">
+                          <label className="text-sm font-medium">Description</label>
+                          <RichTextEditor
+                            content={editDescription}
+                            onChange={setEditDescription}
+                            placeholder="Brief overview of the project..."
+                          />
+                        </div>
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Client</label>
                         <select name="clientId" defaultValue={project.clientId || ''} className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring">
@@ -333,10 +368,11 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
 
                     </div>
                     
-                    <Button type="submit" className="w-full" disabled={isPending}>
-                      {isPending ? 'Saving...' : 'Update Project'}
-                    </Button>
-                  </form>
+                      <Button type="submit" className="w-full" disabled={isPending}>
+                        {isPending ? 'Saving...' : 'Update Project'}
+                      </Button>
+                    </form>
+                  </div>
                 </DialogContent>
               </Dialog>
 
@@ -644,7 +680,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
             </div>
           </div>
           <div className="p-3 max-h-[350px] overflow-y-auto custom-scrollbar">
-            {project.assignees?.filter((a: any) => a.user.name.toLowerCase().includes(assigneeSearchQuery.toLowerCase())).map((a: any) => {
+            {project.assignees?.filter((a: any) => a.user.name.toLowerCase().includes(assigneeSearchQuery.toLowerCase()) && a.user.role === 'MEMBER').map((a: any) => {
               const isSelected = newTaskAssignees.includes(a.userId);
               return (
                 <div 

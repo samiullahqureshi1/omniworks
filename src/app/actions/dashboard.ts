@@ -117,8 +117,11 @@ export async function getDashboardDataAction() {
 
     // 2. Member/Project Manager Dashboard View
     if (role === "MEMBER") {
-      // Find projects where user is assigned or is Project Manager
-      const [assignedProjects, myHoursObj, myTasks, recentLogs] =
+      const now = new Date();
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+      const [assignedProjects, myHoursObj, myHoursLastWeekObj, myTasks, recentLogs] =
         await Promise.all([
           prisma.project.findMany({
             where: {
@@ -133,7 +136,11 @@ export async function getDashboardDataAction() {
             },
           }),
           prisma.timeEntry.aggregate({
-            where: { memberId: userId, organizationId },
+            where: { memberId: userId, organizationId, createdAt: { gte: oneWeekAgo } },
+            _sum: { activeWorkedDuration: true },
+          }),
+          prisma.timeEntry.aggregate({
+            where: { memberId: userId, organizationId, createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo } },
             _sum: { activeWorkedDuration: true },
           }),
           prisma.task.findMany({
@@ -150,21 +157,72 @@ export async function getDashboardDataAction() {
           }),
         ]);
 
+      // Calculate task trends
+      const tasksCompletedThisWeek = myTasks.filter((t: any) => 
+        (t.status?.name?.toLowerCase().includes('done') || t.status?.name?.toLowerCase().includes('complete')) &&
+        t.updatedAt >= oneWeekAgo
+      ).length;
+      
+      const tasksCompletedLastWeek = myTasks.filter((t: any) => 
+        (t.status?.name?.toLowerCase().includes('done') || t.status?.name?.toLowerCase().includes('complete')) &&
+        t.updatedAt >= twoWeeksAgo && t.updatedAt < oneWeekAgo
+      ).length;
+
+      const tasksCreatedThisWeek = myTasks.filter((t: any) => t.createdAt >= oneWeekAgo).length;
+      const tasksCreatedLastWeek = myTasks.filter((t: any) => t.createdAt >= twoWeeksAgo && t.createdAt < oneWeekAgo).length;
+
+      // Calculate Daily Activity (last 7 days)
+      const activityData = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        d.setHours(0, 0, 0, 0);
+        const nextD = new Date(d.getTime() + 24 * 60 * 60 * 1000);
+        
+        const created = myTasks.filter((t: any) => t.createdAt >= d && t.createdAt < nextD).length;
+        const completed = myTasks.filter((t: any) => 
+          (t.status?.name?.toLowerCase().includes('done') || t.status?.name?.toLowerCase().includes('complete')) &&
+          t.updatedAt >= d && t.updatedAt < nextD
+        ).length;
+
+        activityData.push({
+          date: d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
+          created,
+          completed
+        });
+      }
+
       // Check if they manage any projects to customize view
-      // const managedProjects = assignedProjects.filter((p) => p.projectManagerId === userId);
       const managedProjects = assignedProjects.filter(
         (p: any) => p.projectManagerId === userId,
       );
+
+      const hoursThisWeek = (myHoursObj._sum.activeWorkedDuration || 0) / 3600;
+      const hoursLastWeek = (myHoursLastWeekObj._sum.activeWorkedDuration || 0) / 3600;
+
+      // Mock productivity score based on task completion and hours
+      const productivityScore = Math.min(100, Math.round(50 + (tasksCompletedThisWeek * 2) + (hoursThisWeek * 0.5)));
+      const productivityScoreLastWeek = Math.min(100, Math.round(50 + (tasksCompletedLastWeek * 2) + (hoursLastWeek * 0.5)));
+
       return {
         success: true,
         view: managedProjects.length > 0 ? "PROJECT_MANAGER" : "MEMBER",
         metrics: {
           totalProjects: assignedProjects.length,
           totalManagedProjects: managedProjects.length,
-          totalHours: (myHoursObj._sum.activeWorkedDuration || 0) / 3600,
+          totalHours: hoursThisWeek,
+          hoursLastWeek,
           myTasks,
           recentLogs,
           assignedProjects,
+          trends: {
+            tasksCompletedThisWeek,
+            tasksCompletedLastWeek,
+            tasksCreatedThisWeek,
+            tasksCreatedLastWeek,
+            productivityScore,
+            productivityScoreLastWeek
+          },
+          activityData
         },
       };
     }

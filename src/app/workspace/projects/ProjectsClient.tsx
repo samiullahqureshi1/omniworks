@@ -20,6 +20,7 @@ import {
   LayoutGrid,
   List as ListIcon,
   Table as TableIcon,
+  Edit2,
 } from "lucide-react";
 import {
   Table,
@@ -160,8 +161,13 @@ function KanbanCard({ project, currentUser, handleDelete }: any) {
           {project.name}
         </Link>
         {currentUser.role === "OWNER" && (
-          <div onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(project.id); }} className="opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 hover:bg-destructive/10 text-destructive/70 hover:text-destructive rounded-lg cursor-pointer shrink-0">
-            <Trash2 size={16} />
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
+            <Link href={`/workspace/projects/${project.id}?edit=true`} className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg cursor-pointer">
+              <Edit2 size={16} />
+            </Link>
+            <div onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(project.id); }} className="p-1.5 hover:bg-destructive/10 text-destructive/70 hover:text-destructive rounded-lg cursor-pointer">
+              <Trash2 size={16} />
+            </div>
           </div>
         )}
       </div>
@@ -172,6 +178,17 @@ function KanbanCard({ project, currentUser, handleDelete }: any) {
           {project.client.name}
         </span>
       )}
+
+      <div className="flex items-center gap-2 pl-2 relative z-10">
+        <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-sm" style={{ backgroundColor: `${priorityHex}20`, color: priorityHex }}>
+          {project.priority}
+        </span>
+        {project.totalAllocatedHours ? (
+          <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+            <Clock size={11} /> {project.totalAllocatedHours} hrs
+          </span>
+        ) : null}
+      </div>
       
       <div className="flex justify-between items-end mt-auto pt-3 pl-2 border-t border-border/40 relative z-10">
         <div className="flex -space-x-2 overflow-hidden py-1">
@@ -194,7 +211,7 @@ function KanbanCard({ project, currentUser, handleDelete }: any) {
         
         <div className={`text-[11px] font-medium flex items-center gap-1.5 px-2.5 py-1 rounded-full shadow-sm ${project.isOngoing ? 'bg-emerald-500/10 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>
           {project.isOngoing ? <Clock size={12} className="text-emerald-500 animate-pulse" /> : <Calendar size={12} />}
-          {project.isOngoing ? "Ongoing" : project.endDate ? formatDate(project.endDate) : "No Date"}
+          {formatDate(project.startDate)} - {project.isOngoing ? "Ongoing" : project.endDate ? formatDate(project.endDate) : "No Date"}
         </div>
       </div>
     </div>
@@ -205,12 +222,14 @@ export default function ProjectsClient({
   initialProjects,
   users,
   currentUser,
-  projectStatuses = []
+  projectStatuses = [],
+  taskStatuses = []
 }: {
   initialProjects: any[];
   users: any[];
   currentUser: any;
   projectStatuses?: any[];
+  taskStatuses?: any[];
 }) {
   const [projects, setProjects] = useState(initialProjects);
   const [isPending, startTransition] = useTransition();
@@ -357,7 +376,7 @@ export default function ProjectsClient({
       projectManagerId:
         (formData.get("projectManagerId") as string) || undefined,
       description: description,
-      status: formData.get("status") as any,
+      statusId: formData.get("status") as string,
       priority: formData.get("priority") as any,
       startDate: formData.get("startDate") as string,
       endDate: formData.get("endDate") as string,
@@ -376,7 +395,7 @@ export default function ProjectsClient({
           title: t.title,
           description: t.description,
           priority: t.priority as any,
-          status: t.status as any,
+          statusId: t.status as string,
           assigneeIds: t.assigneeId ? [t.assigneeId] : [],
         })),
     };
@@ -881,10 +900,10 @@ export default function ProjectsClient({
                   name="status"
                   className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
                 >
-                  <option value="PLANNING">Planning</option>
-                  <option value="IN_PROGRESS">In Progress</option>
-                  <option value="ON_HOLD">On Hold</option>
-                  <option value="COMPLETE">Complete</option>
+                  <option value="">No Status</option>
+                  {projectStatuses.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
                 </select>
               </div>
               <div className="space-y-2">
@@ -994,7 +1013,7 @@ export default function ProjectsClient({
                         id: Math.random().toString(),
                         title: "",
                         description: "",
-                        status: "TODO",
+                        status: "",
                         priority: "MEDIUM",
                         assigneeId: "",
                       },
@@ -1062,9 +1081,10 @@ export default function ProjectsClient({
                           }}
                           className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
                         >
-                          <option value="TODO">To Do</option>
-                          <option value="IN_PROGRESS">In Progress</option>
-                          <option value="DONE">Done</option>
+                          <option value="">No Status</option>
+                          {taskStatuses.map((ts) => (
+                            <option key={ts.id} value={ts.id}>{ts.name}</option>
+                          ))}
                         </select>
 
                         <select
