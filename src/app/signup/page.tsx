@@ -135,12 +135,13 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signupAction } from "@/app/actions/auth";
 import Link from "next/link";
-import { Building2, EyeOff, Lock, Mail, UserRound, UserPlus } from "lucide-react";
+import { Building2, Eye, EyeOff, Lock, Mail, UserRound, UserPlus } from "lucide-react";
 import { FaGoogle, FaFacebookF, FaApple } from "react-icons/fa6";
 
 export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -244,15 +245,19 @@ export default function SignupPage() {
             <input
               id="password"
               name="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               required
               placeholder="Password"
               className="w-full rounded-2xl border border-black/5 bg-black/5 py-3 pl-14 pr-14 text-[16px] text-black outline-none placeholder:text-black/45 focus:ring-2 focus:ring-[#ffad0d]"
             />
-            <EyeOff
-              className="absolute right-5 top-1/2 -translate-y-1/2 text-black/45"
-              size={21}
-            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-5 top-1/2 -translate-y-1/2 text-black/45 hover:text-black/70 focus:outline-none"
+              tabIndex={-1}
+            >
+              {showPassword ? <Eye size={21} /> : <EyeOff size={21} />}
+            </button>
           </div>
 
           <button

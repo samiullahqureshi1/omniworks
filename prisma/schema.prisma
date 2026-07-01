@@ -7,33 +7,33 @@ generator client {
 }
 
 model Organization {
-  id           String         @id @default(uuid())
-  name         String
-  slug         String?        @unique
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  ownerUserId  String?
+  id                   String   @id @default(uuid())
+  name                 String
+  slug                 String?  @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  ownerUserId          String?
   parentOrganizationId String?
-  
-  owner                User?          @relation("OrganizationOwner", fields: [ownerUserId], references: [id])
-  parentOrganization   Organization?  @relation("ChildOrganizations", fields: [parentOrganizationId], references: [id])
-  childOrganizations   Organization[] @relation("ChildOrganizations")
 
-  users        User[]
-  invitations  Invitation[]
-  projects     Project[]
-  tasks        Task[]
-  taskStatuses TaskStatus[]
+  owner              User?          @relation("OrganizationOwner", fields: [ownerUserId], references: [id])
+  parentOrganization Organization?  @relation("ChildOrganizations", fields: [parentOrganizationId], references: [id])
+  childOrganizations Organization[] @relation("ChildOrganizations")
+
+  users           User[]
+  invitations     Invitation[]
+  projects        Project[]
+  tasks           Task[]
+  taskStatuses    TaskStatus[]
   projectStatuses ProjectStatus[]
-  timeEntries  TimeEntry[]
-  activeTimers ActiveTimer[]
+  timeEntries     TimeEntry[]
+  activeTimers    ActiveTimer[]
   timeScreenshots TimeScreenshot[]
   activityLogs    ActivityLog[]
   idlePeriods     IdlePeriod[]
-  settings     Setting[]
-  reports      Report[]
-  notifications Notification[]
-  messages     ProjectMessage[]
+  settings        Setting[]
+  reports         Report[]
+  notifications   Notification[]
+  messages        ProjectMessage[]
 }
 
 enum Role {
@@ -48,37 +48,40 @@ enum UserStatus {
 }
 
 model User {
-  id               String            @id @default(uuid())
+  id               String       @id @default(uuid())
   name             String
   email            String
   passwordHash     String
   role             Role
-  status           UserStatus        @default(ACTIVE)
+  status           UserStatus   @default(ACTIVE)
   organizationId   String
-  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   twoFactorSecret  String?
-  twoFactorEnabled Boolean           @default(false)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  twoFactorEnabled Boolean      @default(false)
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
   // Relations
-  ownedOrganizations Organization[]  @relation("OrganizationOwner")
-  clientProjects   Project[]         @relation("ProjectClient")
-  managedProjects  Project[]         @relation("ProjectManager")
-  projectAssignees ProjectAssignee[]
-  taskAssignees    TaskAssignee[]
-  timeEntries      TimeEntry[]
-  activeTimers     ActiveTimer[]
-  timeScreenshots  TimeScreenshot[]
-  activityLogs     ActivityLog[]
-  idlePeriods      IdlePeriod[]
-  notificationsReceived Notification[] @relation("NotificationRecipient")
-  notificationsActed    Notification[] @relation("NotificationActor")
-  messagesSent          ProjectMessage[] @relation("MessageSender")
+  ownedOrganizations    Organization[]       @relation("OrganizationOwner")
+  clientProjects        Project[]            @relation("ProjectClient")
+  managedProjects       Project[]            @relation("ProjectManager")
+  projectAssignees      ProjectAssignee[]
+  taskAssignees         TaskAssignee[]
+  timeEntries           TimeEntry[]
+  activeTimers          ActiveTimer[]
+  timeScreenshots       TimeScreenshot[]
+  activityLogs          ActivityLog[]
+  idlePeriods           IdlePeriod[]
+  notificationsReceived Notification[]       @relation("NotificationRecipient")
+  notificationsActed    Notification[]       @relation("NotificationActor")
+  messagesSent          ProjectMessage[]     @relation("MessageSender")
   messageMentions       MessageMention[]
   messageReadReceipts   MessageReadReceipt[]
 
   @@unique([email, organizationId])
+  @@index([organizationId])
 }
 
 model Invitation {
@@ -102,8 +105,8 @@ model ProjectStatus {
   createdByOwner Boolean      @default(true)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
-  
-  projects       Project[]
+
+  projects Project[]
 }
 
 enum Priority {
@@ -114,34 +117,39 @@ enum Priority {
 }
 
 model Project {
-  id                   String            @id @default(uuid())
-  name                 String
-  description          String?
-  notes                String?
-  organizationId       String
-  organization         Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  clientId             String?
-  client               User?             @relation("ProjectClient", fields: [clientId], references: [id], onDelete: SetNull)
-  projectManagerId     String?
-  projectManager       User?             @relation("ProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
-  statusId             String?
-  status               ProjectStatus?    @relation(fields: [statusId], references: [id], onDelete: SetNull)
-  startDate            DateTime
-  endDate              DateTime?
-  isOngoing            Boolean           @default(false)
-  projectBudget        Float?
-  totalAllocatedHours  Float?
-  priority             Priority          @default(MEDIUM)
-  createdAt            DateTime          @default(now())
-  
+  id                  String         @id @default(uuid())
+  name                String
+  description         String?
+  notes               String?
+  organizationId      String
+  organization        Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  clientId            String?
+  client              User?          @relation("ProjectClient", fields: [clientId], references: [id], onDelete: SetNull)
+  projectManagerId    String?
+  projectManager      User?          @relation("ProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
+  statusId            String?
+  status              ProjectStatus? @relation(fields: [statusId], references: [id], onDelete: SetNull)
+  startDate           DateTime
+  endDate             DateTime?
+  isOngoing           Boolean        @default(false)
+  projectBudget       Float?
+  totalAllocatedHours Float?
+  priority            Priority       @default(MEDIUM)
+  createdAt           DateTime       @default(now())
+
   // Relations
-  assignees            ProjectAssignee[]
-  tasks                Task[]
-  timeEntries          TimeEntry[]
-  activeTimers         ActiveTimer[]
-  timeScreenshots      TimeScreenshot[]
-  notifications        Notification[]
-  messages             ProjectMessage[]
+  assignees       ProjectAssignee[]
+  tasks           Task[]
+  timeEntries     TimeEntry[]
+  activeTimers    ActiveTimer[]
+  timeScreenshots TimeScreenshot[]
+  notifications   Notification[]
+  messages        ProjectMessage[]
+
+  @@index([organizationId])
+  @@index([clientId])
+  @@index([projectManagerId])
+  @@index([statusId])
 }
 
 model ProjectAssignee {
@@ -163,34 +171,38 @@ model TaskStatus {
   createdByOwner Boolean      @default(true)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
-  
-  tasks          Task[]
+
+  tasks Task[]
 }
 
 model Task {
-  id             String         @id @default(uuid())
+  id             String       @id @default(uuid())
   organizationId String
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   projectId      String
-  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title          String
   description    String?
   allocatedHours Float?
-  trackedHours   Float?         @default(0)
+  trackedHours   Float?       @default(0)
   dueDate        DateTime?
   statusId       String?
-  status         TaskStatus?    @relation(fields: [statusId], references: [id], onDelete: SetNull)
-  priority       Priority       @default(MEDIUM)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  
+  status         TaskStatus?  @relation(fields: [statusId], references: [id], onDelete: SetNull)
+  priority       Priority     @default(MEDIUM)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
   // Relations
-  assignees      TaskAssignee[]
-  timeEntries    TimeEntry[]
-  activeTimers   ActiveTimer[]
+  assignees       TaskAssignee[]
+  timeEntries     TimeEntry[]
+  activeTimers    ActiveTimer[]
   timeScreenshots TimeScreenshot[]
-  notifications  Notification[]
+  notifications   Notification[]
   messageMentions MessageTaskMention[]
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([statusId])
 }
 
 model TaskAssignee {
@@ -226,9 +238,9 @@ model TimeEntry {
   member               User            @relation(fields: [memberId], references: [id], onDelete: Cascade)
   startTime            DateTime
   endTime              DateTime?
-  duration             Float?          // total hours
-  activeWorkedDuration Float?          // active worked hours
-  idleDuration         Float?          // idle hours
+  duration             Float? // total hours
+  activeWorkedDuration Float? // active worked hours
+  idleDuration         Float? // idle hours
   entryType            TimeEntryType   @default(TIMER)
   status               TimeEntryStatus @default(SAVED)
   notes                String?
@@ -236,88 +248,96 @@ model TimeEntry {
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 
-  screenshots          TimeScreenshot[]
-  activityLogs         ActivityLog[]
-  idlePeriods          IdlePeriod[]
-  notifications        Notification[]
+  screenshots   TimeScreenshot[]
+  activityLogs  ActivityLog[]
+  idlePeriods   IdlePeriod[]
+  notifications Notification[]
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([memberId])
 }
 
 model ActiveTimer {
-  id                   String          @id @default(uuid())
+  id                   String       @id @default(uuid())
   organizationId       String
-  organization         Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   projectId            String
-  project              Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project              Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   taskId               String?
-  task                 Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  task                 Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
   memberId             String
-  member               User            @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  member               User         @relation(fields: [memberId], references: [id], onDelete: Cascade)
   startTime            DateTime
   lastActivityAt       DateTime
   idleStartedAt        DateTime?
-  isIdle               Boolean         @default(false)
-  activeWorkedDuration Float           @default(0) // seconds
-  idleDuration         Float           @default(0) // seconds
+  isIdle               Boolean      @default(false)
+  activeWorkedDuration Float        @default(0) // seconds
+  idleDuration         Float        @default(0) // seconds
   notes                String?
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
 
-  screenshots          TimeScreenshot[]
-  activityLogs         ActivityLog[]
+  screenshots  TimeScreenshot[]
+  activityLogs ActivityLog[]
 
   @@unique([memberId])
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([taskId])
 }
 
 model TimeScreenshot {
-  id              String         @id @default(uuid())
-  organizationId  String
-  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  projectId       String
-  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  taskId          String?
-  task            Task?          @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  memberId        String
-  member          User           @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  timeEntryId     String?
-  timeEntry       TimeEntry?     @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
-  activeTimerId   String?
-  activeTimer     ActiveTimer?   @relation(fields: [activeTimerId], references: [id], onDelete: Cascade)
-  screenshotUrl   String
-  capturedAt      DateTime
-  activityLevel   Int            @default(100)
-  createdAt       DateTime       @default(now())
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId         String?
+  task           Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  memberId       String
+  member         User         @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  timeEntryId    String?
+  timeEntry      TimeEntry?   @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
+  activeTimerId  String?
+  activeTimer    ActiveTimer? @relation(fields: [activeTimerId], references: [id], onDelete: Cascade)
+  screenshotUrl  String
+  capturedAt     DateTime
+  activityLevel  Int          @default(100)
+  createdAt      DateTime     @default(now())
 }
 
 model ActivityLog {
-  id              String         @id @default(uuid())
-  organizationId  String
-  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  memberId        String
-  member          User           @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  timeEntryId     String?
-  timeEntry       TimeEntry?     @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
-  activeTimerId   String?
-  activeTimer     ActiveTimer?   @relation(fields: [activeTimerId], references: [id], onDelete: Cascade)
-  timestamp       DateTime
-  keystrokes      Int            @default(0)
-  mouseMovements  Int            @default(0)
-  activityPercentage Int         @default(0)
-  createdAt       DateTime       @default(now())
+  id                 String       @id @default(uuid())
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberId           String
+  member             User         @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  timeEntryId        String?
+  timeEntry          TimeEntry?   @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
+  activeTimerId      String?
+  activeTimer        ActiveTimer? @relation(fields: [activeTimerId], references: [id], onDelete: Cascade)
+  timestamp          DateTime
+  keystrokes         Int          @default(0)
+  mouseMovements     Int          @default(0)
+  activityPercentage Int          @default(0)
+  createdAt          DateTime     @default(now())
 }
 
 model IdlePeriod {
-  id              String         @id @default(uuid())
-  organizationId  String
-  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  memberId        String
-  member          User           @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  timeEntryId     String?
-  timeEntry       TimeEntry?     @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
-  startTime       DateTime
-  endTime         DateTime?
-  duration        Float?         // in seconds
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberId       String
+  member         User         @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  timeEntryId    String?
+  timeEntry      TimeEntry?   @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
+  startTime      DateTime
+  endTime        DateTime?
+  duration       Float? // in seconds
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 }
 
 model Setting {
@@ -336,7 +356,7 @@ model Report {
   id             String       @id @default(uuid())
   name           String
   type           String
-  config         String       // JSON string for report configuration
+  config         String // JSON string for report configuration
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy      String
@@ -348,33 +368,33 @@ model Notification {
   id             String       @id @default(uuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  projectId      String?
-  project        Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
-  taskId         String?
-  task           Task?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  
-  timeEntryId    String?
-  timeEntry      TimeEntry?   @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
-  
-  recipientId    String
-  recipient      User         @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
-  
-  actorId        String?
-  actor          User?        @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
-  
-  actorRole      String?
-  recipientRole  String?
-  
-  type           String
-  title          String
-  message        String
-  isRead         Boolean      @default(false)
-  actionUrl      String?
-  metadata       String?      // JSON string for additional context
-  
-  createdAt      DateTime     @default(now())
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  timeEntryId String?
+  timeEntry   TimeEntry? @relation(fields: [timeEntryId], references: [id], onDelete: Cascade)
+
+  recipientId String
+  recipient   User   @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  actorId String?
+  actor   User?   @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  actorRole     String?
+  recipientRole String?
+
+  type      String
+  title     String
+  message   String
+  isRead    Boolean @default(false)
+  actionUrl String?
+  metadata  String? // JSON string for additional context
+
+  createdAt DateTime @default(now())
 }
 
 enum MessageVisibility {
@@ -386,24 +406,24 @@ model ProjectMessage {
   id             String       @id @default(uuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  projectId      String
-  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
-  senderId       String
-  sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  
-  content        String
-  visibility     MessageVisibility @default(PUBLIC)
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  senderId String
+  sender   User   @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  content         String
+  visibility      MessageVisibility @default(PUBLIC)
   parentMessageId String?
-  isEdited       Boolean      @default(false)
-  deletedAt      DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  
-  mentions       MessageMention[]
-  taskMentions   MessageTaskMention[]
-  readReceipts   MessageReadReceipt[]
+  isEdited        Boolean           @default(false)
+  deletedAt       DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  mentions     MessageMention[]
+  taskMentions MessageTaskMention[]
+  readReceipts MessageReadReceipt[]
 }
 
 model MessageMention {
@@ -418,24 +438,23 @@ model MessageMention {
 }
 
 model MessageTaskMention {
-  id              String         @id @default(uuid())
-  messageId       String
-  message         ProjectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  taskId          String
-  task            Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  createdAt       DateTime       @default(now())
+  id        String         @id @default(uuid())
+  messageId String
+  message   ProjectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  taskId    String
+  task      Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
 
   @@unique([messageId, taskId])
 }
 
 model MessageReadReceipt {
-  id              String         @id @default(uuid())
-  messageId       String
-  message         ProjectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  userId          String
-  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  readAt          DateTime       @default(now())
+  id        String         @id @default(uuid())
+  messageId String
+  message   ProjectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt    DateTime       @default(now())
 
   @@unique([messageId, userId])
 }
-

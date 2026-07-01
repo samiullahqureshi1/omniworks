@@ -1,6 +1,8 @@
 'use server';
 
 import { prisma } from '@/lib/db';
+import nodemailer from 'nodemailer';
+import crypto from 'crypto';
 import { hashPassword, verifyPassword, createSession, destroySession, getSession } from '@/lib/auth';
 
 export async function signupAction(formData: FormData) {
@@ -244,5 +246,131 @@ export async function deleteOrganizationAction(id: string) {
     return { success: true };
   } catch (error: any) {
     return { error: error.message || 'Failed to delete organization.' };
+  }
+}
+
+export async function forgotPasswordAction(formData: FormData) {
+  try {
+    const email = formData.get('email') as string;
+    if (!email) return { error: 'Email is required' };
+
+    // Find all users with this email (might be multiple if in different orgs, but we just update one or all)
+    // Actually, usually users have the same password across orgs in this setup if they were added, 
+    // or they have different rows. Let's find all rows with this email.
+    const users = await prisma.user.findMany({
+      where: { email }
+    });
+
+    if (users.length === 0) {
+      return { error: 'No account found with that email address.' };
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
+
+    // Update all user records with this email
+    await prisma.user.updateMany({
+      where: { email },
+      data: {
+        resetToken,
+        resetTokenExpiry
+      }
+    });
+
+    // Send email
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      const resetLink = `http://localhost:3000/reset-password?token=${resetToken}`;
+      // Note: In production, use the actual domain from env
+
+      await transporter.sendMail({
+        from: `"OmniWork Support" <${process.env.EMAIL_USER}>`,
+        to: email,
+        replyTo: process.env.EMAIL_USER,
+        subject: 'Reset Your OmniWork Password',
+        text: `You requested a password reset. Click the link to reset your password: ${resetLink}`,
+        html: `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset Your Password</title>
+</head>
+<body style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 20px;">
+  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+    <h2 style="color: #333333; margin-top: 0;">Reset Your Password</h2>
+    <p style="color: #555555; font-size: 16px;">We received a request to reset your password.</p>
+    <div style="margin: 30px 0;">
+      <a href="${resetLink}" style="background-color: #000000; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Reset Password</a>
+    </div>
+    <p style="color: #777777; font-size: 14px; line-height: 1.5;">
+      If you did not request a password reset, please ignore this email or reply to let us know. This link is only valid for the next 1 hour.
+    </p>
+    <hr style="border: none; border-top: 1px solid #eeeeee; margin: 30px 0 20px 0;" />
+    <p style="color: #999999; font-size: 12px; text-align: center; margin: 0;">
+      © ${new Date().getFullYear()} OmniWork. All rights reserved.
+    </p>
+  </div>
+</body>
+</html>
+        `,
+      });
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Forgot password error:', error);
+    return { error: 'Failed to process request.' };
+  }
+}
+
+export async function resetPasswordAction(formData: FormData) {
+  try {
+    const token = formData.get('token') as string;
+    const password = formData.get('password') as string;
+
+    if (!token || !password) {
+      return { error: 'Token and new password are required.' };
+    }
+
+    const users = await prisma.user.findMany({
+      where: {
+        resetToken: token,
+        resetTokenExpiry: {
+          gt: new Date()
+        }
+      }
+    });
+
+    if (users.length === 0) {
+      return { error: 'Invalid or expired reset token.' };
+    }
+
+    const passwordHash = await hashPassword(password);
+
+    // Update all users that had this token
+    for (const user of users) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash,
+          resetToken: null,
+          resetTokenExpiry: null
+        }
+      });
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Reset password error:', error);
+    return { error: 'Failed to reset password.' };
   }
 }
