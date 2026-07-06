@@ -16,7 +16,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     whereClause.clientId = session.userId;
   } else if (session.role === 'MEMBER') {
     whereClause.OR = [
-      { assignees: { some: { userId: session.userId } } },
+      { tasks: { some: { assignees: { some: { userId: session.userId } } } } },
       { projectManagerId: session.userId },
     ];
   }
@@ -65,13 +65,20 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     );
   }
 
+  const isStrictMember = session.role === 'MEMBER' && session.userId !== project.projectManagerId;
+
+  if (isStrictMember) {
+    // API Requirement: Member users do not see project-level total hours
+    (project as any).totalAllocatedHours = null;
+  }
+
   // Also fetch timesheets related to this project's tasks or direct tracking.
   // Wait, our timesheet model is daily. TimeTrackings link to projects.
   // We can just rely on the timeTrackings array included above for detailed logs.
 
   const users = await prisma.user.findMany({
     where: { organizationId: session.organizationId },
-    select: { id: true, name: true, email: true, role: true, status: true }
+    select: { id: true, name: true, email: true, role: true, status: true, presence: true }
   });
 
   const taskStatuses = await prisma.taskStatus.findMany({

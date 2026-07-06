@@ -36,6 +36,28 @@ export async function signupAction(formData: FormData) {
       },
     });
 
+    // Create default project and task stages
+    const defaultStages = [
+      { name: 'To Do', color: '#64748b', order: 0 },
+      { name: 'In Progress', color: '#eab308', order: 1 },
+      { name: 'In Review', color: '#a855f7', order: 2 },
+      { name: 'Completed', color: '#22c55e', order: 3 },
+    ];
+
+    await prisma.projectStatus.createMany({
+      data: defaultStages.map(stage => ({
+        ...stage,
+        organizationId: org.id,
+      })),
+    });
+
+    await prisma.taskStatus.createMany({
+      data: defaultStages.map(stage => ({
+        ...stage,
+        organizationId: org.id,
+      })),
+    });
+
     // Hash password & create Owner user
     const passwordHash = await hashPassword(password);
     const user = await prisma.user.create({

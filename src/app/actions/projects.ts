@@ -6,17 +6,20 @@ import { createNotification } from './notifications';
 import {  Prisma } from '@prisma/client';
 import { hashPassword } from '@/lib/auth'; // Ensure this is imported
 
+import nodemailer from 'nodemailer';
+import crypto from 'crypto';
+
 // Quick Client Creation inside project form:
 // Owner can quickly create a Client user directly during project creation/editing.
-export async function quickCreateClientAction(name: string, email: string, password?: string) {
+export async function quickCreateClientAction(name: string, email: string) {
   try {
     const session = await getSession();
     if (!session || session.role !== 'OWNER') {
       return { error: 'Unauthorized: Only Owners can create clients.' };
     }
 
-    if (!name || !email || !password) {
-      return { error: 'Name, email, and password are required.' };
+    if (!name || !email) {
+      return { error: 'Name and email are required.' };
     }
 
     // Check if user already exists
@@ -27,7 +30,8 @@ export async function quickCreateClientAction(name: string, email: string, passw
       return { error: 'User with this email already exists.' };
     }
 
-    const passwordHash = await hashPassword(password);
+    const rawPassword = crypto.randomBytes(4).toString('hex');
+    const passwordHash = await hashPassword(rawPassword);
 
     // Create client user
     const clientUser = await prisma.user.create({
@@ -39,6 +43,73 @@ export async function quickCreateClientAction(name: string, email: string, passw
         organizationId: session.organizationId,
       },
     });
+
+    // Send email with credentials
+    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+      try {
+        const transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+          },
+        });
+
+        await transporter.sendMail({
+          from: `"OmniWork" <${process.env.EMAIL_USER}>`,
+          to: email,
+          replyTo: process.env.EMAIL_USER,
+          subject: 'Welcome to OmniWork - Your Client Account Details',
+          html: `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to OmniWork</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f7f6; padding: 40px 20px; margin: 0; color: #333;">
+  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); overflow: hidden;">
+    <div style="background-color: #2563eb; padding: 30px; text-align: center;">
+      <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">OmniWork</h1>
+      <p style="color: #bfdbfe; margin-top: 5px; font-size: 16px;">Client Portal Access</p>
+    </div>
+    
+    <div style="padding: 40px 30px;">
+      <h2 style="color: #1e293b; margin-top: 0; font-size: 22px;">Hello ${name},</h2>
+      <p style="font-size: 16px; line-height: 1.6; color: #475569;">
+        A client account has been created for you on OmniWork. You can now log in to view project updates, track progress, and communicate directly with the team.
+      </p>
+      
+      <div style="background-color: #f8fafc; padding: 25px; border-radius: 8px; margin: 30px 0; border: 1px solid #e2e8f0;">
+        <h3 style="margin-top: 0; color: #0f172a; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Your Login Credentials</h3>
+        <p style="margin: 15px 0 5px 0; font-size: 15px;"><strong>Email:</strong> <a href="mailto:${email}" style="color: #2563eb; text-decoration: none;">${email}</a></p>
+        <p style="margin: 0; font-size: 15px;"><strong>Password:</strong> <span style="background-color: #e2e8f0; padding: 4px 8px; border-radius: 4px; font-family: monospace; letter-spacing: 1px;">${rawPassword}</span></p>
+      </div>
+      
+      <p style="color: #64748b; font-size: 15px; line-height: 1.6;">
+        For your security, we strongly recommend logging in and updating your password from your profile settings immediately.
+      </p>
+      
+      <div style="text-align: center; margin-top: 40px;">
+        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/login" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block;">Access Your Portal</a>
+      </div>
+    </div>
+    
+    <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #e2e8f0;">
+      <p style="color: #94a3b8; font-size: 13px; margin: 0;">
+        &copy; ${new Date().getFullYear()} OmniWork. All rights reserved.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+          `,
+        });
+      } catch (emailError) {
+        console.error('Failed to send email:', emailError);
+      }
+    }
 
     return { success: true, client: clientUser };
   } catch (error: any) {
@@ -340,9 +411,9 @@ export async function getProjectsAction() {
       // Client can only access their own assigned projects
       whereClause.clientId = userId;
     } else if (role === 'MEMBER') {
-      // Member can see assigned projects OR projects where they are PM
+      // Member can see projects where they are assigned to at least one task OR projects where they are PM
       whereClause.OR = [
-        { assignees: { some: { userId } } },
+        { tasks: { some: { assignees: { some: { userId } } } } },
         { projectManagerId: userId },
       ];
     }
@@ -350,6 +421,7 @@ export async function getProjectsAction() {
     const projects = await prisma.project.findMany({
       where: whereClause,
       include: {
+        status: true,
         client: {
           select: { id: true, name: true, email: true },
         },

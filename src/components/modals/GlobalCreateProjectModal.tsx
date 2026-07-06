@@ -153,10 +153,9 @@ export default function GlobalCreateProjectModal({
     const formData = new FormData(e.currentTarget);
     const name = formData.get("name") as string;
     const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
 
     startTransition(async () => {
-      const res = await quickCreateClientAction(name, email, password);
+      const res = await quickCreateClientAction(name, email);
       if (res.error) {
         toast.error(res.error);
       } else {
@@ -567,15 +566,6 @@ export default function GlobalCreateProjectModal({
                 type="email"
                 required
                 placeholder="contact@acme.com"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Client Password</label>
-              <Input
-                name="password"
-                type="password"
-                required
-                placeholder="Temporary password"
               />
             </div>
             <DialogFooter className="pt-4">

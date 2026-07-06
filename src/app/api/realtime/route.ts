@@ -46,7 +46,11 @@ export async function GET(req: NextRequest) {
         'manual_time_added', 
         'time_entry_updated', 
         'time_entry_deleted', 
-        'task_hours_updated'
+        'task_hours_updated',
+        'message_sent',
+        'notification_created',
+        'message_read',
+        'presence_updated'
       ];
       
       const boundListeners: { name: string, fn: any }[] = [];

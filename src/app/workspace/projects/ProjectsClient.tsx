@@ -85,6 +85,25 @@ const getStatusColor = (status: string) => {
   }
 };
 
+const getProjectMembers = (project: any) => {
+  const membersMap = new Map();
+  if (project.assignees) {
+    project.assignees.forEach((a: any) => {
+      if (a.user) membersMap.set(a.user.id, a.user);
+    });
+  }
+  if (project.tasks) {
+    project.tasks.forEach((t: any) => {
+      if (t.assignees) {
+        t.assignees.forEach((a: any) => {
+          if (a.user) membersMap.set(a.user.id, a.user);
+        });
+      }
+    });
+  }
+  return Array.from(membersMap.values());
+};
+
 const getPriorityColor = (priority: string) => {
   switch (priority) {
     case "LOW":
@@ -172,7 +191,7 @@ function KanbanCard({ project, currentUser, handleDelete }: any) {
         )}
       </div>
       
-      {project.client && (
+      {project.client && currentUser.role !== "MEMBER" && (
         <span className="text-[12px] font-medium text-muted-foreground pl-2 truncate relative z-10 flex items-center gap-1.5">
           <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
           {project.client.name}
@@ -197,14 +216,14 @@ function KanbanCard({ project, currentUser, handleDelete }: any) {
               <AvatarFallback className="bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700 text-[10px] font-bold">{project.projectManager.name.substring(0,2).toUpperCase()}</AvatarFallback>
             </Avatar>
           )}
-          {project.assignees.slice(0, 3).map((a: any) => (
-            <Avatar key={a.user.id} className="h-7 w-7 border-2 border-background shadow-sm transition-transform group-hover:scale-110 duration-300">
-              <AvatarFallback className="bg-gradient-to-br from-primary/10 to-primary/20 text-primary text-[10px] font-bold">{a.user.name.substring(0,2).toUpperCase()}</AvatarFallback>
+          {getProjectMembers(project).slice(0, 3).map((u: any) => (
+            <Avatar key={u.id} className="h-7 w-7 border-2 border-background shadow-sm transition-transform group-hover:scale-110 duration-300" title={u.name}>
+              <AvatarFallback className="bg-gradient-to-br from-primary/10 to-primary/20 text-primary text-[10px] font-bold">{u.name.substring(0,2).toUpperCase()}</AvatarFallback>
             </Avatar>
           ))}
-          {project.assignees.length > 3 && (
+          {getProjectMembers(project).length > 3 && (
             <div className="h-7 w-7 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground shadow-sm z-10">
-              +{project.assignees.length - 3}
+              +{getProjectMembers(project).length - 3}
             </div>
           )}
         </div>
@@ -418,19 +437,11 @@ export default function ProjectsClient({
   ) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const password = formData.get("password") as string;
-    const confirmPassword = formData.get("confirmPassword") as string;
-
-    if (password !== confirmPassword) {
-      toast.error("Passwords do not match.");
-      return;
-    }
 
     startTransition(async () => {
       const res = await quickCreateClientAction(
         formData.get("name") as string,
-        formData.get("email") as string,
-        password,
+        formData.get("email") as string
       );
       if (res.error) {
         toast.error(res.error);
@@ -577,7 +588,7 @@ export default function ProjectsClient({
                       >
                         {p.name}
                       </Link>
-                      {p.client && (
+                      {p.client && currentUser.role !== "MEMBER" && (
                         <span className="text-xs text-muted-foreground mt-1">
                           Client: {p.client.name}
                         </span>
@@ -631,15 +642,15 @@ export default function ProjectsClient({
                           </Avatar>
                         </div>
                       )}
-                      {p.assignees.map((a: any) => (
+                      {getProjectMembers(p).map((u: any) => (
                         <div
-                          key={a.user.id}
-                          title={a.user.name}
+                          key={u.id}
+                          title={u.name}
                           className="relative border-2 border-background rounded-full"
                         >
                           <Avatar className="h-7 w-7">
                             <AvatarFallback className="bg-primary/10 text-primary text-[10px]">
-                              {a.user.name.substring(0, 2)}
+                              {u.name.substring(0, 2)}
                             </AvatarFallback>
                           </Avatar>
                         </div>
@@ -745,7 +756,7 @@ export default function ProjectsClient({
                   ) : (
                     <p className="text-sm text-muted-foreground italic">No description provided.</p>
                   )}
-                  {p.client && <p className="text-xs text-muted-foreground mt-2 font-medium">Client: {p.client.name}</p>}
+                  {p.client && currentUser.role !== "MEMBER" && <p className="text-xs text-muted-foreground mt-2 font-medium">Client: {p.client.name}</p>}
                 </div>
                 
                 <div className="flex items-center gap-6 sm:ml-auto w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0">
@@ -769,14 +780,14 @@ export default function ProjectsClient({
                           <AvatarFallback className="bg-purple-100 text-purple-700 text-xs">{p.projectManager.name.substring(0,2)}</AvatarFallback>
                         </Avatar>
                       )}
-                      {p.assignees.slice(0, 4).map((a: any) => (
-                        <Avatar key={a.user.id} className="h-8 w-8 border-2 border-background" title={a.user.name}>
-                          <AvatarFallback className="bg-primary/10 text-primary text-xs">{a.user.name.substring(0,2)}</AvatarFallback>
+                      {getProjectMembers(p).slice(0, 4).map((u: any) => (
+                        <Avatar key={u.id} className="h-8 w-8 border-2 border-background" title={u.name}>
+                          <AvatarFallback className="bg-primary/10 text-primary text-xs">{u.name.substring(0,2)}</AvatarFallback>
                         </Avatar>
                       ))}
-                      {p.assignees.length > 4 && (
+                      {getProjectMembers(p).length > 4 && (
                         <div className="h-8 w-8 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-medium text-muted-foreground z-10">
-                          +{p.assignees.length - 4}
+                          +{getProjectMembers(p).length - 4}
                         </div>
                       )}
                     </div>
@@ -1164,28 +1175,6 @@ export default function ProjectsClient({
                     type="email"
                     required
                     placeholder="contact@acme.com"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Password</label>
-                  <Input
-                    name="password"
-                    type="password"
-                    required
-                    placeholder="••••••••"
-                    minLength={6}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Confirm Password
-                  </label>
-                  <Input
-                    name="confirmPassword"
-                    type="password"
-                    required
-                    placeholder="••••••••"
-                    minLength={6}
                   />
                 </div>
                 <DialogFooter className="pt-4">

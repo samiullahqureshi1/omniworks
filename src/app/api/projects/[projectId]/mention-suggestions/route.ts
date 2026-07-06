@@ -17,7 +17,7 @@ export async function GET(request: Request, context: { params: Promise<{ project
         ...(session.role === 'CLIENT' ? { clientId: session.userId } : {}),
         ...(session.role === 'MEMBER' ? {
           OR: [
-            { assignees: { some: { userId: session.userId } } },
+            { tasks: { some: { assignees: { some: { userId: session.userId } } } } },
             { projectManagerId: session.userId },
           ]
         } : {})

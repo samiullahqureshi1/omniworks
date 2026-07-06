@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
         organizationId: user.organizationId,
         OR: [
           { assignees: { some: { userId: user.id } } },
+          { tasks: { some: { assignees: { some: { userId: user.id } } } } },
           { projectManagerId: user.id },
           ...(user.role === 'OWNER' ? [{}] : []),
         ]

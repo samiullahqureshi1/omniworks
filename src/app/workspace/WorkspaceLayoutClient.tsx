@@ -23,6 +23,7 @@ import {
   ChevronDown,
   User,
   Shield,
+  Briefcase,
   Trash2,
   Plus
 } from 'lucide-react';
@@ -39,6 +40,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { usePresence } from '@/hooks/usePresence';
+import { useRealtime } from '@/hooks/useRealtime';
+import { toast } from 'sonner';
 
 export default function WorkspaceLayoutClient({
   children,
@@ -59,6 +63,30 @@ export default function WorkspaceLayoutClient({
   const pathname = usePathname();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
+
+  usePresence();
+  const { lastEvent } = useRealtime([]);
+
+  useEffect(() => {
+    if (lastEvent) {
+      if (lastEvent.event === 'message_sent' && lastEvent.payload.message) {
+        const msg = lastEvent.payload.message;
+        if (msg.senderId !== user.userId) {
+          toast.info(`New message from ${msg.sender?.name || 'someone'}`, {
+            description: msg.content.substring(0, 50) + (msg.content.length > 50 ? '...' : ''),
+            action: {
+              label: 'View',
+              onClick: () => router.push(`/workspace/projects/${msg.projectId}?tab=conversation`)
+            }
+          });
+        }
+      }
+      if (lastEvent.event === 'notification_created') {
+        // Notification toast might be handled here or in NotificationBell, but sonner toast is good.
+        // The payload for notification_created currently just says type: 'mention' etc. We can wait or just rely on message_sent for messages.
+      }
+    }
+  }, [lastEvent, router, user.userId]);
 
   useEffect(() => {
     setMounted(true);
@@ -132,11 +160,12 @@ export default function WorkspaceLayoutClient({
 
   const allNavItems = [
     { name: 'Overview', href: '/workspace', icon: LayoutDashboard, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
-    { name: 'Projects', href: '/workspace/projects', icon: FolderKanban, exact: false, roles: ['OWNER', 'PM', 'CLIENT'] },
+    { name: 'Projects', href: '/workspace/projects', icon: FolderKanban, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'Tasks', href: '/workspace/tasks', icon: CheckSquare, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'Time', href: '/workspace/time', icon: Timer, exact: false, roles: ['OWNER', 'PM', 'MEMBER'] },
     { name: 'Timesheet', href: '/workspace/timesheet', icon: FileText, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'Users', href: '/workspace/users', icon: UsersIcon, exact: false, roles: ['OWNER'] },
+    { name: 'Clients', href: '/workspace/clients', icon: Briefcase, exact: false, roles: ['OWNER'] },
     { name: 'Reports', href: '/workspace/reports', icon: BarChart3, exact: false, roles: ['OWNER', 'PM'] },
     { name: 'Settings', href: '/workspace/settings', icon: Settings, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
   ];
@@ -219,10 +248,10 @@ export default function WorkspaceLayoutClient({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex flex-col h-screen w-full bg-[#f4f4f2] dark:bg-[#0f0f0f] overflow-hidden p-2 md:p-4 gap-2 md:gap-4 transition-colors">
+      <div className="flex flex-col h-screen w-full bg-[#f4f4f2] dark:bg-[#0f0f0f] overflow-hidden p-3 md:p-5 gap-3 md:gap-4 transition-colors">
         
         {/* Full-width Top Navbar */}
-        <header className="flex h-16 shrink-0 items-center justify-between w-full">
+        <header className="flex shrink-0 items-center justify-between w-full py-2 mb-1">
           <div className="flex items-center gap-3 flex-1">
             <button
               className="md:hidden text-slate-500 hover:text-black dark:hover:text-white p-2 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5 dark:border-white/10"

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useTransition, useEffect } from 'react';
+import React, { useState, useTransition, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import {
   ArrowLeft, Calendar, Clock, MoreHorizontal, Settings, 
   LayoutDashboard, CheckSquare, Users, Timer, Activity,
   Briefcase, MessageSquare, GripVertical, Plus, ShieldAlert,
-  Search, Check, X
+  Search, Check, X, Hash
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -20,8 +20,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from 'sonner';
 import { createTaskAction, updateTaskAction, deleteTaskAction } from '@/app/actions/tasks';
 import { updateProjectAction } from '@/app/actions/projects';
-import ProjectConversation from './ProjectConversation';
+import ProjectConversation, { ProjectConversationRef } from './ProjectConversation';
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
+import { useRealtime } from '@/hooks/useRealtime';
 
 export default function ProjectDetailClient({ project, currentUser, users = [], taskStatuses = [], projectStatuses = [] }: { project: any, currentUser: any, users?: any[], taskStatuses?: any[], projectStatuses?: any[] }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -39,6 +40,78 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
   const [isEditProjectOpen, setIsEditProjectOpen] = useState(false);
   const [editIsOngoing, setEditIsOngoing] = useState(project.isOngoing);
   const [editDescription, setEditDescription] = useState(project.description || '');
+
+  // Presence
+  const [presenceMap, setPresenceMap] = useState<Record<string, string>>({});
+  
+  const conversationRef = useRef<ProjectConversationRef>(null);
+
+  const { lastEvent } = useRealtime([]);
+
+  useEffect(() => {
+    const initialPresence: Record<string, string> = {};
+    users.forEach((u: any) => {
+      if (u.presence) {
+        const diff = Date.now() - new Date(u.presence.lastSeen).getTime();
+        initialPresence[u.id] = diff > 120000 ? 'OFFLINE' : 'ONLINE';
+      } else {
+        initialPresence[u.id] = 'OFFLINE';
+      }
+    });
+    setPresenceMap(initialPresence);
+  }, [users]);
+
+  useEffect(() => {
+    if (lastEvent?.event === 'presence_updated' && lastEvent.payload) {
+      setPresenceMap(prev => ({
+        ...prev,
+        [lastEvent.payload.userId]: lastEvent.payload.status
+      }));
+    }
+  }, [lastEvent]);
+
+  const handleMentionTask = (taskId: string, taskTitle: string) => {
+    conversationRef.current?.insertMention(taskId, taskTitle, 'task');
+  };
+
+  const handleMentionUser = (userId: string, userName: string) => {
+    conversationRef.current?.insertMention(userId, userName, 'user');
+  };
+
+  const projectMembers = useMemo(() => {
+    const membersMap = new Map();
+    
+    // 1. Add all Owners
+    users.filter((u: any) => u.role === 'OWNER').forEach((u: any) => membersMap.set(u.id, u));
+    
+    // 2. Add Project Manager
+    if (project.projectManagerId) {
+      const pm = users.find((u: any) => u.id === project.projectManagerId);
+      if (pm) membersMap.set(pm.id, pm);
+    }
+    
+    // 3. Add Client
+    if (project.clientId) {
+      const client = users.find((u: any) => u.id === project.clientId);
+      if (client) membersMap.set(client.id, client);
+    }
+
+    if (project.assignees) {
+      project.assignees.forEach((a: any) => {
+        if (a.user) membersMap.set(a.user.id, a.user);
+      });
+    }
+    if (project.tasks) {
+      project.tasks.forEach((t: any) => {
+        if (t.assignees) {
+          t.assignees.forEach((a: any) => {
+            if (a.user) membersMap.set(a.user.id, a.user);
+          });
+        }
+      });
+    }
+    return Array.from(membersMap.values());
+  }, [project, users]);
   
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -96,14 +169,45 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
   const canManageTasks = isOwner || isPM || isClient; // As per rules: Clients can create tasks in own projects.
 
   // Metrics
-  const totalTrackedMs = project.timeEntries.reduce((acc: number, t: any) => {
-    return acc + (t.activeWorkedDuration || 0) * 1000;
-  }, 0);
-  const totalTrackedHours = Math.round((totalTrackedMs / (1000 * 60 * 60)) * 100) / 100;
-  
-  const progressPercent = project.totalAllocatedHours 
-    ? Math.round((totalTrackedHours / project.totalAllocatedHours) * 100)
-    : 0;
+  const getTaskTrackedHours = (taskId: string) => {
+    const ms = project.timeEntries?.filter((t: any) => t.taskId === taskId).reduce((acc: number, t: any) => acc + (t.activeWorkedDuration || 0) * 1000, 0) || 0;
+    return Math.round((ms / (1000 * 60 * 60)) * 100) / 100;
+  };
+
+  const getMemberTrackedHours = (userId: string) => {
+    const ms = project.timeEntries?.filter((t: any) => t.memberId === userId).reduce((acc: number, t: any) => acc + (t.activeWorkedDuration || 0) * 1000, 0) || 0;
+    return Math.round((ms / (1000 * 60 * 60)) * 100) / 100;
+  };
+
+  const getMemberAllocatedHours = (userId: string) => {
+    let allocated = 0;
+    project.tasks?.forEach((task: any) => {
+      if (task.assignees?.some((a: any) => a.userId === userId)) {
+        allocated += (task.allocatedHours || 0);
+      }
+    });
+    return allocated;
+  };
+
+  const isStrictMember = currentUser.role === 'MEMBER' && !isPM;
+
+  let displayTotalAllocatedHours = project.totalAllocatedHours || 0;
+  let displayTotalTrackedHours = 0;
+  let displayProgressPercent = 0;
+
+  if (isStrictMember) {
+    displayTotalAllocatedHours = getMemberAllocatedHours(currentUser.userId);
+    displayTotalTrackedHours = getMemberTrackedHours(currentUser.userId);
+    displayProgressPercent = displayTotalAllocatedHours 
+      ? Math.round((displayTotalTrackedHours / displayTotalAllocatedHours) * 100)
+      : 0;
+  } else {
+    const totalTrackedMs = project.timeEntries?.reduce((acc: number, t: any) => acc + (t.activeWorkedDuration || 0) * 1000, 0) || 0;
+    displayTotalTrackedHours = Math.round((totalTrackedMs / (1000 * 60 * 60)) * 100) / 100;
+    displayProgressPercent = project.totalAllocatedHours 
+      ? Math.round((displayTotalTrackedHours / project.totalAllocatedHours) * 100)
+      : 0;
+  }
 
   async function handleUpdateProject(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -379,6 +483,78 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
 
             </div>
           )}
+        
+          {/* Top Header Expanded Info */}
+          <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-slate-200/60 dark:border-slate-800/60">
+            {/* Project Details */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-2"><Briefcase size={14} className="text-primary"/> Details</h3>
+              <div className="grid grid-cols-2 gap-4">
+                {!isStrictMember && (
+                  <div className="flex flex-col">
+                    <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">Client</span>
+                    <span className="font-semibold text-sm text-foreground">{project.client?.name || 'Internal'}</span>
+                  </div>
+                )}
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">Manager</span>
+                  <span className="font-semibold text-sm text-foreground">{project.projectManager?.name || 'Unassigned'}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">Start Date</span>
+                  <span className="font-semibold text-sm text-foreground">{new Date(project.startDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">End Date</span>
+                  <span className="font-semibold text-sm text-foreground">{project.isOngoing ? 'Ongoing' : project.endDate ? new Date(project.endDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'Not set'}</span>
+                </div>
+              </div>
+              {project.notes && (
+                <div className="mt-2">
+                  <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider block mb-1">Notes</span>
+                  <p className="text-xs text-slate-700 dark:text-slate-300 italic bg-muted/40 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+                    "{project.notes}"
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Time & Progress */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <Timer size={14} className="text-primary"/> 
+                {isStrictMember ? 'Your Progress & Hours' : 'Progress & Hours'}
+              </h3>
+              <div className="flex justify-between items-end">
+                <div>
+                  <p className="text-2xl font-extrabold tracking-tight text-foreground">{displayTotalTrackedHours} <span className="text-sm font-semibold text-muted-foreground">hrs</span></p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mt-0.5">Total Logged Time</p>
+                </div>
+                {displayTotalAllocatedHours > 0 && (
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-foreground">{displayTotalAllocatedHours} <span className="text-xs font-semibold text-muted-foreground">hrs</span></p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mt-0.5">Allocated Budget</p>
+                  </div>
+                )}
+              </div>
+              {displayTotalAllocatedHours > 0 && (
+                <div className="space-y-2 mt-2">
+                  <div className="flex justify-between text-xs font-semibold">
+                    <span className={displayProgressPercent > 100 ? 'text-destructive' : 'text-primary'}>{displayProgressPercent}% Complete</span>
+                    {displayTotalTrackedHours > displayTotalAllocatedHours && (
+                      <span className="text-destructive flex items-center bg-destructive/10 px-1.5 py-0.5 rounded text-[10px]"><ShieldAlert size={10} className="mr-1"/> Over Budget</span>
+                    )}
+                  </div>
+                  <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
+                    <div 
+                      className={`h-full rounded-full transition-all duration-1000 ${displayProgressPercent > 100 ? 'bg-gradient-to-r from-red-500 to-rose-600' : 'bg-gradient-to-r from-primary to-blue-500'}`} 
+                      style={{ width: `${Math.min(100, displayProgressPercent)}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -393,87 +569,109 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
         <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             
-            {/* Left Column: Details + Progress */}
+            {/* Left Column: Tasks + Members */}
             <div className="col-span-1 space-y-6">
-              {/* Meta Info */}
-              <Card className="shadow-sm border-slate-200/60 dark:border-slate-800/60 hover:shadow-md transition-all duration-300 bg-gradient-to-b from-white to-slate-50/50 dark:from-slate-950 dark:to-slate-900/50 overflow-hidden">
-                <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/50 bg-white/50 dark:bg-slate-950/50">
-                  <CardTitle className="text-lg flex items-center gap-2"><Briefcase size={16} className="text-primary"/> Project Details</CardTitle>
+              {/* Project Tasks */}
+              <Card className="shadow-sm border-slate-200/60 dark:border-slate-800/60 hover:shadow-md transition-all duration-300">
+                <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/50 bg-muted/10">
+                  <CardTitle className="text-sm flex items-center gap-2"><CheckSquare size={16} className="text-primary"/> Project Tasks</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3 pt-4 text-sm">
-                  <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white dark:hover:bg-slate-900 transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-800 hover:shadow-sm">
-                    <div className="bg-blue-500/10 p-2 rounded-md"><Briefcase size={14} className="text-blue-600 dark:text-blue-400"/></div>
-                    <div className="flex flex-col flex-1">
-                      <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">Client</span>
-                      <span className="font-semibold text-foreground">{project.client?.name || 'Internal'}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white dark:hover:bg-slate-900 transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-800 hover:shadow-sm">
-                    <div className="bg-purple-500/10 p-2 rounded-md"><Users size={14} className="text-purple-600 dark:text-purple-400"/></div>
-                    <div className="flex flex-col flex-1">
-                      <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">Manager</span>
-                      <span className="font-semibold text-foreground">{project.projectManager?.name || 'Unassigned'}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white dark:hover:bg-slate-900 transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-800 hover:shadow-sm">
-                    <div className="bg-emerald-500/10 p-2 rounded-md"><Calendar size={14} className="text-emerald-600 dark:text-emerald-400"/></div>
-                    <div className="flex flex-col flex-1">
-                      <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">Start Date</span>
-                      <span className="font-semibold text-foreground">{new Date(project.startDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white dark:hover:bg-slate-900 transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-800 hover:shadow-sm">
-                    <div className="bg-orange-500/10 p-2 rounded-md"><Clock size={14} className="text-orange-600 dark:text-orange-400"/></div>
-                    <div className="flex flex-col flex-1">
-                      <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">End Date</span>
-                      <span className="font-semibold text-foreground">{project.isOngoing ? 'Ongoing' : project.endDate ? new Date(project.endDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'Not set'}</span>
-                    </div>
-                  </div>
-                  {project.notes && (
-                    <div className="pt-4 mt-2 border-t border-slate-100 dark:border-slate-800/50 px-2">
-                      <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider block mb-2">Notes</span>
-                      <p className="text-sm text-slate-700 dark:text-slate-300 italic bg-muted/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                        "{project.notes}"
-                      </p>
-                    </div>
+                <CardContent className="p-0 max-h-[300px] overflow-y-auto custom-scrollbar">
+                  {project.tasks.length === 0 ? (
+                    <div className="p-4 text-sm text-muted-foreground text-center">No tasks available.</div>
+                  ) : (
+                    <ul className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                      {project.tasks.map((task: any) => {
+                        const tracked = getTaskTrackedHours(task.id);
+                        const allocated = task.allocatedHours || 0;
+                        return (
+                          <li key={task.id} className="flex flex-col p-3 hover:bg-muted/40 transition-colors group gap-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium truncate pr-2">{task.title}</span>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 px-2 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-all shadow-sm bg-background border"
+                                onClick={() => handleMentionTask(task.id, task.title)}
+                                title="Mention Task"
+                              >
+                                @
+                              </Button>
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <div className="flex -space-x-1">
+                                {task.assignees?.map((a: any) => (
+                                  <Avatar key={a.userId} className="h-5 w-5 border border-background">
+                                    <AvatarFallback className="text-[8px] bg-primary/10 text-primary">{a.user?.name?.substring(0,2)}</AvatarFallback>
+                                  </Avatar>
+                                ))}
+                                {(!task.assignees || task.assignees.length === 0) && (
+                                  <span className="text-[10px] italic">Unassigned</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 font-mono bg-muted/30 px-1.5 py-0.5 rounded">
+                                <Clock size={10} className="text-primary/70" />
+                                <span>{tracked.toFixed(1)} / {allocated.toFixed(1)} hrs</span>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
                   )}
                 </CardContent>
               </Card>
 
-              {/* Time & Progress */}
-              <Card className="shadow-sm border-slate-200/60 dark:border-slate-800/60 hover:shadow-md transition-all duration-300 overflow-hidden">
+              {/* Project Members */}
+              <Card className="shadow-sm border-slate-200/60 dark:border-slate-800/60 hover:shadow-md transition-all duration-300">
                 <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/50 bg-muted/10">
-                  <CardTitle className="text-lg flex items-center gap-2"><Timer size={16} className="text-primary"/> Progress & Hours</CardTitle>
+                  <CardTitle className="text-sm flex items-center gap-2"><Users size={16} className="text-primary"/> Project Members</CardTitle>
                 </CardHeader>
-                <CardContent className="pt-6 space-y-6">
-                  <div className="flex justify-between items-end">
-                    <div>
-                      <p className="text-4xl font-extrabold tracking-tight text-foreground">{totalTrackedHours} <span className="text-lg font-semibold text-muted-foreground">hrs</span></p>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-1">Total Logged Time</p>
-                    </div>
-                    {project.totalAllocatedHours && (
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-foreground">{project.totalAllocatedHours} <span className="text-sm font-semibold text-muted-foreground">hrs</span></p>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-1">Allocated Budget</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {project.totalAllocatedHours && (
-                    <div className="space-y-3">
-                      <div className="flex justify-between text-sm font-semibold">
-                        <span className={progressPercent > 100 ? 'text-destructive' : 'text-primary'}>{progressPercent}% Complete</span>
-                        {totalTrackedHours > project.totalAllocatedHours && (
-                          <span className="text-destructive flex items-center bg-destructive/10 px-2 py-0.5 rounded-full text-xs"><ShieldAlert size={12} className="mr-1"/> Over Budget</span>
-                        )}
-                      </div>
-                      <div className="h-4 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
-                        <div 
-                          className={`h-full rounded-full transition-all duration-1000 ${progressPercent > 100 ? 'bg-gradient-to-r from-red-500 to-rose-600' : 'bg-gradient-to-r from-primary to-blue-500'}`} 
-                          style={{ width: `${Math.min(100, progressPercent)}%` }}
-                        ></div>
-                      </div>
-                    </div>
+                <CardContent className="p-0 max-h-[300px] overflow-y-auto custom-scrollbar">
+                  {projectMembers.length === 0 ? (
+                    <div className="p-4 text-sm text-muted-foreground text-center">No members available.</div>
+                  ) : (
+                    <ul className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                      {projectMembers.map((member: any) => {
+                        const tracked = getMemberTrackedHours(member.id);
+                        const allocated = getMemberAllocatedHours(member.id);
+                        return (
+                          <li key={member.id} className="flex flex-col p-3 hover:bg-muted/40 transition-colors group gap-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 truncate">
+                                <div className="relative">
+                                  <Avatar className="h-6 w-6">
+                                    <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{member.name.substring(0,2)}</AvatarFallback>
+                                  </Avatar>
+                                  <span className={`absolute bottom-0 right-0 w-2 h-2 rounded-full border border-white dark:border-slate-900 ${presenceMap[member.id] === 'ONLINE' ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'}`}></span>
+                                </div>
+                                <span className="text-sm font-medium truncate">{member.name}</span>
+                                <Badge variant="secondary" className="text-[8px] h-4 py-0 px-1.5 uppercase font-semibold">
+                                  {member.id === project.projectManagerId ? 'MANAGER' : member.role}
+                                </Badge>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 px-2 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-all shadow-sm bg-background border"
+                                onClick={() => handleMentionUser(member.id, member.name)}
+                                title="Mention Member"
+                              >
+                                @
+                              </Button>
+                            </div>
+                            {((member.role !== 'OWNER' && member.role !== 'CLIENT') || tracked > 0 || allocated > 0) && (
+                              <div className="flex items-center justify-end text-xs text-muted-foreground mt-1">
+                                <div className="flex items-center gap-1 font-mono bg-muted/30 px-1.5 py-0.5 rounded">
+                                  <Clock size={10} className="text-primary/70" />
+                                  <span>{tracked.toFixed(1)} / {allocated.toFixed(1)} hrs</span>
+                                </div>
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
                   )}
                 </CardContent>
               </Card>
@@ -483,6 +681,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
             <div className="col-span-1 md:col-span-1 lg:col-span-2">
               <div className="shadow-sm border border-slate-200/60 dark:border-slate-800/60 rounded-2xl h-full flex flex-col overflow-hidden hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-950">
                 <ProjectConversation 
+                  ref={conversationRef}
                   projectId={project.id} 
                   currentUser={currentUser} 
                   organizationId={project.organizationId} 

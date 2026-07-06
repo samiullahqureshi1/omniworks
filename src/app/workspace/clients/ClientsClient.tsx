@@ -4,17 +4,16 @@ import React, { useState, useTransition, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, UserPlus, Users as UsersIcon, Mail, ShieldAlert, MoreHorizontal, Key, UserX, UserCheck, Pencil, Trash2 } from 'lucide-react';
+import { Search, UserPlus, Briefcase, Mail, ShieldAlert, MoreHorizontal, Key, UserX, UserCheck, Pencil, Trash2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addUserAction, editUserAction, deactivateUserAction, activateUserAction, resetUserPasswordAction, deleteUserAction } from '@/app/actions/users';
 
-export default function UsersClient({ initialUsers, currentUser }: { initialUsers: any[], currentUser: any }) {
+export default function ClientsClient({ initialUsers, currentUser }: { initialUsers: any[], currentUser: any }) {
   const [users, setUsers] = useState(initialUsers);
   const [isPending, startTransition] = useTransition();
 
@@ -35,21 +34,21 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
     if (searchParams.get('invite') === 'true') {
       setIsAddModalOpen(true);
       // Clean up the URL
-      router.replace('/workspace/users');
+      router.replace('/workspace/clients');
     }
   }, [searchParams, router]);
 
-  // Filtered Users
+  // Filtered Users (Clients only)
   const filteredUsers = users.filter(u => {
     const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const isMember = u.role === 'OWNER' || u.role === 'MEMBER';
-    return matchesSearch && isMember;
+    return matchesSearch && u.role === 'CLIENT';
   });
 
-  // Handle Add User
+  // Handle Add Client
   const handleAddSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    formData.append('role', 'CLIENT');
 
     startTransition(async () => {
       const res = await addUserAction(formData);
@@ -64,11 +63,12 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
     });
   };
 
-  // Handle Edit User
+  // Handle Edit Client
   const handleEditSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editUser) return;
     const formData = new FormData(e.currentTarget);
+    formData.append('role', 'CLIENT');
 
     startTransition(async () => {
       const res = await editUserAction(editUser.id, formData);
@@ -146,16 +146,16 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <UsersIcon className="text-primary" size={28} />
-            User Management
+            <Briefcase className="text-primary" size={28} />
+            Client Management
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Add and manage members within your organization.
+            Add and manage clients within your organization.
           </p>
         </div>
         
         <Button onClick={() => setIsAddModalOpen(true)} className="w-full sm:w-auto shadow-md group">
-          <UserPlus className="mr-2 h-4 w-4 transition-transform group-hover:scale-110" /> Add User
+          <UserPlus className="mr-2 h-4 w-4 transition-transform group-hover:scale-110" /> Add Client
         </Button>
       </div>
 
@@ -172,12 +172,12 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
         </div>
       </div>
 
-      {/* Users Table */}
+      {/* Clients Table */}
       <div className="bg-background rounded-xl border shadow-sm overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/30">
-              <TableHead className="w-[300px]">Member</TableHead>
+              <TableHead className="w-[300px]">Client</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Joined</TableHead>
@@ -189,8 +189,8 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
               <TableRow>
                 <TableCell colSpan={5} className="h-48 text-center text-muted-foreground">
                   <div className="flex flex-col items-center justify-center space-y-3">
-                    <UsersIcon size={40} className="opacity-20" />
-                    <p>No users found matching your criteria.</p>
+                    <Briefcase size={40} className="opacity-20" />
+                    <p>No clients found matching your criteria.</p>
                   </div>
                 </TableCell>
               </TableRow>
@@ -217,9 +217,8 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      {u.role === 'OWNER' && <ShieldAlert size={14} className="text-purple-500" />}
-                      <span className={`text-sm font-medium ${u.role === 'OWNER' ? 'text-purple-600 dark:text-purple-400' : ''}`}>
-                        {u.role.charAt(0) + u.role.slice(1).toLowerCase()}
+                      <span className="text-sm font-medium">
+                        Client
                       </span>
                     </div>
                   </TableCell>
@@ -243,7 +242,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
                           <DropdownMenuItem onClick={() => setEditUser(u)} className="cursor-pointer">
-                            <Pencil className="mr-2 h-4 w-4 text-muted-foreground" /> Edit User
+                            <Pencil className="mr-2 h-4 w-4 text-muted-foreground" /> Edit Client
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => setResetUser(u)} className="cursor-pointer">
                             <Key className="mr-2 h-4 w-4 text-muted-foreground" /> Reset Password
@@ -251,21 +250,17 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
                           <DropdownMenuSeparator />
                           {u.status === 'ACTIVE' ? (
                             <DropdownMenuItem onClick={() => setDeactivateUser(u)} className="text-destructive focus:text-destructive cursor-pointer">
-                              <UserX className="mr-2 h-4 w-4" /> Deactivate User
+                              <UserX className="mr-2 h-4 w-4" /> Deactivate Client
                             </DropdownMenuItem>
                           ) : (
                             <DropdownMenuItem onClick={() => handleToggleStatus(u)} className="text-emerald-600 focus:text-emerald-600 cursor-pointer">
-                              <UserCheck className="mr-2 h-4 w-4" /> Reactivate User
+                              <UserCheck className="mr-2 h-4 w-4" /> Reactivate Client
                             </DropdownMenuItem>
                           )}
-                          {u.role !== 'OWNER' && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => setDeleteUser(u)} className="text-destructive focus:text-destructive cursor-pointer">
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete User
-                              </DropdownMenuItem>
-                            </>
-                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => setDeleteUser(u)} className="text-destructive focus:text-destructive cursor-pointer">
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete Client
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}
@@ -277,45 +272,38 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
         </Table>
       </div>
 
-      {/* Add User Modal */}
+      {/* Add Client Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Add New User</DialogTitle>
+            <DialogTitle>Add New Client</DialogTitle>
             <DialogDescription>
-              Create a new user account manually. They will be able to log in immediately.
+              Create a new client account manually. An email with their credentials will be sent.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAddSubmit} className="space-y-4 pt-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Name</label>
-              <Input name="name" required placeholder="John Doe" />
+              <Input name="name" required placeholder="Acme Corp" />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Email</label>
-              <Input name="email" type="email" required placeholder="john@example.com" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Role</label>
-              <select name="role" required className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <option value="MEMBER">Member</option>
-                <option value="OWNER">Owner</option>
-              </select>
+              <Input name="email" type="email" required placeholder="contact@acme.com" />
             </div>
             <DialogFooter className="pt-4">
               <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={isPending}>{isPending ? 'Adding...' : 'Add User'}</Button>
+              <Button type="submit" disabled={isPending}>{isPending ? 'Adding...' : 'Add Client'}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Edit User Modal */}
+      {/* Edit Client Modal */}
       <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
-            <DialogDescription>Update user details and roles.</DialogDescription>
+            <DialogTitle>Edit Client</DialogTitle>
+            <DialogDescription>Update client details.</DialogDescription>
           </DialogHeader>
           {editUser && (
             <form onSubmit={handleEditSubmit} className="space-y-4 pt-4">
@@ -327,21 +315,12 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
                 <label className="text-sm font-medium">Email</label>
                 <Input name="email" type="email" defaultValue={editUser.email} required />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Role</label>
-                  <select name="role" defaultValue={editUser.role} required className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <option value="MEMBER">Member</option>
-                    <option value="OWNER">Owner</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Status</label>
-                  <select name="status" defaultValue={editUser.status} required className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <option value="ACTIVE">Active</option>
-                    <option value="INACTIVE">Inactive</option>
-                  </select>
-                </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Status</label>
+                <select name="status" defaultValue={editUser.status} required className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <option value="ACTIVE">Active</option>
+                  <option value="INACTIVE">Inactive</option>
+                </select>
               </div>
               <DialogFooter className="pt-4">
                 <Button type="button" variant="outline" onClick={() => setEditUser(null)}>Cancel</Button>
@@ -382,7 +361,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
       <Dialog open={!!deactivateUser} onOpenChange={(open) => !open && setDeactivateUser(null)}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle className="text-destructive">Deactivate User</DialogTitle>
+            <DialogTitle className="text-destructive">Deactivate Client</DialogTitle>
             <DialogDescription>
               Are you sure you want to deactivate <strong>{deactivateUser?.name}</strong>? They will no longer be able to log into the workspace. Their historical data will remain intact.
             </DialogDescription>
@@ -400,7 +379,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
       <Dialog open={!!deleteUser} onOpenChange={(open) => !open && setDeleteUser(null)}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle className="text-destructive">Delete User</DialogTitle>
+            <DialogTitle className="text-destructive">Delete Client</DialogTitle>
             <DialogDescription>
               Are you sure you want to completely delete <strong>{deleteUser?.name}</strong>? This action cannot be undone and will remove them from the organization entirely.
             </DialogDescription>

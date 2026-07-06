@@ -23,8 +23,10 @@ export type AppEventType =
   | 'time_entry_updated'
   | 'time_entry_deleted'
   | 'task_hours_updated'
-  | 'notification_created'
   | 'message_sent'
+  | 'notification_created'
+  | 'message_read'
+  | 'presence_updated'
   | 'message_edited'
   | 'message_deleted';
 
