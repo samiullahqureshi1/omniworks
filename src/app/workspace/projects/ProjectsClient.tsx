@@ -23,6 +23,8 @@ import {
   Edit2,
   ChevronDown,
   Repeat,
+  Check,
+  Pin,
 } from "lucide-react";
 import {
   Table,
@@ -46,6 +48,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -59,6 +62,7 @@ import {
   deleteProjectTemplateAction,
 } from "@/app/actions/projects";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
+import { getRulesAction, createRuleAction } from "@/app/actions/rules";
 import { DndContext, DragEndEvent, useDraggable, useDroppable, DragOverlay } from "@dnd-kit/core";
 
 const formatDate = (dateInput: any) => {
@@ -315,10 +319,85 @@ export default function ProjectsClient({
 
   // Template Management States
   const [isTemplateSelectOpen, setIsTemplateSelectOpen] = useState(false);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [pinnedTemplateIds, setPinnedTemplateIds] = useState<string[]>([]);
+  const pinnedTemplates = React.useMemo(() => {
+    return templates.filter((t) => pinnedTemplateIds.includes(t.id));
+  }, [templates, pinnedTemplateIds]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
-  const [templates, setTemplates] = useState<any[]>([]);
-  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+
+  // Rule States
+  const [rules, setRules] = useState<any[]>([]);
+  const [attachedRuleIds, setAttachedRuleIds] = useState<string[]>([]);
+  const [isCreateRuleOpen, setIsCreateRuleOpen] = useState(false);
+
+  // Rule Form States
+  const [ruleFormName, setRuleFormName] = useState("");
+  const [ruleFormDescription, setRuleFormDescription] = useState("");
+  const [ruleFormFrequency, setRuleFormFrequency] = useState("DAILY");
+  const [ruleFormReminderTime, setRuleFormReminderTime] = useState("09:00 AM");
+  const [ruleFormActionType, setRuleFormActionType] = useState("SEND_REMINDER");
+  const [ruleFormRecipients, setRuleFormRecipients] = useState<string[]>(["PROJECT_MANAGER"]);
+
+  const fetchRules = async () => {
+    const res = await getRulesAction();
+    if (res.success && res.rules) {
+      setRules(res.rules);
+    }
+  };
+
+  useEffect(() => {
+    if (isCreateOpen) {
+      fetchRules();
+    }
+  }, [isCreateOpen]);
+
+  const handleCreateRule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ruleFormName.trim()) {
+      toast.error("Rule name is required");
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await createRuleAction({
+        name: ruleFormName,
+        description: ruleFormDescription,
+        frequency: ruleFormFrequency,
+        reminderTime: ruleFormReminderTime,
+        actionType: ruleFormActionType,
+        recipients: ruleFormRecipients,
+      });
+
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("Rule created and attached successfully");
+        setIsCreateRuleOpen(false);
+        if (res.rule) {
+          setAttachedRuleIds((prev) => [...prev, res.rule.id]);
+        }
+        fetchRules();
+        // Reset form
+        setRuleFormName("");
+        setRuleFormDescription("");
+        setRuleFormFrequency("DAILY");
+        setRuleFormReminderTime("09:00 AM");
+        setRuleFormActionType("SEND_REMINDER");
+        setRuleFormRecipients(["PROJECT_MANAGER"]);
+      }
+    });
+  };
+
+  const toggleRuleRecipient = (role: string) => {
+    if (ruleFormRecipients.includes(role)) {
+      setRuleFormRecipients((prev) => prev.filter((r) => r !== role));
+    } else {
+      setRuleFormRecipients((prev) => [...prev, role]);
+    }
+  };
 
   const fetchTemplates = async () => {
     setIsLoadingTemplates(true);
@@ -370,6 +449,9 @@ export default function ProjectsClient({
         statusId: t.status || undefined,
         assigneeIds: t.assigneeId ? [t.assigneeId] : [],
       })),
+      attachedRuleIds,
+      isRepeatEnabled,
+      repeatFrequency,
     };
 
     startTransition(async () => {
@@ -394,10 +476,28 @@ export default function ProjectsClient({
       } else {
         toast.success("Template deleted");
         setTemplates(templates.filter((t) => t.id !== templateId));
+        // Remove from pinned list if deleted
+        setPinnedTemplateIds((prev) => {
+          const next = prev.filter((id) => id !== templateId);
+          localStorage.setItem("omniwork_pinned_templates", JSON.stringify(next));
+          return next;
+        });
       }
     } catch (err) {
       toast.error("Failed to delete template");
     }
+  };
+
+  const handleTogglePinTemplate = (templateId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPinnedTemplateIds((prev) => {
+      const isPinned = prev.includes(templateId);
+      const next = isPinned
+        ? prev.filter((id) => id !== templateId)
+        : [...prev, templateId];
+      localStorage.setItem("omniwork_pinned_templates", JSON.stringify(next));
+      return next;
+    });
   };
 
   const handleUseTemplate = (template: any) => {
@@ -448,6 +548,15 @@ export default function ProjectsClient({
       setProjectTasks([]);
     }
 
+    if (config.attachedRuleIds && Array.isArray(config.attachedRuleIds)) {
+      setAttachedRuleIds(config.attachedRuleIds);
+    } else {
+      setAttachedRuleIds([]);
+    }
+
+    setIsRepeatEnabled(config.isRepeatEnabled || false);
+    setRepeatFrequency(config.repeatFrequency || "DAILY");
+
     setIsTemplateSelectOpen(false);
     setIsCreateOpen(true);
   };
@@ -457,6 +566,13 @@ export default function ProjectsClient({
     if (savedView === "TABLE" || savedView === "KANBAN" || savedView === "LIST") {
       setViewMode(savedView);
     }
+    const savedPinned = localStorage.getItem("omniwork_pinned_templates");
+    if (savedPinned) {
+      try {
+        setPinnedTemplateIds(JSON.parse(savedPinned));
+      } catch (e) {}
+    }
+    fetchTemplates();
   }, []);
 
   const handleSetViewMode = (mode: "TABLE" | "KANBAN" | "LIST") => {
@@ -588,6 +704,7 @@ export default function ProjectsClient({
           statusId: t.status as string,
           assigneeIds: t.assigneeId ? [t.assigneeId] : [],
         })),
+      ruleIds: attachedRuleIds,
     };
 
     startTransition(async () => {
@@ -612,6 +729,7 @@ export default function ProjectsClient({
         setDescription("");
         setIsRepeatEnabled(false);
         setRepeatFrequency("DAILY");
+        setAttachedRuleIds([]);
         router.refresh();
       }
     });
@@ -749,6 +867,25 @@ export default function ProjectsClient({
                 >
                   Create Repeated Project
                 </DropdownMenuItem>
+
+                {pinnedTemplates.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator className="my-1 border-t border-black/5 dark:border-white/10" />
+                    <div className="px-3 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider select-none">
+                      Pinned Templates
+                    </div>
+                    {pinnedTemplates.map((template) => (
+                      <DropdownMenuItem
+                        key={template.id}
+                        onClick={() => handleUseTemplate(template)}
+                        className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted flex items-center gap-2"
+                      >
+                        <Pin className="h-3.5 w-3.5 fill-purple-600 text-purple-600 dark:fill-purple-400 dark:text-purple-400 rotate-45 shrink-0" />
+                        <span className="truncate">{template.name}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -1112,7 +1249,85 @@ export default function ProjectsClient({
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
             <form onSubmit={handleCreateProject} className="space-y-6 pb-6">
-            {/* Basics */}
+              {/* Rules Selector */}
+              <div className="space-y-3 bg-indigo-50/50 dark:bg-indigo-950/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/30 col-span-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-sm font-bold text-foreground">
+                    Automation Rules
+                  </label>
+                  <span className="text-xs text-muted-foreground">Select rules to run automatically on this project.</span>
+                </div>
+                <div className="flex gap-2 items-center flex-wrap">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" variant="outline" size="sm" className="h-9 rounded-xl border bg-background px-3 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                        Select Rules... <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-56 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1.5 z-50">
+                      {rules.filter(r => r.isActive).length === 0 ? (
+                        <div className="p-2.5 text-center text-xs text-muted-foreground">
+                          No active rules
+                        </div>
+                      ) : (
+                        rules
+                          .filter((r) => r.isActive)
+                          .map((r) => {
+                            const isAttached = attachedRuleIds.includes(r.id);
+                            return (
+                              <DropdownMenuItem
+                                key={r.id}
+                                onClick={() => {
+                                  if (isAttached) {
+                                    setAttachedRuleIds(prev => prev.filter(id => id !== r.id));
+                                  } else {
+                                    setAttachedRuleIds(prev => [...prev, r.id]);
+                                  }
+                                }}
+                                className="cursor-pointer rounded-lg px-2.5 py-2 text-xs flex items-center justify-between hover:bg-muted focus:bg-muted"
+                              >
+                                <span>{r.name}</span>
+                                {isAttached && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />}
+                              </DropdownMenuItem>
+                            );
+                          })
+                      )}
+                      <DropdownMenuSeparator className="my-1 border-t" />
+                      <DropdownMenuItem
+                        onClick={() => setIsCreateRuleOpen(true)}
+                        className="cursor-pointer rounded-lg px-2.5 py-2 text-xs text-primary hover:bg-primary/5 focus:bg-primary/5 font-semibold flex items-center gap-1"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Create New Rule
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <div className="flex flex-wrap gap-1.5 items-center">
+                    {attachedRuleIds.map((id) => {
+                      const r = rules.find((rule) => rule.id === id);
+                      if (!r) return null;
+                      return (
+                        <Badge
+                          key={id}
+                          variant="secondary"
+                          className="py-1 px-2.5 rounded-lg flex items-center gap-1.5 bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900/50 text-xs font-semibold"
+                        >
+                          {r.name}
+                          <button
+                            type="button"
+                            onClick={() => setAttachedRuleIds((prev) => prev.filter((rid) => rid !== id))}
+                            className="hover:text-destructive text-indigo-500 hover:bg-indigo-200/50 rounded-full p-0.5"
+                          >
+                            <X size={10} />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Basics */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2 col-span-2">
                 <label className="text-sm font-medium">
@@ -1267,42 +1482,57 @@ export default function ProjectsClient({
             </div>
 
             {/* Repeat Settings */}
-            <div className="space-y-4 bg-purple-50/50 dark:bg-purple-950/10 p-4 rounded-xl border border-purple-100 dark:border-purple-900/30">
+            <div className="space-y-4 bg-gradient-to-r from-purple-500/5 to-indigo-500/5 dark:from-purple-950/10 dark:to-indigo-950/10 p-5 rounded-2xl border border-purple-100/80 dark:border-purple-900/20 shadow-sm transition-all duration-300">
               <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <label className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                <div className="space-y-1">
+                  <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <Repeat className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                     Repeat Project
                   </label>
                   <p className="text-xs text-muted-foreground">
                     Automatically create duplicate projects based on frequency.
                   </p>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={isRepeatEnabled}
-                  onChange={(e) => {
-                    setIsRepeatEnabled(e.target.checked);
-                    if (e.target.checked) {
-                      setIsOngoing(false); // Repeat settings require a fixed end date boundary
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isRepeatEnabled}
+                  onClick={() => {
+                    const newVal = !isRepeatEnabled;
+                    setIsRepeatEnabled(newVal);
+                    if (newVal) {
+                      setIsOngoing(false);
                     }
                   }}
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                />
+                  className={`${
+                    isRepeatEnabled ? "bg-purple-600" : "bg-zinc-200 dark:bg-zinc-800"
+                  } relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`${
+                      isRepeatEnabled ? "translate-x-5" : "translate-x-0"
+                    } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out`}
+                  />
+                </button>
               </div>
 
               {isRepeatEnabled && (
-                <div className="grid grid-cols-1 gap-4 pt-2 border-t border-purple-100/50 dark:border-purple-900/20 animate-in fade-in slide-in-from-top-1 duration-200">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground">Repeat Frequency</label>
-                    <select
-                      value={repeatFrequency}
-                      onChange={(e) => setRepeatFrequency(e.target.value as any)}
-                      className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
-                    >
-                      <option value="DAILY">Daily</option>
-                      <option value="WEEKLY">Weekly</option>
-                      <option value="MONTHLY">Monthly</option>
-                    </select>
+                <div className="grid grid-cols-1 gap-4 pt-4 border-t border-purple-100/50 dark:border-purple-900/20 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground tracking-wide uppercase">Repeat Frequency</label>
+                    <div className="relative">
+                      <select
+                        value={repeatFrequency}
+                        onChange={(e) => setRepeatFrequency(e.target.value as any)}
+                        className="flex h-10 w-full appearance-none rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 cursor-pointer pr-10"
+                      >
+                        <option value="DAILY">Daily</option>
+                        <option value="WEEKLY">Weekly</option>
+                        <option value="MONTHLY">Monthly</option>
+                      </select>
+                      <ChevronDown className="absolute right-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    </div>
                   </div>
                 </div>
               )}
@@ -1732,6 +1962,15 @@ export default function ProjectsClient({
                     >
                       <button
                         type="button"
+                        onClick={(e) => handleTogglePinTemplate(template.id, e)}
+                        className="absolute right-9 top-3 text-muted-foreground hover:text-primary transition-opacity"
+                        title={pinnedTemplateIds.includes(template.id) ? "Unpin template" : "Pin template"}
+                      >
+                        <Pin className={`h-4 w-4 ${pinnedTemplateIds.includes(template.id) ? "fill-primary text-primary" : "opacity-0 group-hover:opacity-100"}`} />
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={(e) => handleDeleteTemplate(template.id, e)}
                         className="absolute right-3 top-3 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                         title="Delete template"
@@ -1801,6 +2040,117 @@ export default function ProjectsClient({
               {isPending ? "Moving..." : "Confirm Move"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CREATE RULE DIALOG */}
+      <Dialog open={isCreateRuleOpen} onOpenChange={setIsCreateRuleOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-background border-border max-h-[85vh] overflow-y-auto custom-scrollbar">
+          <DialogHeader>
+            <DialogTitle>Create Automation Rule</DialogTitle>
+            <DialogDescription>
+              Define automation trigger schedules and actions.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateRule} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">Rule Name</label>
+              <Input
+                required
+                value={ruleFormName}
+                onChange={(e) => setRuleFormName(e.target.value)}
+                placeholder="e.g. Daily Project Report Reminder"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">Description</label>
+              <Input
+                value={ruleFormDescription}
+                onChange={(e) => setRuleFormDescription(e.target.value)}
+                placeholder="Send daily reminder to PM"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Frequency</label>
+                <select
+                  value={ruleFormFrequency}
+                  onChange={(e) => setRuleFormFrequency(e.target.value)}
+                  className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                >
+                  <option value="DAILY">Daily</option>
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="MONTHLY">Monthly</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Reminder Time</label>
+                <Input
+                  value={ruleFormReminderTime}
+                  onChange={(e) => setRuleFormReminderTime(e.target.value)}
+                  placeholder="e.g. 06:00 PM"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">Action Type</label>
+              <select
+                value={ruleFormActionType}
+                onChange={(e) => setRuleFormActionType(e.target.value)}
+                className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+              >
+                <option value="SEND_REMINDER">Send Reminder</option>
+                <option value="CREATE_TASK">Create Task</option>
+                <option value="SEND_NOTIFICATION">Send Notification</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-muted-foreground">Send Reminder To</label>
+              <div className="flex flex-col gap-2 p-3 border rounded-xl bg-muted/20">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={ruleFormRecipients.includes('PROJECT_OWNER')}
+                    onChange={() => toggleRuleRecipient('PROJECT_OWNER')}
+                    className="rounded border-gray-300 text-primary"
+                  />
+                  Project Owner
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={ruleFormRecipients.includes('PROJECT_MANAGER')}
+                    onChange={() => toggleRuleRecipient('PROJECT_MANAGER')}
+                    className="rounded border-gray-300 text-primary"
+                  />
+                  Project Manager
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={ruleFormRecipients.includes('ASSIGNED_USER')}
+                    onChange={() => toggleRuleRecipient('ASSIGNED_USER')}
+                    className="rounded border-gray-300 text-primary"
+                  />
+                  Assigned Users
+                </label>
+              </div>
+            </div>
+
+            <DialogFooter className="pt-4 border-t">
+              <Button type="button" variant="outline" onClick={() => setIsCreateRuleOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending ? 'Creating...' : 'Create & Attach'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

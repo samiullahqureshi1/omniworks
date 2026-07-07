@@ -9,10 +9,17 @@ import {
   ArrowLeft, Calendar, Clock, MoreHorizontal, Settings, 
   LayoutDashboard, CheckSquare, Users, Timer, Activity,
   Briefcase, MessageSquare, GripVertical, Plus, ShieldAlert,
-  Search, Check, X, Hash, Trash2, Repeat
+  Search, Check, X, Hash, Trash2, Repeat, ChevronDown
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,6 +27,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { toast } from 'sonner';
 import { createTaskAction, updateTaskAction, deleteTaskAction } from '@/app/actions/tasks';
 import { updateProjectAction } from '@/app/actions/projects';
+import { getRulesAction, createRuleAction } from '@/app/actions/rules';
 import ProjectConversation, { ProjectConversationRef } from './ProjectConversation';
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { useRealtime } from '@/hooks/useRealtime';
@@ -48,6 +56,79 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
     }
     return [];
   });
+
+  // Rule States
+  const [rules, setRules] = useState<any[]>([]);
+  const [attachedRuleIds, setAttachedRuleIds] = useState<string[]>(
+    project.rules?.map((pr: any) => pr.ruleId) || []
+  );
+  const [isCreateRuleOpen, setIsCreateRuleOpen] = useState(false);
+
+  // Rule Form States
+  const [ruleFormName, setRuleFormName] = useState("");
+  const [ruleFormDescription, setRuleFormDescription] = useState("");
+  const [ruleFormFrequency, setRuleFormFrequency] = useState("DAILY");
+  const [ruleFormReminderTime, setRuleFormReminderTime] = useState("09:00 AM");
+  const [ruleFormActionType, setRuleFormActionType] = useState("SEND_REMINDER");
+  const [ruleFormRecipients, setRuleFormRecipients] = useState<string[]>(["PROJECT_MANAGER"]);
+
+  const fetchRules = async () => {
+    const res = await getRulesAction();
+    if (res.success && res.rules) {
+      setRules(res.rules);
+    }
+  };
+
+  useEffect(() => {
+    if (isEditProjectOpen) {
+      fetchRules();
+    }
+  }, [isEditProjectOpen]);
+
+  const handleCreateRule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ruleFormName.trim()) {
+      toast.error("Rule name is required");
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await createRuleAction({
+        name: ruleFormName,
+        description: ruleFormDescription,
+        frequency: ruleFormFrequency,
+        reminderTime: ruleFormReminderTime,
+        actionType: ruleFormActionType,
+        recipients: ruleFormRecipients,
+      });
+
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("Rule created and attached successfully");
+        setIsCreateRuleOpen(false);
+        if (res.rule) {
+          setAttachedRuleIds((prev) => [...prev, res.rule.id]);
+        }
+        fetchRules();
+        // Reset form
+        setRuleFormName("");
+        setRuleFormDescription("");
+        setRuleFormFrequency("DAILY");
+        setRuleFormReminderTime("09:00 AM");
+        setRuleFormActionType("SEND_REMINDER");
+        setRuleFormRecipients(["PROJECT_MANAGER"]);
+      }
+    });
+  };
+
+  const toggleRuleRecipient = (role: string) => {
+    if (ruleFormRecipients.includes(role)) {
+      setRuleFormRecipients((prev) => prev.filter((r) => r !== role));
+    } else {
+      setRuleFormRecipients((prev) => [...prev, role]);
+    }
+  };
 
   // Presence
   const [presenceMap, setPresenceMap] = useState<Record<string, string>>({});
@@ -236,6 +317,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
         projectBudget: formData.get('projectBudget') ? parseFloat(formData.get('projectBudget') as string) : undefined,
         totalAllocatedHours: formData.get('totalAllocatedHours') ? parseFloat(formData.get('totalAllocatedHours') as string) : undefined,
         customFields: editCustomFields,
+        ruleIds: attachedRuleIds,
       });
       
       if (res.error) {
@@ -369,6 +451,83 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                   </DialogHeader>
                   <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
                     <form onSubmit={handleUpdateProject} className="space-y-6 pb-6">
+                      {/* Rules Selector */}
+                      <div className="space-y-3 bg-indigo-50/50 dark:bg-indigo-950/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/30">
+                        <div className="flex justify-between items-center">
+                          <label className="text-sm font-bold text-foreground">
+                            Automation Rules
+                          </label>
+                          <span className="text-xs text-muted-foreground">Select rules to run automatically on this project.</span>
+                        </div>
+                        <div className="flex gap-2 items-center flex-wrap">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button type="button" variant="outline" size="sm" className="h-9 rounded-xl border bg-background px-3 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                                Select Rules... <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-56 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1.5 z-50">
+                              {rules.filter(r => r.isActive).length === 0 ? (
+                                <div className="p-2.5 text-center text-xs text-muted-foreground">
+                                  No active rules
+                                </div>
+                              ) : (
+                                rules
+                                  .filter((r) => r.isActive)
+                                  .map((r) => {
+                                    const isAttached = attachedRuleIds.includes(r.id);
+                                    return (
+                                      <DropdownMenuItem
+                                        key={r.id}
+                                        onClick={() => {
+                                          if (isAttached) {
+                                            setAttachedRuleIds(prev => prev.filter(id => id !== r.id));
+                                          } else {
+                                            setAttachedRuleIds(prev => [...prev, r.id]);
+                                          }
+                                        }}
+                                        className="cursor-pointer rounded-lg px-2.5 py-2 text-xs flex items-center justify-between hover:bg-muted focus:bg-muted"
+                                      >
+                                        <span>{r.name}</span>
+                                        {isAttached && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />}
+                                      </DropdownMenuItem>
+                                    );
+                                  })
+                              )}
+                              <DropdownMenuSeparator className="my-1 border-t" />
+                              <DropdownMenuItem
+                                onClick={() => setIsCreateRuleOpen(true)}
+                                className="cursor-pointer rounded-lg px-2.5 py-2 text-xs text-primary hover:bg-primary/5 focus:bg-primary/5 font-semibold flex items-center gap-1"
+                              >
+                                <Plus className="h-3.5 w-3.5" /> Create New Rule
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+
+                          <div className="flex flex-wrap gap-1.5 items-center">
+                            {attachedRuleIds.map((id) => {
+                              const r = rules.find((rule) => rule.id === id);
+                              if (!r) return null;
+                              return (
+                                <Badge
+                                  key={id}
+                                  variant="secondary"
+                                  className="py-1 px-2.5 rounded-lg flex items-center gap-1.5 bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900/50 text-xs font-semibold"
+                                >
+                                  {r.name}
+                                  <button
+                                    type="button"
+                                    onClick={() => setAttachedRuleIds((prev) => prev.filter((rid) => rid !== id))}
+                                    className="hover:text-destructive text-indigo-500 hover:bg-indigo-200/50 rounded-full p-0.5"
+                                  >
+                                    <X size={10} />
+                                  </button>
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2 sm:col-span-2">
                           <label className="text-sm font-medium">Project Name <span className="text-destructive">*</span></label>
@@ -1068,6 +1227,117 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
           <div className="p-4 border-t bg-muted/20">
             <Button className="w-full" onClick={() => setIsAssigneeModalOpen(false)}>Done</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* CREATE RULE DIALOG */}
+      <Dialog open={isCreateRuleOpen} onOpenChange={setIsCreateRuleOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-background border-border max-h-[85vh] overflow-y-auto custom-scrollbar">
+          <DialogHeader>
+            <DialogTitle>Create Automation Rule</DialogTitle>
+            <DialogDescription>
+              Define automation trigger schedules and actions.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateRule} className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">Rule Name</label>
+              <Input
+                required
+                value={ruleFormName}
+                onChange={(e) => setRuleFormName(e.target.value)}
+                placeholder="e.g. Daily Project Report Reminder"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">Description</label>
+              <Input
+                value={ruleFormDescription}
+                onChange={(e) => setRuleFormDescription(e.target.value)}
+                placeholder="Send daily reminder to PM"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Frequency</label>
+                <select
+                  value={ruleFormFrequency}
+                  onChange={(e) => setRuleFormFrequency(e.target.value)}
+                  className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                >
+                  <option value="DAILY">Daily</option>
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="MONTHLY">Monthly</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Reminder Time</label>
+                <Input
+                  value={ruleFormReminderTime}
+                  onChange={(e) => setRuleFormReminderTime(e.target.value)}
+                  placeholder="e.g. 06:00 PM"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">Action Type</label>
+              <select
+                value={ruleFormActionType}
+                onChange={(e) => setRuleFormActionType(e.target.value)}
+                className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+              >
+                <option value="SEND_REMINDER">Send Reminder</option>
+                <option value="CREATE_TASK">Create Task</option>
+                <option value="SEND_NOTIFICATION">Send Notification</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-muted-foreground">Send Reminder To</label>
+              <div className="flex flex-col gap-2 p-3 border rounded-xl bg-muted/20">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={ruleFormRecipients.includes('PROJECT_OWNER')}
+                    onChange={() => toggleRuleRecipient('PROJECT_OWNER')}
+                    className="rounded border-gray-300 text-primary"
+                  />
+                  Project Owner
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={ruleFormRecipients.includes('PROJECT_MANAGER')}
+                    onChange={() => toggleRuleRecipient('PROJECT_MANAGER')}
+                    className="rounded border-gray-300 text-primary"
+                  />
+                  Project Manager
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={ruleFormRecipients.includes('ASSIGNED_USER')}
+                    onChange={() => toggleRuleRecipient('ASSIGNED_USER')}
+                    className="rounded border-gray-300 text-primary"
+                  />
+                  Assigned Users
+                </label>
+              </div>
+            </div>
+
+            <DialogFooter className="pt-4 border-t">
+              <Button type="button" variant="outline" onClick={() => setIsCreateRuleOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending ? 'Creating...' : 'Create & Attach'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

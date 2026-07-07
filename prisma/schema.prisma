@@ -37,6 +37,7 @@ model Organization {
   userPresences   UserPresence[]
   projectTemplates ProjectTemplate[]
   taskTemplates    TaskTemplate[]
+  rules            Rule[]
 }
 
 enum Role {
@@ -151,6 +152,8 @@ model Project {
   timeScreenshots TimeScreenshot[]
   notifications   Notification[]
   messages        ProjectMessage[]
+  rules           ProjectRule[]
+  ruleLogs        RuleLog[]
 
   @@index([organizationId])
   @@index([clientId])
@@ -509,6 +512,49 @@ model TaskTemplate {
   updatedAt      DateTime     @updatedAt
 
   @@index([organizationId])
+}
+
+model Rule {
+  id             String        @id @default(uuid())
+  name           String
+  description    String?
+  isActive       Boolean       @default(true)
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  frequency      String        // DAILY, WEEKLY, MONTHLY
+  reminderTime   String        // e.g. "09:00 AM"
+  actionType     String        // SEND_REMINDER, CREATE_TASK, UPDATE_STATUS, SEND_NOTIFICATION
+  recipients     Json          // e.g. ["PROJECT_MANAGER"] or custom user IDs
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  projects       ProjectRule[]
+  logs           RuleLog[]
+
+  @@index([organizationId])
+}
+
+model ProjectRule {
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ruleId    String
+  rule      Rule    @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, ruleId])
+}
+
+model RuleLog {
+  id          String   @id @default(uuid())
+  ruleId      String
+  rule        Rule     @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  executedAt  DateTime @default(now())
+  sentTo      String
+  status      String   // SUCCESSFUL, FAILED
+  error       String?
+
+  @@index([ruleId])
 }
 
 

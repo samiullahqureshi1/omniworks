@@ -172,6 +172,7 @@ export async function createProjectAction(data: {
     statusId?: string;
     assigneeIds: string[];
   }[];
+  ruleIds?: string[];
 }) {
   try {
     const session = await getSession();
@@ -197,6 +198,7 @@ export async function createProjectAction(data: {
       isRepeated,
       repeatSettings,
       tasks,
+      ruleIds,
     } = data;
 
     if (!name || !startDate) {
@@ -281,6 +283,9 @@ export async function createProjectAction(data: {
                   },
                 })) || [],
               },
+              rules: ruleIds && ruleIds.length > 0 ? {
+                create: ruleIds.map(ruleId => ({ ruleId }))
+              } : undefined,
             },
           });
 
@@ -342,6 +347,9 @@ export async function createProjectAction(data: {
             },
           })) || [],
         },
+        rules: ruleIds && ruleIds.length > 0 ? {
+          create: ruleIds.map(ruleId => ({ ruleId }))
+        } : undefined,
       },
     });
 
@@ -381,6 +389,7 @@ export async function updateProjectAction(
     priority: Prisma.ProjectCreateInput["priority"];
     assigneeIds: string[];
     customFields?: any;
+    ruleIds?: string[];
   }
 ) {
   try {
@@ -414,6 +423,7 @@ export async function updateProjectAction(
       priority,
       assigneeIds,
       customFields,
+      ruleIds,
     } = data;
 
     if (totalAllocatedHours === undefined || totalAllocatedHours === null || totalAllocatedHours < 0) {
@@ -422,6 +432,11 @@ export async function updateProjectAction(
 
     // Delete existing assignees, then add new ones
     await prisma.projectAssignee.deleteMany({
+      where: { projectId },
+    });
+
+    // Delete existing attached rules
+    await prisma.projectRule.deleteMany({
       where: { projectId },
     });
 
@@ -446,6 +461,9 @@ export async function updateProjectAction(
             userId,
           })),
         },
+        rules: ruleIds && ruleIds.length > 0 ? {
+          create: ruleIds.map(ruleId => ({ ruleId }))
+        } : undefined,
       },
     });
 

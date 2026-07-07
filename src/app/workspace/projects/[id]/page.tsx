@@ -27,6 +27,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       client: { select: { id: true, name: true, email: true } },
       projectManager: { select: { id: true, name: true, email: true } },
       status: true,
+      rules: {
+        include: {
+          rule: true
+        }
+      },
       assignees: {
         include: {
           user: { select: { id: true, name: true, email: true, role: true } },

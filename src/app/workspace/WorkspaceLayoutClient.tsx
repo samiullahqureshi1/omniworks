@@ -25,7 +25,8 @@ import {
   Shield,
   Briefcase,
   Trash2,
-  Plus
+  Plus,
+  Cpu
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
@@ -167,6 +168,7 @@ export default function WorkspaceLayoutClient({
     { name: 'Users', href: '/workspace/users', icon: UsersIcon, exact: false, roles: ['OWNER'] },
     { name: 'Clients', href: '/workspace/clients', icon: Briefcase, exact: false, roles: ['OWNER'] },
     { name: 'Reports', href: '/workspace/reports', icon: BarChart3, exact: false, roles: ['OWNER', 'PM'] },
+    { name: 'Rules', href: '/workspace/rules', icon: Cpu, exact: false, roles: ['OWNER'] },
     { name: 'Settings', href: '/workspace/settings', icon: Settings, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
   ];
 
