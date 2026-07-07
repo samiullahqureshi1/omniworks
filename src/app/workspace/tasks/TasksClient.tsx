@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useState, useTransition, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -10,8 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Search, Plus, Settings, Calendar, Clock, LayoutGrid, List, Columns } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Edit, Trash2 } from 'lucide-react';
-import { deleteTaskAction, updateTaskAction } from '@/app/actions/tasks';
+import { MoreHorizontal, Edit, Trash2, ChevronDown, Repeat } from 'lucide-react';
+import { deleteTaskAction, updateTaskAction, getTaskTemplatesAction, deleteTaskTemplateAction } from '@/app/actions/tasks';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import TaskFormModal from './TaskFormModal';
@@ -41,8 +41,13 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
       <div className="absolute top-0 left-0 w-[4px] h-full transition-all duration-300 group-hover:w-[6px]" style={{ backgroundColor: priorityHex }} />
       
       <div className="flex justify-between items-start gap-3 pl-2">
-        <span className="font-semibold text-[14px] leading-snug text-foreground/90 transition-colors line-clamp-2">
+        <span className="font-semibold text-[14px] leading-snug text-foreground/90 transition-colors line-clamp-2 flex items-center gap-1.5 flex-wrap">
           {task.title}
+          {task.isRepeated && (
+            <Badge variant="outline" className="text-[9px] bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0 px-1 font-semibold flex items-center gap-0.5 shrink-0 align-middle">
+              <Repeat size={8} /> Recurring
+            </Badge>
+          )}
         </span>
         {currentUser.role !== 'CLIENT' && !isDraggingOverlay && (
           <DropdownMenu>
@@ -238,6 +243,31 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   const [isStatusManageOpen, setIsStatusManageOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<any>(null);
 
+  const [taskTemplates, setTaskTemplates] = useState<any[]>([]);
+  const [isTemplateSelectOpen, setIsTemplateSelectOpen] = useState(false);
+  const [selectedTemplateConfig, setSelectedTemplateConfig] = useState<any>(null);
+  const [isRepeatFromDropdown, setIsRepeatFromDropdown] = useState(false);
+
+  useEffect(() => {
+    if (isTemplateSelectOpen) {
+      getTaskTemplatesAction().then((res: any) => {
+        if (res.success && res.templates) {
+          setTaskTemplates(res.templates);
+        }
+      });
+    }
+  }, [isTemplateSelectOpen]);
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    const res = await deleteTaskTemplateAction(templateId);
+    if (res.error) {
+      toast.error(res.error);
+    } else {
+      toast.success("Task template deleted");
+      setTaskTemplates((prev) => prev.filter((t) => t.id !== templateId));
+    }
+  };
+
   const isClient = currentUser.role === 'CLIENT';
   const canCreateTask = currentUser.role === 'OWNER' || 
                         (currentUser.role === 'MEMBER' && projects.some(p => p.projectManagerId === currentUser.userId)) ||
@@ -306,10 +336,58 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
             </Button>
           )}
           {canCreateTask && (
-            <Button onClick={() => { setEditingTask(null); setIsCreateOpen(true); }}>
-              <Plus className="w-4 h-4 mr-2" />
-              Create Task
-            </Button>
+            <div className="flex items-center -space-x-px shadow-sm rounded-xl overflow-hidden">
+              <Button
+                onClick={() => {
+                  setEditingTask(null);
+                  setSelectedTemplateConfig(null);
+                  setIsRepeatFromDropdown(false);
+                  setIsCreateOpen(true);
+                }}
+                className="rounded-r-none h-10 px-4"
+              >
+                <Plus className="mr-2 h-4 w-4" /> Create Task
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button className="rounded-l-none border-l border-white/20 px-2.5 h-10">
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1.5 z-50">
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setEditingTask(null);
+                      setSelectedTemplateConfig(null);
+                      setIsRepeatFromDropdown(false);
+                      setIsCreateOpen(true);
+                    }}
+                    className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
+                  >
+                    Create New Task
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setIsTemplateSelectOpen(true);
+                    }}
+                    className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
+                  >
+                    Use Existing Task Template
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setEditingTask(null);
+                      setSelectedTemplateConfig(null);
+                      setIsRepeatFromDropdown(true);
+                      setIsCreateOpen(true);
+                    }}
+                    className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
+                  >
+                    Create Repeated Task
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           )}
         </div>
       </div>
@@ -416,7 +494,14 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                 filteredTasks.map((task: any) => (
                   <TableRow key={task.id} className="group hover:bg-muted/30">
                     <TableCell>
-                      <div className="font-medium">{task.title}</div>
+                      <div className="font-medium flex items-center gap-1.5 flex-wrap">
+                        {task.title}
+                        {task.isRepeated && (
+                          <Badge variant="outline" className="text-[9px] bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0 px-1 font-semibold flex items-center gap-0.5 align-middle">
+                            <Repeat size={8} /> Recurring
+                          </Badge>
+                        )}
+                      </div>
                       {task.dueDate && <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1"><Calendar size={12} /> {formatDate(task.dueDate)}</div>}
                     </TableCell>
                     <TableCell>
@@ -535,19 +620,106 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
       {isCreateOpen && (
         <TaskFormModal 
           isOpen={isCreateOpen} 
-          onOpenChange={setIsCreateOpen} 
+          onOpenChange={(open) => {
+            setIsCreateOpen(open);
+            if (!open) {
+              setEditingTask(null);
+              setSelectedTemplateConfig(null);
+              setIsRepeatFromDropdown(false);
+            }
+          }} 
           task={editingTask} 
           projects={projects} 
           taskStatuses={taskStatuses} 
           users={users} 
           currentUser={currentUser}
+          initialRepeatEnabled={isRepeatFromDropdown}
+          initialTemplateConfig={selectedTemplateConfig}
           onSuccess={() => {
             setIsCreateOpen(false);
             setEditingTask(null);
+            setSelectedTemplateConfig(null);
+            setIsRepeatFromDropdown(false);
             router.refresh();
           }}
         />
       )}
+
+      {/* Template Selection Modal */}
+      <Dialog open={isTemplateSelectOpen} onOpenChange={setIsTemplateSelectOpen}>
+        <DialogContent className="sm:max-w-[600px] bg-background border-border flex flex-col h-[70vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Use Task Template</DialogTitle>
+            <DialogDescription>
+              Select a task template to pre-populate details and custom fields.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto py-4 space-y-4 custom-scrollbar">
+            {taskTemplates.length === 0 ? (
+              <div className="h-48 flex flex-col items-center justify-center border border-dashed rounded-2xl text-muted-foreground p-6">
+                <Repeat size={32} className="opacity-20 mb-2" />
+                <p className="text-sm font-medium">No task templates saved yet.</p>
+                <p className="text-xs text-center mt-1">Save a task template inside the creation form to reuse it here.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {taskTemplates.map((tpl) => {
+                  const config = tpl.config || {};
+                  const fieldsCount = (config.customFields || []).length;
+                  const dateFormatted = new Date(tpl.createdAt).toLocaleDateString("en-US", {
+                    month: "long",
+                    year: "numeric",
+                  });
+
+                  return (
+                    <Card key={tpl.id} className="relative overflow-hidden group hover:border-purple-200 dark:hover:border-purple-900/50 transition-all duration-300 shadow-sm flex flex-col justify-between">
+                      {currentUser.role === "OWNER" && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTemplate(tpl.id)}
+                          className="absolute right-3 top-3 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                      <CardHeader className="p-4 pb-2">
+                        <CardTitle className="text-sm font-bold truncate pr-6">{tpl.name}</CardTitle>
+                        <CardDescription className="text-xs truncate">{config.title || "Untitled Task"}</CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-0 space-y-2 text-xs">
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Custom Fields:</span>
+                          <span className="font-semibold text-foreground">{fieldsCount}</span>
+                        </div>
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Created:</span>
+                          <span className="font-semibold text-foreground">{dateFormatted}</span>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            setSelectedTemplateConfig(config);
+                            setIsTemplateSelectOpen(false);
+                            setIsCreateOpen(true);
+                          }}
+                          className="w-full mt-2 h-8 text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700"
+                        >
+                          Use Template
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <DialogFooter className="pt-4 border-t shrink-0">
+            <Button variant="outline" onClick={() => setIsTemplateSelectOpen(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {isStatusManageOpen && (
         <StatusManagementModal

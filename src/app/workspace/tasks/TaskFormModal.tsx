@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { createTaskAction, updateTaskAction } from "@/app/actions/tasks";
+import { createTaskAction, updateTaskAction, createTaskTemplateAction } from "@/app/actions/tasks";
 import { quickCreateProjectAction } from "@/app/actions/projects";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 
@@ -27,6 +27,7 @@ type TaskInput = {
   dueDate: string;
   allocatedHours: string;
   assignees: string[];
+  customFields?: { name: string; type: string; value: string }[];
 };
 
 export default function TaskFormModal({
@@ -38,6 +39,8 @@ export default function TaskFormModal({
   users,
   currentUser,
   onSuccess,
+  initialRepeatEnabled = false,
+  initialTemplateConfig,
 }: {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
@@ -47,12 +50,14 @@ export default function TaskFormModal({
   users: any[];
   currentUser: any;
   onSuccess: () => void;
+  initialRepeatEnabled?: boolean;
+  initialTemplateConfig?: any;
 }) {
   const isEditing = !!task;
   const [isPending, startTransition] = useTransition();
 
   const [projectId, setProjectId] = useState(
-    task?.projectId || (projects.length > 0 ? projects[0].id : ""),
+    task?.projectId || initialTemplateConfig?.projectId || (projects.length > 0 ? projects[0].id : ""),
   );
 
   // Array of tasks for multi-create, or single task for edit
@@ -70,7 +75,23 @@ export default function TaskFormModal({
             : "",
           allocatedHours: task.allocatedHours?.toString() || "",
           assignees: task.assignees.map((a: any) => a.userId),
+          customFields: (task.customFields as any) || [],
         },
+      ];
+    }
+    if (initialTemplateConfig) {
+      return [
+        {
+          id: Date.now().toString(),
+          title: initialTemplateConfig.title || "",
+          description: initialTemplateConfig.description || "",
+          statusId: initialTemplateConfig.statusId || "",
+          priority: initialTemplateConfig.priority || "MEDIUM",
+          dueDate: initialTemplateConfig.dueDate || "",
+          allocatedHours: initialTemplateConfig.allocatedHours?.toString() || "",
+          assignees: initialTemplateConfig.assigneeIds || [],
+          customFields: initialTemplateConfig.customFields || [],
+        }
       ];
     }
     return [
@@ -83,6 +104,7 @@ export default function TaskFormModal({
         dueDate: "",
         allocatedHours: "",
         assignees: [],
+        customFields: [],
       },
     ];
   });
@@ -98,6 +120,48 @@ export default function TaskFormModal({
   const [activeTaskAssigneeIndex, setActiveTaskAssigneeIndex] = useState<
     number | null
   >(null);
+
+  // Repeat Settings States
+  const [isRepeatEnabled, setIsRepeatEnabled] = useState(initialRepeatEnabled);
+  const [repeatFrequency, setRepeatFrequency] = useState<"DAILY" | "WEEKLY" | "MONTHLY">("DAILY");
+  const [repeatStartDate, setRepeatStartDate] = useState("");
+  const [repeatEndDate, setRepeatEndDate] = useState("");
+
+  // Template Save States
+  const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+
+  const handleSaveTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!templateName.trim()) {
+      toast.error("Please enter a template name");
+      return;
+    }
+
+    const tInput = tasksInput[0];
+    const config = {
+      title: tInput.title,
+      description: tInput.description,
+      priority: tInput.priority,
+      statusId: tInput.statusId || undefined,
+      dueDate: tInput.dueDate,
+      allocatedHours: tInput.allocatedHours ? parseFloat(tInput.allocatedHours) : undefined,
+      assigneeIds: tInput.assignees,
+      customFields: tInput.customFields || [],
+      projectId: projectId || undefined,
+    };
+
+    startTransition(async () => {
+      const res = await createTaskTemplateAction(templateName.trim(), config);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("Task template saved successfully");
+        setIsSaveTemplateOpen(false);
+        setTemplateName("");
+      }
+    });
+  };
 
   // RBAC checks for the modal
   const isOwner = currentUser.role === "OWNER";
@@ -170,6 +234,7 @@ export default function TaskFormModal({
         dueDate: "",
         allocatedHours: "",
         assignees: [],
+        customFields: [],
       },
     ]);
   };
@@ -200,6 +265,11 @@ export default function TaskFormModal({
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (isRepeatEnabled && (!repeatStartDate || !repeatEndDate)) {
+      toast.error("Start Date and End Date are required to schedule repeated tasks.");
+      return;
+    }
+
     startTransition(async () => {
       if (isEditing) {
         const tInput = tasksInput[0];
@@ -221,6 +291,7 @@ export default function TaskFormModal({
             trackedHours: trackedHours ? parseFloat(trackedHours) : 0,
             dueDate: tInput.dueDate || undefined,
             assigneeIds: tInput.assignees,
+            customFields: tInput.customFields || [],
           });
         }
         if (res.error) toast.error(res.error);
@@ -229,6 +300,37 @@ export default function TaskFormModal({
           onSuccess();
         }
       } else {
+        // Repeated task create (if active)
+        if (isRepeatEnabled) {
+          const tInput = tasksInput[0];
+          const res = await createTaskAction(
+            projectId,
+            tInput.title,
+            tInput.description,
+            tInput.priority as any,
+            tInput.allocatedHours ? parseFloat(tInput.allocatedHours) : undefined,
+            undefined, // Due date is auto-calculated per repeat occurrence
+            tInput.statusId || undefined,
+            tInput.assignees,
+            tInput.customFields || [],
+            true, // isRepeated
+            {
+              enabled: true,
+              frequency: repeatFrequency,
+              startDate: repeatStartDate,
+              endDate: repeatEndDate,
+            }
+          );
+
+          if (res.error) {
+            toast.error(res.error);
+          } else {
+            toast.success("Repeated tasks created successfully");
+            onSuccess();
+          }
+          return;
+        }
+
         // Multi-create
         let errors = 0;
         for (const tInput of tasksInput) {
@@ -244,6 +346,7 @@ export default function TaskFormModal({
             tInput.dueDate || undefined,
             tInput.statusId || undefined,
             tInput.assignees,
+            tInput.customFields || [],
           );
           if (res.error) {
             toast.error(`Error creating "${tInput.title}": ${res.error}`);
@@ -608,36 +711,219 @@ export default function TaskFormModal({
                             </div>
                           </div>
                           )}
+
+                          {/* Custom Fields */}
+                          <div className="space-y-3 col-span-2 pt-2 border-t">
+                            <div className="flex justify-between items-center">
+                              <label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
+                                Custom Fields
+                              </label>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const updated = [...tasksInput];
+                                  const currentFields = updated[index].customFields || [];
+                                  updated[index].customFields = [
+                                    ...currentFields,
+                                    { name: "", type: "text", value: "" }
+                                  ];
+                                  setTasksInput(updated);
+                                }}
+                                className="h-8 text-xs rounded-lg"
+                              >
+                                <Plus className="mr-1 h-3 w-3" /> Add Field
+                              </Button>
+                            </div>
+
+                            {(tInput.customFields || []).length > 0 && (
+                              <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
+                                {(tInput.customFields || []).map((field, fIndex) => (
+                                  <div
+                                    key={fIndex}
+                                    className="p-3 border rounded-xl bg-muted/20 space-y-3 relative group"
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const updated = [...tasksInput];
+                                        updated[index].customFields = (updated[index].customFields || []).filter((_, i) => i !== fIndex);
+                                        setTasksInput(updated);
+                                      }}
+                                      className="absolute right-2 top-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                      <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-muted-foreground">Field Name</label>
+                                        <Input
+                                          placeholder="e.g. Skype ID, Website"
+                                          value={field.name}
+                                          onChange={(e) => {
+                                            const updated = [...tasksInput];
+                                            if (updated[index].customFields) {
+                                              updated[index].customFields[fIndex].name = e.target.value;
+                                              setTasksInput(updated);
+                                            }
+                                          }}
+                                          className="h-8 text-xs bg-background"
+                                          required
+                                        />
+                                      </div>
+
+                                      <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-muted-foreground">Field Type</label>
+                                        <select
+                                          value={field.type}
+                                          onChange={(e) => {
+                                            const updated = [...tasksInput];
+                                            if (updated[index].customFields) {
+                                              updated[index].customFields[fIndex].type = e.target.value;
+                                              updated[index].customFields[fIndex].value = "";
+                                              setTasksInput(updated);
+                                            }
+                                          }}
+                                          className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
+                                        >
+                                          <option value="text">Text</option>
+                                          <option value="number">Number</option>
+                                          <option value="url">URL</option>
+                                        </select>
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                      <label className="text-xs font-medium text-muted-foreground">Value</label>
+                                      <Input
+                                        type={field.type === "number" ? "number" : "text"}
+                                        placeholder={
+                                          field.type === "url"
+                                            ? "https://example.com"
+                                            : field.type === "number"
+                                            ? "0"
+                                            : "Enter value..."
+                                        }
+                                        value={field.value}
+                                        onChange={(e) => {
+                                          const updated = [...tasksInput];
+                                          if (updated[index].customFields) {
+                                            updated[index].customFields[fIndex].value = e.target.value;
+                                            setTasksInput(updated);
+                                          }
+                                        }}
+                                        className="h-8 text-xs bg-background"
+                                        required
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
 
+                    {/* Repeat Task settings (only when creating a single task) */}
+                    {!isEditing && tasksInput.length === 1 && (
+                      <div className="space-y-4 bg-purple-50/50 dark:bg-purple-950/10 p-4 rounded-xl border border-purple-100 dark:border-purple-900/30">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <label className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                              Repeat Task
+                            </label>
+                            <p className="text-xs text-muted-foreground">
+                              Automatically create duplicate tasks based on frequency.
+                            </p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={isRepeatEnabled}
+                            onChange={(e) => setIsRepeatEnabled(e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                          />
+                        </div>
 
+                        {isRepeatEnabled && (
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-purple-100/50 dark:border-purple-900/20 animate-in fade-in slide-in-from-top-1 duration-200">
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-semibold text-muted-foreground">Frequency</label>
+                              <select
+                                value={repeatFrequency}
+                                onChange={(e) => setRepeatFrequency(e.target.value as any)}
+                                className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                              >
+                                <option value="DAILY">Daily</option>
+                                <option value="WEEKLY">Weekly</option>
+                                <option value="MONTHLY">Monthly</option>
+                              </select>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-semibold text-muted-foreground">Start Date</label>
+                              <Input
+                                type="date"
+                                required={isRepeatEnabled}
+                                value={repeatStartDate}
+                                onChange={(e) => setRepeatStartDate(e.target.value)}
+                                className="h-9 text-xs"
+                              />
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-semibold text-muted-foreground">End Date</label>
+                              <Input
+                                type="date"
+                                required={isRepeatEnabled}
+                                value={repeatEndDate}
+                                onChange={(e) => setRepeatEndDate(e.target.value)}
+                                className="h-9 text-xs"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
-                <DialogFooter className="px-6 py-4 border-t shrink-0 bg-background sticky bottom-0 z-20">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => onOpenChange(false)}
-                    className="rounded-full shadow-sm hover:bg-slate-50 transition-colors h-10 px-5 font-semibold text-sm border-slate-200"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={
-                      isPending || (!isEditing && !projectId) || isExceeded
-                    }
-                    className="rounded-full shadow-sm h-10 px-5 font-semibold text-sm bg-foreground text-background hover:bg-foreground/90 transition-colors"
-                  >
-                    {isPending
-                      ? "Saving..."
-                      : isEditing
-                        ? "Update Task"
-                        : "Save Tasks"}
-                  </Button>
+                <DialogFooter className="px-6 py-4 border-t shrink-0 bg-background sticky bottom-0 z-20 flex justify-between items-center">
+                  {!isEditing && tasksInput.length === 1 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsSaveTemplateOpen(true)}
+                      className="text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-900/50 dark:hover:bg-purple-950/20"
+                    >
+                      Save as Template
+                    </Button>
+                  )}
+                  <div className="flex gap-2 ml-auto">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => onOpenChange(false)}
+                      className="rounded-full shadow-sm hover:bg-slate-50 transition-colors h-10 px-5 font-semibold text-sm border-slate-200"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={
+                        isPending || (!isEditing && !projectId) || isExceeded
+                      }
+                      className="rounded-full shadow-sm h-10 px-5 font-semibold text-sm bg-foreground text-background hover:bg-foreground/90 transition-colors"
+                    >
+                      {isPending
+                        ? "Saving..."
+                        : isEditing
+                          ? "Update Task"
+                          : "Save Tasks"}
+                    </Button>
+                  </div>
                 </DialogFooter>
               </form>
             );
@@ -753,6 +1039,41 @@ export default function TaskFormModal({
               </Button>
             </DialogFooter>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save Template Name Modal */}
+      <Dialog open={isSaveTemplateOpen} onOpenChange={setIsSaveTemplateOpen}>
+        <DialogContent className="sm:max-w-[400px] bg-background border-border">
+          <DialogHeader>
+            <DialogTitle>Save as Template</DialogTitle>
+            <DialogDescription>
+              Enter a name for this task template. This will save the task details, priority, config, and custom fields.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveTemplate} className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Template Name</label>
+              <Input
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                required
+                placeholder="e.g. SEO Audit Template"
+              />
+            </div>
+            <DialogFooter className="pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsSaveTemplateOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending ? "Saving..." : "Save Template"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </>

@@ -36,6 +36,7 @@ model Organization {
   messages        ProjectMessage[]
   userPresences   UserPresence[]
   projectTemplates ProjectTemplate[]
+  taskTemplates    TaskTemplate[]
 }
 
 enum Role {
@@ -194,6 +195,8 @@ model Task {
   statusId       String?
   status         TaskStatus?  @relation(fields: [statusId], references: [id], onDelete: SetNull)
   priority       Priority     @default(MEDIUM)
+  customFields   Json?
+  isRepeated     Boolean      @default(false)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -495,4 +498,17 @@ model ProjectTemplate {
 
   @@index([organizationId])
 }
+
+model TaskTemplate {
+  id             String       @id @default(uuid())
+  name           String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  config         Json
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+}
+
 
