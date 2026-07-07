@@ -21,6 +21,8 @@ import {
   List as ListIcon,
   Table as TableIcon,
   Edit2,
+  ChevronDown,
+  Repeat,
 } from "lucide-react";
 import {
   Table,
@@ -52,6 +54,9 @@ import {
   deleteProjectAction,
   quickCreateClientAction,
   updateProjectStatusAction,
+  createProjectTemplateAction,
+  getProjectTemplatesAction,
+  deleteProjectTemplateAction,
 } from "@/app/actions/projects";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { DndContext, DragEndEvent, useDraggable, useDroppable, DragOverlay } from "@dnd-kit/core";
@@ -178,6 +183,11 @@ function KanbanCard({ project, currentUser, handleDelete }: any) {
       <div className="flex justify-between items-start gap-3 pl-2 relative z-10">
         <Link href={`/workspace/projects/${project.id}`} className="font-bold text-[15px] leading-tight text-foreground/90 group-hover:text-primary transition-colors line-clamp-2" onPointerDown={(e) => e.stopPropagation()}>
           {project.name}
+          {project.isRepeated && (
+            <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0 px-1.5 font-semibold inline-flex items-center gap-1 ml-1.5 align-middle">
+              <Repeat size={8} /> Recurring
+            </Badge>
+          )}
         </Link>
         {currentUser.role === "OWNER" && (
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
@@ -288,6 +298,160 @@ export default function ProjectsClient({
   const [description, setDescription] = useState("");
   const [viewMode, setViewMode] = useState<"TABLE" | "KANBAN" | "LIST">("TABLE");
 
+  // Form Control States for Project Creation
+  const [formName, setFormName] = useState("");
+  const [formClientId, setFormClientId] = useState("");
+  const [formPMId, setFormPMId] = useState("");
+  const [formStatusId, setFormStatusId] = useState("");
+  const [formPriority, setFormPriority] = useState("MEDIUM");
+  const [formStartDate, setFormStartDate] = useState("");
+  const [formEndDate, setFormEndDate] = useState("");
+  const [formBudget, setFormBudget] = useState("");
+  const [formAllocatedHours, setFormAllocatedHours] = useState("");
+  const [formNotes, setFormNotes] = useState("");
+
+  const [isRepeatEnabled, setIsRepeatEnabled] = useState(false);
+  const [repeatFrequency, setRepeatFrequency] = useState<"DAILY" | "WEEKLY" | "MONTHLY">("DAILY");
+
+  // Template Management States
+  const [isTemplateSelectOpen, setIsTemplateSelectOpen] = useState(false);
+  const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+
+  const fetchTemplates = async () => {
+    setIsLoadingTemplates(true);
+    try {
+      const res = await getProjectTemplatesAction();
+      if (res.success && res.templates) {
+        setTemplates(res.templates);
+      } else {
+        toast.error(res.error || "Failed to load templates");
+      }
+    } catch (e) {
+      toast.error("Failed to load templates");
+    } finally {
+      setIsLoadingTemplates(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isTemplateSelectOpen) {
+      fetchTemplates();
+    }
+  }, [isTemplateSelectOpen]);
+
+  const handleSaveTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!templateName.trim()) {
+      toast.error("Please enter a template name");
+      return;
+    }
+
+    const config = {
+      name: formName,
+      clientId: formClientId || undefined,
+      projectManagerId: formPMId || undefined,
+      statusId: formStatusId || undefined,
+      priority: formPriority,
+      startDate: formStartDate,
+      endDate: formEndDate,
+      isOngoing,
+      projectBudget: formBudget ? Number(formBudget) : undefined,
+      totalAllocatedHours: formAllocatedHours ? Number(formAllocatedHours) : undefined,
+      notes: formNotes,
+      description: description,
+      customFields,
+      tasks: projectTasks.map((t) => ({
+        title: t.title,
+        description: t.description,
+        priority: t.priority,
+        statusId: t.status || undefined,
+        assigneeIds: t.assigneeId ? [t.assigneeId] : [],
+      })),
+    };
+
+    startTransition(async () => {
+      const res = await createProjectTemplateAction(templateName.trim(), config);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("Template saved successfully");
+        setIsSaveTemplateOpen(false);
+        setTemplateName("");
+      }
+    });
+  };
+
+  const handleDeleteTemplate = async (templateId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Are you sure you want to delete this template?")) return;
+    try {
+      const res = await deleteProjectTemplateAction(templateId);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("Template deleted");
+        setTemplates(templates.filter((t) => t.id !== templateId));
+      }
+    } catch (err) {
+      toast.error("Failed to delete template");
+    }
+  };
+
+  const handleUseTemplate = (template: any) => {
+    const config = template.config;
+    if (!config) return;
+
+    setFormName(config.name || "");
+    setFormClientId(config.clientId || "");
+    setFormPMId(config.projectManagerId || "");
+    setFormStatusId(config.statusId || "");
+    setFormPriority(config.priority || "MEDIUM");
+    
+    const formatDateForInput = (dateStr: string) => {
+      if (!dateStr) return "";
+      try {
+        return new Date(dateStr).toISOString().split("T")[0];
+      } catch (err) {
+        return "";
+      }
+    };
+    
+    setFormStartDate(formatDateForInput(config.startDate));
+    setFormEndDate(formatDateForInput(config.endDate));
+    setIsOngoing(config.isOngoing || false);
+    setFormBudget(config.projectBudget ? String(config.projectBudget) : "");
+    setFormAllocatedHours(config.totalAllocatedHours ? String(config.totalAllocatedHours) : "");
+    setFormNotes(config.notes || "");
+    setDescription(config.description || "");
+
+    if (config.customFields && Array.isArray(config.customFields)) {
+      setCustomFields(config.customFields);
+    } else {
+      setCustomFields([]);
+    }
+
+    if (config.tasks && Array.isArray(config.tasks)) {
+      setProjectTasks(
+        config.tasks.map((t: any) => ({
+          id: t.id || Math.random().toString(),
+          title: t.title || "",
+          description: t.description || "",
+          status: t.statusId || t.status || "",
+          priority: t.priority || "MEDIUM",
+          assigneeId: (t.assigneeIds && t.assigneeIds[0]) || t.assigneeId || "",
+        }))
+      );
+    } else {
+      setProjectTasks([]);
+    }
+
+    setIsTemplateSelectOpen(false);
+    setIsCreateOpen(true);
+  };
+
   useEffect(() => {
     const savedView = localStorage.getItem("omniwork_project_view");
     if (savedView === "TABLE" || savedView === "KANBAN" || savedView === "LIST") {
@@ -390,28 +554,31 @@ export default function ProjectsClient({
 
   const handleCreateProject = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
+
+    if (isRepeatEnabled && (!formEndDate || isOngoing)) {
+      toast.error("An End Date is required to schedule repeated projects.");
+      return;
+    }
 
     const data = {
-      name: formData.get("name") as string,
-      clientId: (formData.get("clientId") as string) || undefined,
-      projectManagerId:
-        (formData.get("projectManagerId") as string) || undefined,
+      name: formName,
+      clientId: formClientId || undefined,
+      projectManagerId: formPMId || undefined,
       description: description,
-      statusId: formData.get("status") as string,
-      priority: formData.get("priority") as any,
-      startDate: formData.get("startDate") as string,
-      endDate: formData.get("endDate") as string,
+      statusId: formStatusId || undefined,
+      priority: formPriority as any,
+      startDate: formStartDate,
+      endDate: formEndDate,
       isOngoing,
-      projectBudget: formData.get("projectBudget")
-        ? Number(formData.get("projectBudget"))
-        : undefined,
-      totalAllocatedHours: formData.get("totalAllocatedHours")
-        ? Number(formData.get("totalAllocatedHours"))
-        : undefined,
-      notes: formData.get("notes") as string,
+      projectBudget: formBudget ? Number(formBudget) : undefined,
+      totalAllocatedHours: formAllocatedHours ? Number(formAllocatedHours) : undefined,
+      notes: formNotes,
       assigneeIds: [],
       customFields,
+      repeatSettings: {
+        enabled: isRepeatEnabled,
+        frequency: repeatFrequency,
+      },
       tasks: projectTasks
         .filter((t) => t.title.trim() !== "")
         .map((t) => ({
@@ -432,6 +599,19 @@ export default function ProjectsClient({
         setIsCreateOpen(false);
         setProjectTasks([]);
         setCustomFields([]);
+        setFormName("");
+        setFormClientId("");
+        setFormPMId("");
+        setFormStatusId("");
+        setFormPriority("MEDIUM");
+        setFormStartDate("");
+        setFormEndDate("");
+        setFormBudget("");
+        setFormAllocatedHours("");
+        setFormNotes("");
+        setDescription("");
+        setIsRepeatEnabled(false);
+        setRepeatFrequency("DAILY");
         router.refresh();
       }
     });
@@ -485,12 +665,93 @@ export default function ProjectsClient({
         </div>
 
         {currentUser.role === "OWNER" && (
-          <Button
-            onClick={() => setIsCreateOpen(true)}
-            className="w-full sm:w-auto shadow-md"
-          >
-            <Plus className="mr-2 h-4 w-4" /> New Project
-          </Button>
+          <div className="flex items-center -space-x-px w-full sm:w-auto shadow-md rounded-xl overflow-hidden">
+            <Button
+              onClick={() => {
+                setIsRepeatEnabled(false);
+                setFormName("");
+                setFormClientId("");
+                setFormPMId("");
+                setFormStatusId("");
+                setFormPriority("MEDIUM");
+                setFormStartDate("");
+                setFormEndDate("");
+                setFormBudget("");
+                setFormAllocatedHours("");
+                setFormNotes("");
+                setDescription("");
+                setProjectTasks([]);
+                setCustomFields([]);
+                setIsCreateOpen(true);
+              }}
+              className="rounded-r-none h-10 px-4 flex-1 sm:flex-initial"
+            >
+              <Plus className="mr-2 h-4 w-4" /> New Project
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="rounded-l-none border-l border-white/20 px-2.5 h-10 flex-none">
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1.5 z-50">
+                <DropdownMenuItem
+                  onClick={() => {
+                    setIsRepeatEnabled(false);
+                    setFormName("");
+                    setFormClientId("");
+                    setFormPMId("");
+                    setFormStatusId("");
+                    setFormPriority("MEDIUM");
+                    setFormStartDate("");
+                    setFormEndDate("");
+                    setFormBudget("");
+                    setFormAllocatedHours("");
+                    setFormNotes("");
+                    setDescription("");
+                    setProjectTasks([]);
+                    setCustomFields([]);
+                    setIsCreateOpen(true);
+                  }}
+                  className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
+                >
+                  Create New Project
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setIsRepeatEnabled(false);
+                    setIsTemplateSelectOpen(true);
+                  }}
+                  className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
+                >
+                  Use Existing Template
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setIsRepeatEnabled(true);
+                    setIsOngoing(false);
+                    setFormName("");
+                    setFormClientId("");
+                    setFormPMId("");
+                    setFormStatusId("");
+                    setFormPriority("MEDIUM");
+                    setFormStartDate("");
+                    setFormEndDate("");
+                    setFormBudget("");
+                    setFormAllocatedHours("");
+                    setFormNotes("");
+                    setDescription("");
+                    setProjectTasks([]);
+                    setCustomFields([]);
+                    setIsCreateOpen(true);
+                  }}
+                  className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
+                >
+                  Create Repeated Project
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         )}
       </div>
 
@@ -592,6 +853,11 @@ export default function ProjectsClient({
                         className="font-semibold text-foreground hover:text-primary transition-colors flex items-center gap-2"
                       >
                         {p.name}
+                        {p.isRepeated && (
+                          <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0 px-1.5 font-semibold flex items-center gap-1">
+                            <Repeat size={8} /> Recurring
+                          </Badge>
+                        )}
                       </Link>
                       {p.client && currentUser.role !== "MEMBER" && (
                         <span className="text-xs text-muted-foreground mt-1">
@@ -754,6 +1020,11 @@ export default function ProjectsClient({
                     <Link href={`/workspace/projects/${p.id}`} className="text-lg font-bold text-foreground hover:text-primary transition-colors truncate">
                       {p.name}
                     </Link>
+                    {p.isRepeated && (
+                      <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0 px-1.5 font-semibold flex items-center gap-1">
+                        <Repeat size={8} /> Recurring
+                      </Badge>
+                    )}
                     <Badge variant="outline" className="border-transparent font-medium text-white" style={{ backgroundColor: p.status?.color || '#cccccc' }}>{p.status?.name || "No Status"}</Badge>
                   </div>
                   {p.description ? (
@@ -851,6 +1122,8 @@ export default function ProjectsClient({
                   name="name"
                   required
                   placeholder="e.g. Website Redesign"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
                 />
               </div>
               <div className="space-y-2 col-span-2">
@@ -877,6 +1150,8 @@ export default function ProjectsClient({
                 </div>
                 <select
                   name="clientId"
+                  value={formClientId}
+                  onChange={(e) => setFormClientId(e.target.value)}
                   className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
                 >
                   <option value="">No Client (Internal)</option>
@@ -896,6 +1171,8 @@ export default function ProjectsClient({
                 </label>
                 <select
                   name="projectManagerId"
+                  value={formPMId}
+                  onChange={(e) => setFormPMId(e.target.value)}
                   className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
                 >
                   <option value="">Unassigned</option>
@@ -914,6 +1191,8 @@ export default function ProjectsClient({
                 <label className="text-sm font-medium">Status</label>
                 <select
                   name="status"
+                  value={formStatusId}
+                  onChange={(e) => setFormStatusId(e.target.value)}
                   className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
                 >
                   <option value="">No Status</option>
@@ -926,7 +1205,8 @@ export default function ProjectsClient({
                 <label className="text-sm font-medium">Priority</label>
                 <select
                   name="priority"
-                  defaultValue="MEDIUM"
+                  value={formPriority}
+                  onChange={(e) => setFormPriority(e.target.value)}
                   className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
                 >
                   <option value="LOW">Low</option>
@@ -943,7 +1223,13 @@ export default function ProjectsClient({
                 <label className="text-sm font-medium">
                   Start Date <span className="text-destructive">*</span>
                 </label>
-                <Input name="startDate" type="date" required />
+                <Input
+                  name="startDate"
+                  type="date"
+                  required
+                  value={formStartDate}
+                  onChange={(e) => setFormStartDate(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
@@ -965,13 +1251,61 @@ export default function ProjectsClient({
                   </div>
                 </div>
                 {!isOngoing ? (
-                  <Input name="endDate" type="date" required={!isOngoing} />
+                  <Input
+                    name="endDate"
+                    type="date"
+                    required={!isOngoing}
+                    value={formEndDate}
+                    onChange={(e) => setFormEndDate(e.target.value)}
+                  />
                 ) : (
                   <div className="flex h-9 w-full items-center justify-center rounded-xl border bg-muted/50 text-xs text-muted-foreground italic">
                     Project has no end date
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Repeat Settings */}
+            <div className="space-y-4 bg-purple-50/50 dark:bg-purple-950/10 p-4 rounded-xl border border-purple-100 dark:border-purple-900/30">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <label className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                    Repeat Project
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Automatically create duplicate projects based on frequency.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={isRepeatEnabled}
+                  onChange={(e) => {
+                    setIsRepeatEnabled(e.target.checked);
+                    if (e.target.checked) {
+                      setIsOngoing(false); // Repeat settings require a fixed end date boundary
+                    }
+                  }}
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                />
+              </div>
+
+              {isRepeatEnabled && (
+                <div className="grid grid-cols-1 gap-4 pt-2 border-t border-purple-100/50 dark:border-purple-900/20 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground">Repeat Frequency</label>
+                    <select
+                      value={repeatFrequency}
+                      onChange={(e) => setRepeatFrequency(e.target.value as any)}
+                      className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                    >
+                      <option value="DAILY">Daily</option>
+                      <option value="WEEKLY">Weekly</option>
+                      <option value="MONTHLY">Monthly</option>
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Resources */}
@@ -989,6 +1323,8 @@ export default function ProjectsClient({
                   step="0.01"
                   min="0"
                   placeholder="e.g. 5000"
+                  value={formBudget}
+                  onChange={(e) => setFormBudget(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
@@ -1003,6 +1339,8 @@ export default function ProjectsClient({
                   min="0"
                   required
                   placeholder="e.g. 120"
+                  value={formAllocatedHours}
+                  onChange={(e) => setFormAllocatedHours(e.target.value)}
                 />
               </div>
             </div>
@@ -1251,17 +1589,27 @@ export default function ProjectsClient({
               )}
             </div>
 
-            <DialogFooter className="pt-4 border-t mt-6 sticky bottom-0 bg-background pb-2">
+            <DialogFooter className="pt-4 border-t mt-6 sticky bottom-0 bg-background pb-2 flex items-center justify-between">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setIsCreateOpen(false)}
+                onClick={() => setIsSaveTemplateOpen(true)}
+                className="text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-900/50 dark:hover:bg-purple-950/20"
               >
-                Cancel
+                Save as Template
               </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? "Creating..." : "Create Project"}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsCreateOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isPending}>
+                  {isPending ? "Creating..." : "Create Project"}
+                </Button>
+              </div>
             </DialogFooter>
           </form>
           </div>
@@ -1307,6 +1655,131 @@ export default function ProjectsClient({
               </form>
             </DialogContent>
           </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save Template Name Modal */}
+      <Dialog open={isSaveTemplateOpen} onOpenChange={setIsSaveTemplateOpen}>
+        <DialogContent className="sm:max-w-[400px] bg-background border-border">
+          <DialogHeader>
+            <DialogTitle>Save as Template</DialogTitle>
+            <DialogDescription>
+              Enter a name for this template. This will save the project structure, custom fields, and task template.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveTemplate} className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Template Name</label>
+              <Input
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                required
+                placeholder="e.g. Website Development Template"
+              />
+            </div>
+            <DialogFooter className="pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsSaveTemplateOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending ? "Saving..." : "Save Template"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Template Selection Modal */}
+      <Dialog open={isTemplateSelectOpen} onOpenChange={setIsTemplateSelectOpen}>
+        <DialogContent className="sm:max-w-[600px] h-[70vh] flex flex-col overflow-hidden bg-background border-border p-0">
+          <DialogHeader className="px-6 py-4 border-b shrink-0 bg-background z-10 sticky top-0 shadow-sm">
+            <DialogTitle>Select a Template</DialogTitle>
+            <DialogDescription>
+              Choose an existing template to populate the project configuration and custom fields structure.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+            {isLoadingTemplates ? (
+              <div className="flex items-center justify-center h-48">
+                <span className="text-sm text-muted-foreground">Loading templates...</span>
+              </div>
+            ) : templates.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 border border-dashed rounded-2xl p-6 text-center">
+                <FolderKanban className="h-8 w-8 text-muted-foreground mb-2" />
+                <h3 className="font-semibold text-sm">No templates saved yet</h3>
+                <p className="text-xs text-muted-foreground mt-1 max-w-[280px]">
+                  Create a new project and click "Save as Template" to add one.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {templates.map((template) => {
+                  const config = template.config || {};
+                  const customFieldsCount = Array.isArray(config.customFields)
+                    ? config.customFields.length
+                    : 0;
+                  const tasksCount = Array.isArray(config.tasks) ? config.tasks.length : 0;
+
+                  return (
+                    <div
+                      key={template.id}
+                      className="border rounded-2xl p-4 bg-muted/20 hover:bg-muted/40 transition-colors flex flex-col justify-between group relative animate-in fade-in zoom-in-95 duration-200"
+                    >
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteTemplate(template.id, e)}
+                        className="absolute right-3 top-3 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Delete template"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+
+                      <div className="space-y-2 mb-4">
+                        <h4 className="font-bold text-base text-foreground leading-tight truncate pr-6">
+                          {template.name}
+                        </h4>
+                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground font-medium">
+                          <span>
+                            Fields: {customFieldsCount}
+                          </span>
+                          <span>•</span>
+                          <span>
+                            Tasks: {tasksCount}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground font-normal">
+                          Created: {new Date(template.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                        </p>
+                      </div>
+
+                      <Button
+                        type="button"
+                        onClick={() => handleUseTemplate(template)}
+                        className="w-full text-xs font-semibold h-9"
+                      >
+                        Use Template
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="px-6 py-4 border-t shrink-0 bg-background sticky bottom-0 z-10">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsTemplateSelectOpen(false)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       {/* Status Confirmation Modal */}

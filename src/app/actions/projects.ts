@@ -160,6 +160,11 @@ export async function createProjectAction(data: {
   priority: Prisma.ProjectCreateInput["priority"];
   assigneeIds: string[];
   customFields?: any;
+  isRepeated?: boolean;
+  repeatSettings?: {
+    enabled: boolean;
+    frequency: "DAILY" | "WEEKLY" | "MONTHLY";
+  };
   tasks?: {
     title: string;
     description?: string;
@@ -189,6 +194,8 @@ export async function createProjectAction(data: {
       priority,
       assigneeIds,
       customFields,
+      isRepeated,
+      repeatSettings,
       tasks,
     } = data;
 
@@ -199,7 +206,106 @@ export async function createProjectAction(data: {
       return { error: 'Total Allocated Hours is required and must be greater than or equal to 0.' };
     }
 
-    // Create project
+    // Repeated Projects Creation Logic
+    if (repeatSettings?.enabled && endDate) {
+      const generateRepeatDates = (start: Date, end: Date, freq: "DAILY" | "WEEKLY" | "MONTHLY"): Date[] => {
+        const dates: Date[] = [];
+        let current = new Date(start);
+        const limit = new Date(end);
+
+        current.setHours(0, 0, 0, 0);
+        limit.setHours(0, 0, 0, 0);
+
+        if (current > limit) return [];
+
+        while (current <= limit) {
+          dates.push(new Date(current));
+          if (freq === "DAILY") {
+            current.setDate(current.getDate() + 1);
+          } else if (freq === "WEEKLY") {
+            current.setDate(current.getDate() + 7);
+          } else if (freq === "MONTHLY") {
+            current.setMonth(current.getMonth() + 1);
+          } else {
+            break;
+          }
+        }
+        return dates;
+      };
+
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const repeatDates = generateRepeatDates(start, end, repeatSettings.frequency);
+
+      if (repeatDates.length > 0) {
+        let firstProject: any = null;
+
+        for (const date of repeatDates) {
+          const day = String(date.getDate()).padStart(2, '0');
+          const month = date.toLocaleDateString('en-US', { month: 'long' });
+          const formattedName = `${name} - ${day} ${month}`;
+
+          const created = await prisma.project.create({
+            data: {
+              name: formattedName,
+              description: description || null,
+              notes: notes || null,
+              organizationId: session.organizationId,
+              clientId: clientId || null,
+              projectManagerId: projectManagerId || null,
+              statusId: statusId || null,
+              startDate: date,
+              endDate: date, // For single instances, end date is the occurrence day itself
+              isOngoing: false,
+              projectBudget: projectBudget || null,
+              totalAllocatedHours: totalAllocatedHours || null,
+              priority,
+              customFields: customFields || null,
+              isRepeated: true,
+              assignees: {
+                create: assigneeIds.map((userId) => ({
+                  userId,
+                })),
+              },
+              tasks: {
+                create: tasks?.map((task) => ({
+                  title: task.title,
+                  description: task.description || null,
+                  priority: task.priority,
+                  statusId: task.statusId || null,
+                  organizationId: session.organizationId,
+                  assignees: {
+                    create: task.assigneeIds.map((userId) => ({
+                      userId,
+                    })),
+                  },
+                })) || [],
+              },
+            },
+          });
+
+          await createNotification({
+            organizationId: session.organizationId,
+            projectId: created.id,
+            actorId: session.userId,
+            actorRole: session.role,
+            type: 'project_created',
+            title: 'New Project Created (Recurring)',
+            message: `Recurring Project "${created.name}" has been created.`,
+            actionUrl: `/workspace/projects/${created.id}`,
+            clientVisible: true
+          });
+
+          if (!firstProject) {
+            firstProject = created;
+          }
+        }
+
+        return { success: true, project: firstProject };
+      }
+    }
+
+    // Standard Project Creation Logic
     const project = await prisma.project.create({
       data: {
         name,
@@ -216,6 +322,7 @@ export async function createProjectAction(data: {
         totalAllocatedHours: totalAllocatedHours || null,
         priority,
         customFields: customFields || null,
+        isRepeated: isRepeated || false,
         assignees: {
           create: assigneeIds.map((userId) => ({
             userId,
@@ -459,6 +566,64 @@ export async function getProjectsAction() {
     return { success: true, projects };
   } catch (error: any) {
     return { error: error.message || 'Failed to fetch projects.' };
+  }
+}
+
+export async function createProjectTemplateAction(name: string, config: any) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== 'OWNER') {
+      return { error: 'Unauthorized: Only Owners can create project templates.' };
+    }
+
+    if (!name || !config) {
+      return { error: 'Template Name and configuration details are required.' };
+    }
+
+    const template = await prisma.projectTemplate.create({
+      data: {
+        name,
+        organizationId: session.organizationId,
+        config: config,
+      },
+    });
+
+    return { success: true, template };
+  } catch (error: any) {
+    return { error: error.message || 'Failed to create project template.' };
+  }
+}
+
+export async function getProjectTemplatesAction() {
+  try {
+    const session = await getSession();
+    if (!session) return { error: 'Unauthorized' };
+
+    const templates = await prisma.projectTemplate.findMany({
+      where: { organizationId: session.organizationId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return { success: true, templates };
+  } catch (error: any) {
+    return { error: error.message || 'Failed to fetch project templates.' };
+  }
+}
+
+export async function deleteProjectTemplateAction(templateId: string) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== 'OWNER') {
+      return { error: 'Unauthorized: Only Owners can delete project templates.' };
+    }
+
+    await prisma.projectTemplate.deleteMany({
+      where: { id: templateId, organizationId: session.organizationId },
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message || 'Failed to delete project template.' };
   }
 }
 

@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { createProjectAction, quickCreateClientAction } from "@/app/actions/projects";
+import { createProjectAction, quickCreateClientAction, createProjectTemplateAction } from "@/app/actions/projects";
 import { getProjectFormDataAction } from "@/app/actions/getProjectFormDataAction";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 
@@ -38,6 +38,68 @@ export default function GlobalCreateProjectModal({
   // Form States
   const [description, setDescription] = useState("");
   const [isOngoing, setIsOngoing] = useState(false);
+
+  // Form Control States for Project Creation
+  const [formName, setFormName] = useState("");
+  const [formClientId, setFormClientId] = useState("");
+  const [formPMId, setFormPMId] = useState("");
+  const [formStatusId, setFormStatusId] = useState("");
+  const [formPriority, setFormPriority] = useState("MEDIUM");
+  const [formStartDate, setFormStartDate] = useState("");
+  const [formEndDate, setFormEndDate] = useState("");
+  const [formBudget, setFormBudget] = useState("");
+  const [formAllocatedHours, setFormAllocatedHours] = useState("");
+  const [formNotes, setFormNotes] = useState("");
+
+  // Repeat Settings States
+  const [isRepeatEnabled, setIsRepeatEnabled] = useState(false);
+  const [repeatFrequency, setRepeatFrequency] = useState<"DAILY" | "WEEKLY" | "MONTHLY">("DAILY");
+
+  // Template Save States
+  const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+
+  const handleSaveTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!templateName.trim()) {
+      toast.error("Please enter a template name");
+      return;
+    }
+
+    const config = {
+      name: formName,
+      clientId: formClientId || undefined,
+      projectManagerId: formPMId || undefined,
+      statusId: formStatusId || undefined,
+      priority: formPriority,
+      startDate: formStartDate,
+      endDate: formEndDate,
+      isOngoing,
+      projectBudget: formBudget ? Number(formBudget) : undefined,
+      totalAllocatedHours: formAllocatedHours ? Number(formAllocatedHours) : undefined,
+      notes: formNotes,
+      description: description,
+      customFields,
+      tasks: projectTasks.map((t) => ({
+        title: t.title,
+        description: t.description,
+        priority: t.priority,
+        statusId: t.status || undefined,
+        assigneeIds: t.assigneeId ? [t.assigneeId] : [],
+      })),
+    };
+
+    startTransition(async () => {
+      const res = await createProjectTemplateAction(templateName.trim(), config);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("Template saved successfully");
+        setIsSaveTemplateOpen(false);
+        setTemplateName("");
+      }
+    });
+  };
   const [projectTasks, setProjectTasks] = useState<
     {
       id: string;
@@ -101,28 +163,31 @@ export default function GlobalCreateProjectModal({
 
   const handleCreateProject = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
+
+    if (isRepeatEnabled && (!formEndDate || isOngoing)) {
+      toast.error("An End Date is required to schedule repeated projects.");
+      return;
+    }
 
     const data = {
-      name: formData.get("name") as string,
-      clientId: (formData.get("clientId") as string) || undefined,
-      projectManagerId:
-        (formData.get("projectManagerId") as string) || undefined,
+      name: formName,
+      clientId: formClientId || undefined,
+      projectManagerId: formPMId || undefined,
       description: description,
-      statusId: (formData.get("statusId") as string) || undefined,
-      priority: formData.get("priority") as any,
-      startDate: formData.get("startDate") as string,
-      endDate: formData.get("endDate") as string,
+      statusId: formStatusId || undefined,
+      priority: formPriority as any,
+      startDate: formStartDate,
+      endDate: formEndDate,
       isOngoing,
-      projectBudget: formData.get("projectBudget")
-        ? Number(formData.get("projectBudget"))
-        : undefined,
-      totalAllocatedHours: formData.get("totalAllocatedHours")
-        ? Number(formData.get("totalAllocatedHours"))
-        : undefined,
-      notes: formData.get("notes") as string,
+      projectBudget: formBudget ? Number(formBudget) : undefined,
+      totalAllocatedHours: formAllocatedHours ? Number(formAllocatedHours) : undefined,
+      notes: formNotes,
       assigneeIds: [],
       customFields,
+      repeatSettings: {
+        enabled: isRepeatEnabled,
+        frequency: repeatFrequency,
+      },
       tasks: projectTasks
         .filter((t) => t.title.trim() !== "")
         .map((t) => ({
@@ -146,6 +211,18 @@ export default function GlobalCreateProjectModal({
         setIsOngoing(false);
         setProjectTasks([]);
         setCustomFields([]);
+        setFormName("");
+        setFormClientId("");
+        setFormPMId("");
+        setFormStatusId("");
+        setFormPriority("MEDIUM");
+        setFormStartDate("");
+        setFormEndDate("");
+        setFormBudget("");
+        setFormAllocatedHours("");
+        setFormNotes("");
+        setIsRepeatEnabled(false);
+        setRepeatFrequency("DAILY");
         router.refresh();
       }
     });
@@ -200,6 +277,8 @@ export default function GlobalCreateProjectModal({
                     name="name"
                     required
                     placeholder="e.g. Website Redesign"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2 col-span-2">
@@ -226,6 +305,8 @@ export default function GlobalCreateProjectModal({
                   </div>
                   <select
                     name="clientId"
+                    value={formClientId}
+                    onChange={(e) => setFormClientId(e.target.value)}
                     className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
                   >
                     <option value="">No Client (Internal)</option>
@@ -245,6 +326,8 @@ export default function GlobalCreateProjectModal({
                   </label>
                   <select
                     name="projectManagerId"
+                    value={formPMId}
+                    onChange={(e) => setFormPMId(e.target.value)}
                     className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
                   >
                     <option value="">Unassigned</option>
@@ -302,6 +385,8 @@ export default function GlobalCreateProjectModal({
                       ) : (
                         <select
                           name="statusId"
+                          value={formStatusId}
+                          onChange={(e) => setFormStatusId(e.target.value)}
                           className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
                         >
                           {projectStatuses.map((s) => (
@@ -318,7 +403,8 @@ export default function GlobalCreateProjectModal({
                   <label className="text-sm font-medium">Priority</label>
                   <select
                     name="priority"
-                    defaultValue="MEDIUM"
+                    value={formPriority}
+                    onChange={(e) => setFormPriority(e.target.value)}
                     className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
                   >
                     <option value="LOW">Low</option>
@@ -335,7 +421,13 @@ export default function GlobalCreateProjectModal({
                   <label className="text-sm font-medium">
                     Start Date <span className="text-destructive">*</span>
                   </label>
-                  <Input name="startDate" type="date" required />
+                  <Input
+                    name="startDate"
+                    type="date"
+                    required
+                    value={formStartDate}
+                    onChange={(e) => setFormStartDate(e.target.value)}
+                  />
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
@@ -357,13 +449,61 @@ export default function GlobalCreateProjectModal({
                     </div>
                   </div>
                   {!isOngoing ? (
-                    <Input name="endDate" type="date" required={!isOngoing} />
+                    <Input
+                      name="endDate"
+                      type="date"
+                      required={!isOngoing}
+                      value={formEndDate}
+                      onChange={(e) => setFormEndDate(e.target.value)}
+                    />
                   ) : (
                     <div className="flex h-9 w-full items-center justify-center rounded-xl border bg-muted/50 text-xs text-muted-foreground italic">
                       Project has no end date
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Repeat Settings */}
+              <div className="space-y-4 bg-purple-50/50 dark:bg-purple-950/10 p-4 rounded-xl border border-purple-100 dark:border-purple-900/30">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <label className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                      Repeat Project
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      Automatically create duplicate projects based on frequency.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={isRepeatEnabled}
+                    onChange={(e) => {
+                      setIsRepeatEnabled(e.target.checked);
+                      if (e.target.checked) {
+                        setIsOngoing(false); // Repeat settings require a fixed end date boundary
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                  />
+                </div>
+
+                {isRepeatEnabled && (
+                  <div className="grid grid-cols-1 gap-4 pt-2 border-t border-purple-100/50 dark:border-purple-900/20 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-muted-foreground">Repeat Frequency</label>
+                      <select
+                        value={repeatFrequency}
+                        onChange={(e) => setRepeatFrequency(e.target.value as any)}
+                        className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                      >
+                        <option value="DAILY">Daily</option>
+                        <option value="WEEKLY">Weekly</option>
+                        <option value="MONTHLY">Monthly</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Resources */}
@@ -381,6 +521,8 @@ export default function GlobalCreateProjectModal({
                     step="0.01"
                     min="0"
                     placeholder="e.g. 5000"
+                    value={formBudget}
+                    onChange={(e) => setFormBudget(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
@@ -395,6 +537,8 @@ export default function GlobalCreateProjectModal({
                     min="0"
                     required
                     placeholder="e.g. 120"
+                    value={formAllocatedHours}
+                    onChange={(e) => setFormAllocatedHours(e.target.value)}
                   />
                 </div>
               </div>
@@ -640,17 +784,27 @@ export default function GlobalCreateProjectModal({
                 )}
               </div>
 
-              <DialogFooter className="pt-4 border-t mt-6 sticky bottom-0 bg-background pb-2">
+              <DialogFooter className="pt-4 border-t mt-6 sticky bottom-0 bg-background pb-2 flex items-center justify-between">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setIsOpen(false)}
+                  onClick={() => setIsSaveTemplateOpen(true)}
+                  className="text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-900/50 dark:hover:bg-purple-950/20"
                 >
-                  Cancel
+                  Save as Template
                 </Button>
-                <Button type="submit" disabled={isPending}>
-                  {isPending ? "Creating..." : "Create Project"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isPending}>
+                    {isPending ? "Creating..." : "Create Project"}
+                  </Button>
+                </div>
               </DialogFooter>
             </form>
           </div>
@@ -699,7 +853,40 @@ export default function GlobalCreateProjectModal({
         </DialogContent>
       </Dialog>
 
-
+      {/* Save Template Name Modal */}
+      <Dialog open={isSaveTemplateOpen} onOpenChange={setIsSaveTemplateOpen}>
+        <DialogContent className="sm:max-w-[400px] bg-background border-border">
+          <DialogHeader>
+            <DialogTitle>Save as Template</DialogTitle>
+            <DialogDescription>
+              Enter a name for this template. This will save the project structure, custom fields, and task template.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveTemplate} className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Template Name</label>
+              <Input
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                required
+                placeholder="e.g. Website Development Template"
+              />
+            </div>
+            <DialogFooter className="pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsSaveTemplateOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending ? "Saving..." : "Save Template"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

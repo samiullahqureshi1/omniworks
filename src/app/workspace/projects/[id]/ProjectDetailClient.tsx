@@ -9,7 +9,7 @@ import {
   ArrowLeft, Calendar, Clock, MoreHorizontal, Settings, 
   LayoutDashboard, CheckSquare, Users, Timer, Activity,
   Briefcase, MessageSquare, GripVertical, Plus, ShieldAlert,
-  Search, Check, X, Hash, Trash2
+  Search, Check, X, Hash, Trash2, Repeat
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -341,6 +341,11 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
               <Badge variant="secondary" className={getPriorityColor(project.priority)}>
                 {project.priority}
               </Badge>
+              {project.isRepeated && (
+                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0.5 px-2 font-semibold flex items-center gap-1">
+                  <Repeat size={10} /> Recurring
+                </Badge>
+              )}
             </div>
             {project.description && (
               <div 

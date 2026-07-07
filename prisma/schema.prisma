@@ -35,6 +35,7 @@ model Organization {
   notifications   Notification[]
   messages        ProjectMessage[]
   userPresences   UserPresence[]
+  projectTemplates ProjectTemplate[]
 }
 
 enum Role {
@@ -138,6 +139,7 @@ model Project {
   totalAllocatedHours Float?
   priority            Priority       @default(MEDIUM)
   customFields        Json?
+  isRepeated          Boolean        @default(false)
   createdAt           DateTime       @default(now())
 
   // Relations
@@ -481,3 +483,16 @@ model UserPresence {
 
   @@index([organizationId])
 }
+
+model ProjectTemplate {
+  id             String       @id @default(uuid())
+  name           String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  config         Json
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+}
+
