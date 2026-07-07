@@ -4,11 +4,11 @@ import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import ProjectDetailClient from './ProjectDetailClient';
 
-export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
+export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) redirect('/login');
 
-  const { id } = params;
+  const { id } = await params;
 
   // Verify access based on role
   let whereClause: any = { id, organizationId: session.organizationId };
