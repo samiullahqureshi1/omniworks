@@ -48,6 +48,9 @@ export default function GlobalCreateProjectModal({
       assigneeId: string;
     }[]
   >([]);
+  const [customFields, setCustomFields] = useState<
+    { name: string; type: string; value: string }[]
+  >([]);
 
   // Inline Status Creation States
   const [isCreatingStatus, setIsCreatingStatus] = useState(false);
@@ -119,6 +122,7 @@ export default function GlobalCreateProjectModal({
         : undefined,
       notes: formData.get("notes") as string,
       assigneeIds: [],
+      customFields,
       tasks: projectTasks
         .filter((t) => t.title.trim() !== "")
         .map((t) => ({
@@ -141,6 +145,7 @@ export default function GlobalCreateProjectModal({
         setDescription("");
         setIsOngoing(false);
         setProjectTasks([]);
+        setCustomFields([]);
         router.refresh();
       }
     });
@@ -392,6 +397,116 @@ export default function GlobalCreateProjectModal({
                     placeholder="e.g. 120"
                   />
                 </div>
+              </div>
+
+              {/* Custom Fields */}
+              <div className="space-y-3 pt-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-sm font-medium flex items-center gap-1.5">
+                    Custom Fields{" "}
+                    <span className="text-xs text-muted-foreground font-normal">
+                      (Optional)
+                    </span>
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setCustomFields([
+                        ...customFields,
+                        {
+                          name: "",
+                          type: "text",
+                          value: "",
+                        },
+                      ])
+                    }
+                    className="h-8 text-xs"
+                  >
+                    <Plus className="mr-1 h-3 w-3" /> Add Field
+                  </Button>
+                </div>
+
+                {customFields.length > 0 && (
+                  <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
+                    {customFields.map((field, index) => (
+                      <div
+                        key={index}
+                        className="p-3 border rounded-xl bg-muted/20 space-y-3 relative group"
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCustomFields(
+                              customFields.filter((_, i) => i !== index)
+                            )
+                          }
+                          className="absolute right-2 top-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-muted-foreground">Field Name</label>
+                            <Input
+                              placeholder="e.g. Skype ID, Website"
+                              value={field.name}
+                              onChange={(e) => {
+                                const newFields = [...customFields];
+                                newFields[index].name = e.target.value;
+                                setCustomFields(newFields);
+                              }}
+                              className="h-8 text-xs bg-background"
+                              required
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-muted-foreground">Field Type</label>
+                            <select
+                              value={field.type}
+                              onChange={(e) => {
+                                const newFields = [...customFields];
+                                newFields[index].type = e.target.value;
+                                newFields[index].value = "";
+                                setCustomFields(newFields);
+                              }}
+                              className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
+                            >
+                              <option value="text">Text</option>
+                              <option value="number">Number</option>
+                              <option value="url">URL</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-muted-foreground">Value</label>
+                          <Input
+                            type={field.type === "number" ? "number" : "text"}
+                            placeholder={
+                              field.type === "url"
+                                ? "https://example.com"
+                                : field.type === "number"
+                                ? "0"
+                                : "Enter value..."
+                            }
+                            value={field.value}
+                            onChange={(e) => {
+                              const newFields = [...customFields];
+                              newFields[index].value = e.target.value;
+                              setCustomFields(newFields);
+                            }}
+                            className="h-8 text-xs bg-background"
+                            required
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Project Tasks */}

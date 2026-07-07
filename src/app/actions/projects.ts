@@ -159,6 +159,7 @@ export async function createProjectAction(data: {
   totalAllocatedHours?: number;
   priority: Prisma.ProjectCreateInput["priority"];
   assigneeIds: string[];
+  customFields?: any;
   tasks?: {
     title: string;
     description?: string;
@@ -187,6 +188,7 @@ export async function createProjectAction(data: {
       totalAllocatedHours,
       priority,
       assigneeIds,
+      customFields,
       tasks,
     } = data;
 
@@ -213,6 +215,7 @@ export async function createProjectAction(data: {
         projectBudget: projectBudget || null,
         totalAllocatedHours: totalAllocatedHours || null,
         priority,
+        customFields: customFields || null,
         assignees: {
           create: assigneeIds.map((userId) => ({
             userId,
@@ -270,6 +273,7 @@ export async function updateProjectAction(
     totalAllocatedHours?: number;
     priority: Prisma.ProjectCreateInput["priority"];
     assigneeIds: string[];
+    customFields?: any;
   }
 ) {
   try {
@@ -302,6 +306,7 @@ export async function updateProjectAction(
       totalAllocatedHours,
       priority,
       assigneeIds,
+      customFields,
     } = data;
 
     if (totalAllocatedHours === undefined || totalAllocatedHours === null || totalAllocatedHours < 0) {
@@ -328,6 +333,7 @@ export async function updateProjectAction(
         projectBudget: projectBudget || null,
         totalAllocatedHours: totalAllocatedHours || null,
         priority,
+        customFields: customFields || null,
         assignees: {
           create: assigneeIds.map((userId) => ({
             userId,

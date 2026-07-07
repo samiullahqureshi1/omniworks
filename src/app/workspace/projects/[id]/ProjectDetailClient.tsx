@@ -9,7 +9,7 @@ import {
   ArrowLeft, Calendar, Clock, MoreHorizontal, Settings, 
   LayoutDashboard, CheckSquare, Users, Timer, Activity,
   Briefcase, MessageSquare, GripVertical, Plus, ShieldAlert,
-  Search, Check, X, Hash
+  Search, Check, X, Hash, Trash2
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -40,6 +40,14 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
   const [isEditProjectOpen, setIsEditProjectOpen] = useState(false);
   const [editIsOngoing, setEditIsOngoing] = useState(project.isOngoing);
   const [editDescription, setEditDescription] = useState(project.description || '');
+  const [editCustomFields, setEditCustomFields] = useState<
+    { name: string; type: string; value: string }[]
+  >(() => {
+    if (project.customFields && Array.isArray(project.customFields)) {
+      return project.customFields as any[];
+    }
+    return [];
+  });
 
   // Presence
   const [presenceMap, setPresenceMap] = useState<Record<string, string>>({});
@@ -227,6 +235,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
         assigneeIds: project.assignees.map((a: any) => a.userId),
         projectBudget: formData.get('projectBudget') ? parseFloat(formData.get('projectBudget') as string) : undefined,
         totalAllocatedHours: formData.get('totalAllocatedHours') ? parseFloat(formData.get('totalAllocatedHours') as string) : undefined,
+        customFields: editCustomFields,
       });
       
       if (res.error) {
@@ -469,6 +478,113 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                         <Input name="totalAllocatedHours" type="number" step="0.1" min="0" required defaultValue={project.totalAllocatedHours || ''} />
                       </div>
 
+                      {/* Custom Fields */}
+                      <div className="space-y-3 pt-2 col-span-1 sm:col-span-2">
+                        <div className="flex justify-between items-center">
+                          <label className="text-sm font-medium flex items-center gap-1.5">
+                            Custom Fields
+                          </label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setEditCustomFields([
+                                ...editCustomFields,
+                                {
+                                  name: "",
+                                  type: "text",
+                                  value: "",
+                                },
+                              ])
+                            }
+                            className="h-8 text-xs"
+                          >
+                            <Plus className="mr-1 h-3 w-3" /> Add Field
+                          </Button>
+                        </div>
+
+                        {editCustomFields.length > 0 && (
+                          <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
+                            {editCustomFields.map((field, index) => (
+                              <div
+                                key={index}
+                                className="p-3 border rounded-xl bg-muted/20 space-y-3 relative group"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setEditCustomFields(
+                                      editCustomFields.filter((_, i) => i !== index)
+                                    )
+                                  }
+                                  className="absolute right-2 top-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">Field Name</label>
+                                    <Input
+                                      placeholder="Field Name"
+                                      value={field.name}
+                                      onChange={(e) => {
+                                        const newFields = [...editCustomFields];
+                                        newFields[index].name = e.target.value;
+                                        setEditCustomFields(newFields);
+                                      }}
+                                      className="h-8 text-xs bg-background"
+                                      required
+                                    />
+                                  </div>
+
+                                  <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">Field Type</label>
+                                    <select
+                                      value={field.type}
+                                      onChange={(e) => {
+                                        const newFields = [...editCustomFields];
+                                        newFields[index].type = e.target.value;
+                                        newFields[index].value = "";
+                                        setEditCustomFields(newFields);
+                                      }}
+                                      className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
+                                    >
+                                      <option value="text">Text</option>
+                                      <option value="number">Number</option>
+                                      <option value="url">URL</option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-medium text-muted-foreground">Value</label>
+                                  <Input
+                                    type={field.type === "number" ? "number" : "text"}
+                                    placeholder={
+                                      field.type === "url"
+                                        ? "https://example.com"
+                                        : field.type === "number"
+                                        ? "0"
+                                        : "Enter value..."
+                                    }
+                                    value={field.value}
+                                    onChange={(e) => {
+                                      const newFields = [...editCustomFields];
+                                      newFields[index].value = e.target.value;
+                                      setEditCustomFields(newFields);
+                                    }}
+                                    className="h-8 text-xs bg-background"
+                                    required
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
 
                     </div>
                     
@@ -515,6 +631,30 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                   <p className="text-xs text-slate-700 dark:text-slate-300 italic bg-muted/40 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
                     "{project.notes}"
                   </p>
+                </div>
+              )}
+              {project.customFields && (project.customFields as any[]).length > 0 && (
+                <div className="mt-4 pt-4 border-t border-slate-200/60 dark:border-slate-800/60">
+                  <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider block mb-2">Custom Fields</span>
+                  <div className="grid grid-cols-2 gap-4">
+                    {(project.customFields as any[]).map((field: any, idx: number) => (
+                      <div key={idx} className="flex flex-col">
+                        <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">{field.name}</span>
+                        {field.type === 'url' ? (
+                          <a 
+                            href={field.value.startsWith('http') ? field.value : `https://${field.value}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-sm text-blue-600 dark:text-blue-400 hover:underline truncate"
+                          >
+                            {field.value}
+                          </a>
+                        ) : (
+                          <span className="font-semibold text-sm text-foreground truncate">{field.value}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

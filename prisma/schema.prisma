@@ -137,6 +137,7 @@ model Project {
   projectBudget       Float?
   totalAllocatedHours Float?
   priority            Priority       @default(MEDIUM)
+  customFields        Json?
   createdAt           DateTime       @default(now())
 
   // Relations
