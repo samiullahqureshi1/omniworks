@@ -535,8 +535,8 @@ export async function getProjectsAction() {
 
     const { role, userId, organizationId } = session;
 
-    // Base query options ensuring organization isolation
-    let whereClause: any = { organizationId };
+    // Base query options ensuring organization isolation and client-facing only
+    let whereClause: any = { organizationId, isInternal: false };
 
     if (role === 'CLIENT') {
       // Client can only access their own assigned projects

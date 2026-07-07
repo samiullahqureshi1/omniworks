@@ -26,7 +26,8 @@ import {
   Briefcase,
   Trash2,
   Plus,
-  Cpu
+  Cpu,
+  Workflow
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
@@ -162,6 +163,7 @@ export default function WorkspaceLayoutClient({
   const allNavItems = [
     { name: 'Overview', href: '/workspace', icon: LayoutDashboard, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'Projects', href: '/workspace/projects', icon: FolderKanban, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
+    { name: 'TeamOps Hub', href: '/workspace/teamops', icon: Workflow, exact: false, roles: ['OWNER', 'PM', 'MEMBER'] },
     { name: 'Tasks', href: '/workspace/tasks', icon: CheckSquare, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'Time', href: '/workspace/time', icon: Timer, exact: false, roles: ['OWNER', 'PM', 'MEMBER'] },
     { name: 'Timesheet', href: '/workspace/timesheet', icon: FileText, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },

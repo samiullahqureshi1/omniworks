@@ -320,6 +320,7 @@ export default function ProjectsClient({
   // Template Management States
   const [isTemplateSelectOpen, setIsTemplateSelectOpen] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
+  const [templateSearchQuery, setTemplateSearchQuery] = useState("");
   const [pinnedTemplateIds, setPinnedTemplateIds] = useState<string[]>([]);
   const pinnedTemplates = React.useMemo(() => {
     return templates.filter((t) => pinnedTemplateIds.includes(t.id));
@@ -1925,18 +1926,31 @@ export default function ProjectsClient({
 
       {/* Template Selection Modal */}
       <Dialog open={isTemplateSelectOpen} onOpenChange={setIsTemplateSelectOpen}>
-        <DialogContent className="sm:max-w-[600px] h-[70vh] flex flex-col overflow-hidden bg-background border-border p-0">
-          <DialogHeader className="px-6 py-4 border-b shrink-0 bg-background z-10 sticky top-0 shadow-sm">
-            <DialogTitle>Select a Template</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="sm:max-w-[620px] h-[75vh] flex flex-col overflow-hidden bg-background border-border p-0 rounded-2xl shadow-xl">
+          <DialogHeader className="px-6 py-5 border-b shrink-0 bg-slate-50/50 dark:bg-zinc-900/50 z-10 sticky top-0">
+            <DialogTitle className="text-xl font-bold">Select a Template</DialogTitle>
+            <DialogDescription className="text-xs mt-1">
               Choose an existing template to populate the project configuration and custom fields structure.
             </DialogDescription>
           </DialogHeader>
 
+          {/* Search bar inside modal */}
+          <div className="px-6 pt-4 shrink-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search templates by name..."
+                value={templateSearchQuery}
+                onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                className="pl-9 h-9.5 rounded-xl border bg-background text-sm shadow-sm"
+              />
+            </div>
+          </div>
+
           <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
             {isLoadingTemplates ? (
               <div className="flex items-center justify-center h-48">
-                <span className="text-sm text-muted-foreground">Loading templates...</span>
+                <span className="text-sm text-muted-foreground animate-pulse font-medium">Loading templates...</span>
               </div>
             ) : templates.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 border border-dashed rounded-2xl p-6 text-center">
@@ -1946,75 +1960,91 @@ export default function ProjectsClient({
                   Create a new project and click "Save as Template" to add one.
                 </p>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {templates.map((template) => {
-                  const config = template.config || {};
-                  const customFieldsCount = Array.isArray(config.customFields)
-                    ? config.customFields.length
-                    : 0;
-                  const tasksCount = Array.isArray(config.tasks) ? config.tasks.length : 0;
+            ) : (() => {
+              const filtered = templates.filter(t => t.name.toLowerCase().includes(templateSearchQuery.toLowerCase()));
+              if (filtered.length === 0) {
+                return (
+                  <div className="text-center py-12 text-sm text-muted-foreground font-medium italic">
+                    No templates match "{templateSearchQuery}"
+                  </div>
+                );
+              }
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {filtered.map((template) => {
+                    const config = template.config || {};
+                    const customFieldsCount = Array.isArray(config.customFields)
+                      ? config.customFields.length
+                      : 0;
+                    const tasksCount = Array.isArray(config.tasks) ? config.tasks.length : 0;
+                    const isPinned = pinnedTemplateIds.includes(template.id);
 
-                  return (
-                    <div
-                      key={template.id}
-                      className="border rounded-2xl p-4 bg-muted/20 hover:bg-muted/40 transition-colors flex flex-col justify-between group relative animate-in fade-in zoom-in-95 duration-200"
-                    >
-                      <button
-                        type="button"
-                        onClick={(e) => handleTogglePinTemplate(template.id, e)}
-                        className="absolute right-9 top-3 text-muted-foreground hover:text-primary transition-opacity"
-                        title={pinnedTemplateIds.includes(template.id) ? "Unpin template" : "Pin template"}
+                    return (
+                      <div
+                        key={template.id}
+                        className="border border-slate-200/60 dark:border-zinc-800/80 rounded-2xl p-4.5 bg-slate-50/40 dark:bg-zinc-900/20 hover:bg-slate-50/90 dark:hover:bg-zinc-900/50 hover:border-purple-400 hover:shadow-md transition-all duration-300 flex flex-col justify-between group relative animate-in fade-in duration-200"
                       >
-                        <Pin className={`h-4 w-4 ${pinnedTemplateIds.includes(template.id) ? "fill-primary text-primary" : "opacity-0 group-hover:opacity-100"}`} />
-                      </button>
+                        <div className="absolute right-3 top-3 flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => handleTogglePinTemplate(template.id, e)}
+                            className="text-muted-foreground hover:text-purple-600 dark:hover:text-purple-400 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
+                            title={isPinned ? "Unpin template" : "Pin template"}
+                          >
+                            <Pin className={`h-4 w-4 transition-all duration-200 ${isPinned ? "fill-purple-600 text-purple-600 dark:fill-purple-400 dark:text-purple-400 rotate-45" : "opacity-40 group-hover:opacity-100"}`} />
+                          </button>
 
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteTemplate(template.id, e)}
-                        className="absolute right-3 top-3 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Delete template"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-
-                      <div className="space-y-2 mb-4">
-                        <h4 className="font-bold text-base text-foreground leading-tight truncate pr-6">
-                          {template.name}
-                        </h4>
-                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground font-medium">
-                          <span>
-                            Fields: {customFieldsCount}
-                          </span>
-                          <span>•</span>
-                          <span>
-                            Tasks: {tasksCount}
-                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteTemplate(template.id, e)}
+                            className="text-muted-foreground hover:text-destructive p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 opacity-0 group-hover:opacity-100 transition-all duration-200"
+                            title="Delete template"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
-                        <p className="text-[10px] text-muted-foreground font-normal">
-                          Created: {new Date(template.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
-                        </p>
-                      </div>
 
-                      <Button
-                        type="button"
-                        onClick={() => handleUseTemplate(template)}
-                        className="w-full text-xs font-semibold h-9"
-                      >
-                        Use Template
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                        <div className="space-y-3.5 mb-4">
+                          <h4 className="font-bold text-base text-slate-900 dark:text-white leading-tight truncate pr-16" title={template.name}>
+                            {template.name}
+                          </h4>
+                          
+                          <div className="flex flex-wrap gap-1.5">
+                            <Badge variant="secondary" className="bg-purple-50 text-purple-700 dark:bg-purple-950/20 dark:text-purple-400 border border-purple-100/50 dark:border-purple-900/30 text-[10px] font-bold py-0.5 px-2">
+                              {customFieldsCount} {customFieldsCount === 1 ? 'Field' : 'Fields'}
+                            </Badge>
+                            <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/20 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-900/30 text-[10px] font-bold py-0.5 px-2">
+                              {tasksCount} {tasksCount === 1 ? 'Task' : 'Tasks'}
+                            </Badge>
+                          </div>
+
+                          <p className="text-[10px] text-muted-foreground font-semibold flex items-center">
+                            <Calendar className="h-3 w-3 mr-1" />
+                            Created: {new Date(template.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                          </p>
+                        </div>
+
+                        <Button
+                          type="button"
+                          onClick={() => handleUseTemplate(template)}
+                          className="w-full text-xs font-semibold h-9 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-sm transition-all duration-200"
+                        >
+                          Use Template
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
 
-          <DialogFooter className="px-6 py-4 border-t shrink-0 bg-background sticky bottom-0 z-10">
+          <DialogFooter className="px-6 py-4 border-t shrink-0 bg-slate-50/50 dark:bg-zinc-900/50 sticky bottom-0 z-10">
             <Button
               type="button"
               variant="outline"
               onClick={() => setIsTemplateSelectOpen(false)}
+              className="rounded-xl shadow-sm text-xs font-bold"
             >
               Close
             </Button>

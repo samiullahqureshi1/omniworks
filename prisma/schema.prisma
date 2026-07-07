@@ -142,6 +142,10 @@ model Project {
   priority            Priority       @default(MEDIUM)
   customFields        Json?
   isRepeated          Boolean        @default(false)
+  isInternal          Boolean        @default(false)
+  department          String?
+  team                String?
+  repeatTime          String?
   createdAt           DateTime       @default(now())
 
   // Relations
