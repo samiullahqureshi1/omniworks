@@ -354,7 +354,7 @@ export async function updateProjectAction(
   }
 }
 
-export async function updateProjectStatusAction(projectId: string, status: Prisma.ProjectCreateInput["status"]) {
+export async function updateProjectStatusAction(projectId: string, statusId: string) {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
@@ -369,7 +369,7 @@ export async function updateProjectStatusAction(projectId: string, status: Prism
     // Update status
     const updated = await prisma.project.update({
       where: { id: projectId },
-      data: { status },
+      data: { statusId },
     });
 
     return { success: true, project: updated };

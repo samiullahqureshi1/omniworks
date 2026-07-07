@@ -106,7 +106,7 @@ export default function WorkspaceLayoutClient({
     });
     const data = await res.json();
     if (data.success) {
-      window.location.reload();
+      router.refresh();
     } else {
       alert(data.error || 'Failed to switch organization');
     }
@@ -147,7 +147,7 @@ export default function WorkspaceLayoutClient({
         alert(res.error);
       } else {
         setDeleteOrg(null);
-        window.location.reload();
+        router.refresh();
       }
     } catch (error) {
       alert('An error occurred while deleting the organization.');

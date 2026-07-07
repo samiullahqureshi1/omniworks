@@ -234,7 +234,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
       } else {
         toast.success('Project updated successfully');
         setIsEditProjectOpen(false);
-        window.location.reload();
+        router.refresh();
       }
     });
   }
@@ -266,7 +266,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
         setNewTaskPriority('MEDIUM');
         setNewTaskAssignees([]);
         setIsNewTaskModalOpen(false);
-        window.location.reload();
+        router.refresh();
       }
     });
   }
@@ -275,7 +275,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
     startTransition(async () => {
       const res = await updateTaskAction(taskId, { statusId: newStatus });
       if (res.error) toast.error(res.error);
-      else window.location.reload();
+      else router.refresh();
     });
   };
 

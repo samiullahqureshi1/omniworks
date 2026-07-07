@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,6 +22,7 @@ export default function GlobalAddUserModal({
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const handleAddSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -34,7 +36,7 @@ export default function GlobalAddUserModal({
       } else {
         toast.success(res.message || "User added successfully");
         setIsOpen(false);
-        window.location.reload();
+        router.refresh();
       }
     });
   };

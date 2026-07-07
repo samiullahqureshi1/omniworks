@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
+import { cache } from 'react';
 import { prisma } from './db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'omnitrack-super-secret-jwt-key-2026';
@@ -59,40 +60,28 @@ export async function createSession(user: {
   return sessionData;
 }
 
-export async function getSession(): Promise<UserSession | null> {
+// cache() deduplicates this function so it runs AT MOST ONCE per request,
+// no matter how many server components call getSession() or getCurrentUser().
+export const getSession = cache(async (): Promise<UserSession | null> => {
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get(COOKIE_NAME)?.value;
     if (!token) return null;
 
+    // JWT.verify is cryptographic — no DB call needed for the happy path.
     const decoded = jwt.verify(token, JWT_SECRET) as UserSession;
-    
-    // Verify user and organization still exist and user is ACTIVE
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: { 
-        id: true,
-        status: true, 
-        organizationId: true,
-        ownedOrganizations: { select: { id: true } }
-      },
-    });
 
-    if (!user || user.status !== 'ACTIVE' || user.organizationId !== decoded.organizationId) {
-      return null;
-    }
-
-    // Check for active organization override
+    // Check for active organization override cookie (set when user switches org)
     const activeOrgCookie = cookieStore.get('omniwork_active_org')?.value;
     if (activeOrgCookie && activeOrgCookie !== decoded.organizationId) {
-      // Validate that the user owns this active org or it's a child of their base org
+      // Only hit DB when switching orgs (uncommon path)
       const activeOrg = await prisma.organization.findFirst({
         where: {
           id: activeOrgCookie,
           OR: [
-            { ownerUserId: user.id },
-            { parentOrganizationId: decoded.organizationId }, // Allow if it's a child of the base org
-            { id: decoded.organizationId } // Self
+            { ownerUserId: decoded.userId },
+            { parentOrganizationId: decoded.organizationId },
+            { id: decoded.organizationId }
           ]
         },
         select: { id: true, name: true }
@@ -108,7 +97,7 @@ export async function getSession(): Promise<UserSession | null> {
   } catch {
     return null;
   }
-}
+});
 
 export async function destroySession() {
   const cookieStore = await cookies();

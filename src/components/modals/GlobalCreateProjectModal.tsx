@@ -141,7 +141,7 @@ export default function GlobalCreateProjectModal({
         setDescription("");
         setIsOngoing(false);
         setProjectTasks([]);
-        window.location.reload();
+        router.refresh();
       }
     });
   };

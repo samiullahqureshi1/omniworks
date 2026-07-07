@@ -378,7 +378,7 @@ export default function ProjectsClient({
       if (res.error) {
         toast.error(res.error);
         // Revert optimistic update
-        window.location.reload();
+        router.refresh();
       } else {
         toast.success(`Project moved to ${newStatusName}`);
       }
@@ -427,7 +427,7 @@ export default function ProjectsClient({
         toast.success("Project created successfully");
         setIsCreateOpen(false);
         setProjectTasks([]);
-        window.location.reload();
+        router.refresh();
       }
     });
   };
@@ -448,7 +448,7 @@ export default function ProjectsClient({
       } else {
         toast.success("Client created successfully");
         setIsQuickClientOpen(false);
-        window.location.reload(); // Refresh to update client list
+        router.refresh(); // Refresh to update client list
       }
     });
   };

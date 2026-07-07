@@ -59,7 +59,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
         toast.success(res.message);
         setIsAddModalOpen(false);
         // Soft refresh the page data
-        window.location.reload(); 
+        router.refresh(); 
       }
     });
   };
@@ -77,7 +77,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
       } else {
         toast.success(res.message);
         setEditUser(null);
-        window.location.reload();
+        router.refresh();
       }
     });
   };
@@ -121,7 +121,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
       } else {
         toast.success(res.message);
         setDeactivateUser(null);
-        window.location.reload();
+        router.refresh();
       }
     });
   };
@@ -135,7 +135,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
       } else {
         toast.success(res.message);
         setDeleteUser(null);
-        window.location.reload();
+        router.refresh();
       }
     });
   };
