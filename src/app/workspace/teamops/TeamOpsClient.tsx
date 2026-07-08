@@ -31,7 +31,9 @@ import {
   ShieldCheck,
   Activity,
   PlusCircle,
-  FileText
+  FileText,
+  Shield,
+  Crown,
 } from "lucide-react";
 import {
   Table,
@@ -185,10 +187,12 @@ export default function TeamOpsClient({
   const [rules, setRules] = useState<any[]>([]);
   const [ruleName, setRuleName] = useState("");
   const [ruleDesc, setRuleDesc] = useState("");
-  const [ruleFreq, setRuleFreq] = useState("DAILY");
-  const [ruleTime, setRuleTime] = useState("09:00 AM");
-  const [ruleAction, setRuleAction] = useState("SEND_REMINDER");
-  const [ruleRecipients, setRuleRecipients] = useState<string[]>(["PROJECT_MANAGER"]);
+  const [ruleTriggerField, setRuleTriggerField] = useState("Status");
+  const [ruleTriggerOperator, setRuleTriggerOperator] = useState("Equals");
+  const [ruleTriggerValue, setRuleTriggerValue] = useState("");
+  const [ruleAction, setRuleAction] = useState("In-app Notification");
+  const [ruleRecipients, setRuleRecipients] = useState<string[]>([]);
+  const [ruleRecipientSearch, setRuleRecipientSearch] = useState("");
   const [templateName, setTemplateName] = useState("");
 
   const pinnedTemplates = useMemo(() => {
@@ -392,9 +396,11 @@ export default function TeamOpsClient({
       const res = await createRuleAction({
         name: ruleName,
         description: ruleDesc,
-        frequency: ruleFreq,
-        reminderTime: ruleTime,
+        triggerField: ruleTriggerField,
+        triggerOperator: ruleTriggerOperator,
+        triggerValue: ruleTriggerValue,
         actionType: ruleAction,
+        actionRecipients: ruleRecipients,
         recipients: ruleRecipients,
       });
 
@@ -408,9 +414,23 @@ export default function TeamOpsClient({
         setIsCreateRuleOpen(false);
         setRuleName("");
         setRuleDesc("");
+        setRuleTriggerField("Status");
+        setRuleTriggerOperator("Equals");
+        setRuleTriggerValue("");
+        setRuleAction("In-app Notification");
+        setRuleRecipients([]);
+        setRuleRecipientSearch("");
         fetchRules();
       }
     });
+  };
+
+  const toggleRuleRecipient = (role: string) => {
+    if (ruleRecipients.includes(role)) {
+      setRuleRecipients((prev) => prev.filter((r) => r !== role));
+    } else {
+      setRuleRecipients((prev) => [...prev, role]);
+    }
   };
 
   const handleCreateProject = async (e: React.FormEvent) => {
@@ -1733,60 +1753,226 @@ export default function TeamOpsClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* CREATE NEW RULE DIALOG */}
+         {/* CREATE NEW RULE DIALOG */}
       <Dialog open={isCreateRuleOpen} onOpenChange={setIsCreateRuleOpen}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[550px] bg-background border-border max-h-[85vh] p-0 flex flex-col overflow-hidden">
+          <DialogHeader className="p-6 pb-4 border-b shrink-0">
             <DialogTitle>Create Workflow Rule</DialogTitle>
             <DialogDescription>Setup a rule to trigger actions based on criteria.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreateRule} className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Rule Name <span className="text-destructive">*</span></label>
-              <Input
-                value={ruleName}
-                onChange={(e) => setRuleName(e.target.value)}
-                required
-                placeholder="e.g. Daily Progress Reminder"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Description</label>
-              <Input
-                value={ruleDesc}
-                onChange={(e) => setRuleDesc(e.target.value)}
-                placeholder="Describe the automation rule behavior"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Frequency</label>
-                <select
-                  value={ruleFreq}
-                  onChange={(e) => setRuleFreq(e.target.value)}
-                  className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
-                >
-                  <option value="DAILY">Daily</option>
-                  <option value="WEEKLY">Weekly</option>
-                  <option value="MONTHLY">Monthly</option>
-                </select>
+          <form onSubmit={handleCreateRule} className="flex flex-col flex-1 overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Rule Name <span className="text-destructive">*</span></label>
+                <Input
+                  value={ruleName}
+                  onChange={(e) => setRuleName(e.target.value)}
+                  required
+                  placeholder="e.g. Daily Progress Reminder"
+                />
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Reminder Time</label>
-                <select
-                  value={ruleTime}
-                  onChange={(e) => setRuleTime(e.target.value)}
-                  className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
-                >
-                  <option value="09:00 AM">09:00 AM</option>
-                  <option value="12:00 PM">12:00 PM</option>
-                  <option value="04:00 PM">04:00 PM</option>
-                  <option value="06:00 PM">06:00 PM</option>
-                </select>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Description</label>
+                <Input
+                  value={ruleDesc}
+                  onChange={(e) => setRuleDesc(e.target.value)}
+                  placeholder="Describe the automation rule behavior"
+                />
+              </div>
+
+              {/* IF Trigger block */}
+              <div className="space-y-3 p-4 border rounded-2xl bg-muted/15">
+                <div className="text-xs font-bold text-primary flex items-center gap-1">
+                  <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold">IF</Badge>
+                  Condition
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Field</label>
+                    <select
+                      value={ruleTriggerField}
+                      onChange={(e) => setRuleTriggerField(e.target.value)}
+                      className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                    >
+                      <option value="Title">Title</option>
+                      <option value="Status">Status</option>
+                      <option value="Priority">Priority</option>
+                      <option value="Due Date">Due Date</option>
+                      <option value="Assigned User">Assigned User</option>
+                      <option value="Project">Project</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Condition</label>
+                    <select
+                      value={ruleTriggerOperator}
+                      onChange={(e) => setRuleTriggerOperator(e.target.value)}
+                      className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                    >
+                      <option value="Contains">Contains</option>
+                      <option value="Equals">Equals</option>
+                      <option value="Starts With">Starts With</option>
+                      <option value="Ends With">Ends With</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5 col-span-2">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Value</label>
+                    <Input
+                      required
+                      value={ruleTriggerValue}
+                      onChange={(e) => setRuleTriggerValue(e.target.value)}
+                      placeholder="e.g. Bug"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* THEN Action block */}
+              <div className="space-y-3 p-4 border rounded-2xl bg-muted/15">
+                <div className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                  <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold">THEN</Badge>
+                  Action & Recipients
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Action</label>
+                  <select
+                    value={ruleAction}
+                    onChange={(e) => setRuleAction(e.target.value)}
+                    className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1"
+                  >
+                    <option value="In-app Notification">In-app Notification</option>
+                    <option value="Notification Email">Notification Email</option>
+                    <option value="Create Task">Create Task</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">To (Recipients)</label>
+                  
+                  {/* Selected Pills */}
+                  {ruleRecipients.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50 dark:bg-zinc-900 border rounded-xl">
+                      {ruleRecipients.map(id => {
+                        const roleLabel = id === 'PROJECT_MANAGER' ? 'Project Manager' : id === 'PROJECT_OWNER' ? 'Project Owner' : id === 'ASSIGNED_USER' ? 'All Assigned Users' : '';
+                        const userLabel = users.find(u => u.id === id)?.name || id;
+                        const displayName = roleLabel || userLabel;
+                        return (
+                          <Badge key={id} variant="secondary" className="gap-1.5 pl-2 pr-1 py-0.5 rounded-lg text-[10px] font-semibold bg-background shadow-sm border border-slate-200 text-slate-800 dark:text-slate-200">
+                            {displayName}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); toggleRuleRecipient(id); }}
+                              className="hover:bg-muted p-0.5 rounded-full text-slate-500 hover:text-slate-900"
+                            >
+                              <X size={10} />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input
+                      placeholder="Search roles or team members..."
+                      value={ruleRecipientSearch}
+                      onChange={(e) => setRuleRecipientSearch(e.target.value)}
+                      className="pl-9 pr-4 rounded-xl text-sm"
+                    />
+                  </div>
+
+                  {/* Scroll Box */}
+                  <div className="border rounded-2xl p-2.5 max-h-[200px] overflow-y-auto space-y-3 bg-background custom-scrollbar">
+                    
+                    {/* Default Roles Grid */}
+                    {('project manager'.includes(ruleRecipientSearch.toLowerCase()) || 
+                      'project owner'.includes(ruleRecipientSearch.toLowerCase()) || 
+                      'all assigned users'.includes(ruleRecipientSearch.toLowerCase())) && (
+                      <div className="space-y-1.5">
+                        <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider block px-1">Roles</span>
+                        <div className="grid grid-cols-1 gap-2">
+                          {[
+                            { id: 'PROJECT_MANAGER', label: 'Project Manager (PM)', desc: 'Person leading project operations', icon: Shield },
+                            { id: 'PROJECT_OWNER', label: 'Project Owner', desc: 'Organization owner or creator', icon: Crown },
+                            { id: 'ASSIGNED_USER', label: 'All Assigned Users', desc: 'All members assigned to the task/project', icon: Users }
+                          ].filter(role => role.label.toLowerCase().includes(ruleRecipientSearch.toLowerCase())).map(role => {
+                            const isSel = ruleRecipients.includes(role.id);
+                            const IconComp = role.icon;
+                            return (
+                              <div 
+                                key={role.id} 
+                                onClick={() => toggleRuleRecipient(role.id)}
+                                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                                  isSel 
+                                    ? 'border-primary bg-primary/5 text-primary' 
+                                    : 'border-slate-100 dark:border-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-900'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-lg shrink-0 ${isSel ? 'bg-primary/10 text-primary' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500'}`}>
+                                    <IconComp size={16} />
+                                  </div>
+                                  <div className="text-left">
+                                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-none">{role.label}</p>
+                                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{role.desc}</p>
+                                  </div>
+                                </div>
+                                <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${isSel ? 'border-primary bg-primary text-white' : 'border-slate-300'}`}>
+                                  {isSel && <Check size={10} className="stroke-[3]" />}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Specific Users List */}
+                    <div className="space-y-1.5 pt-1.5 border-t border-dashed">
+                      <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider block px-1">Specific Users</span>
+                      <div className="space-y-1.5">
+                        {users.filter(u => 
+                          u.name.toLowerCase().includes(ruleRecipientSearch.toLowerCase()) || 
+                          u.email.toLowerCase().includes(ruleRecipientSearch.toLowerCase())
+                        ).map(user => {
+                          const isSel = ruleRecipients.includes(user.id);
+                          return (
+                            <div 
+                              key={user.id} 
+                              onClick={() => toggleRuleRecipient(user.id)}
+                              className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
+                                isSel 
+                                  ? 'border-primary bg-primary/5 text-primary' 
+                                  : 'border-slate-100 dark:border-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-900'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-slate-200 to-slate-300 text-slate-700 dark:from-zinc-700 dark:to-zinc-800 dark:text-zinc-300 flex items-center justify-center text-xs font-extrabold shrink-0">
+                                  {user.name.substring(0, 2).toUpperCase()}
+                                </div>
+                                <div className="text-left">
+                                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-none">{user.name}</p>
+                                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{user.email}</p>
+                                </div>
+                              </div>
+                              <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${isSel ? 'border-primary bg-primary text-white' : 'border-slate-300'}`}>
+                                {isSel && <Check size={10} className="stroke-[3]" />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
               </div>
             </div>
-            <DialogFooter className="pt-4 border-t mt-4">
+
+            <DialogFooter className="p-6 pt-4 border-t bg-muted/10 shrink-0">
               <Button type="button" variant="outline" onClick={() => setIsCreateRuleOpen(false)}>Cancel</Button>
               <Button type="submit" disabled={isPending}>{isPending ? "Creating..." : "Create Rule"}</Button>
             </DialogFooter>
