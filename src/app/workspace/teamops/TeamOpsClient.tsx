@@ -34,6 +34,7 @@ import {
   FileText,
   Shield,
   Crown,
+  Star,
 } from "lucide-react";
 import {
   Table,
@@ -194,12 +195,20 @@ export default function TeamOpsClient({
   const [ruleRecipients, setRuleRecipients] = useState<string[]>([]);
   const [ruleRecipientSearch, setRuleRecipientSearch] = useState("");
   const [templateName, setTemplateName] = useState("");
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [defaultTemplateId, setDefaultTemplateId] = useState<string | null>(null);
+
+  // Project Selection & Deletion States
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
 
   const pinnedTemplates = useMemo(() => {
     return templates.filter((t) => pinnedTemplateIds.includes(t.id));
   }, [templates, pinnedTemplateIds]);
 
   const fetchTemplates = async () => {
+    setIsLoadingTemplates(true);
     try {
       const res = await getTeamOpsProjectTemplatesAction();
       if (res.success && res.templates) {
@@ -207,6 +216,8 @@ export default function TeamOpsClient({
       }
     } catch (e) {
       toast.error("Failed to load templates");
+    } finally {
+      setIsLoadingTemplates(false);
     }
   };
 
@@ -230,11 +241,28 @@ export default function TeamOpsClient({
         setPinnedTemplateIds(JSON.parse(savedPinned));
       } catch (e) {}
     }
+    const savedDefault = localStorage.getItem("omniwork_default_teamops_template_id");
+    if (savedDefault) {
+      setDefaultTemplateId(savedDefault);
+    }
     const savedView = localStorage.getItem("omniwork_teamops_view");
     if (savedView === "TABLE" || savedView === "KANBAN" || savedView === "LIST") {
       setViewMode(savedView);
     }
   }, []);
+
+  const handleSetDefaultTemplate = (templateId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newDefault = defaultTemplateId === templateId ? null : templateId;
+    setDefaultTemplateId(newDefault);
+    if (newDefault) {
+      localStorage.setItem("omniwork_default_teamops_template_id", newDefault);
+      toast.success("Template set as default");
+    } else {
+      localStorage.removeItem("omniwork_default_teamops_template_id");
+      toast.success("Default template removed");
+    }
+  };
 
   const handleTogglePinTemplate = (templateId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -333,6 +361,33 @@ export default function TeamOpsClient({
     setIsTemplateSelectOpen(false);
     setIsCreateOpen(true);
     toast.success("Applied template configuration");
+  };
+
+  const handleOpenCreateProject = () => {
+    if (defaultTemplateId) {
+      const defaultTemplate = templates.find((t) => t.id === defaultTemplateId);
+      if (defaultTemplate) {
+        handleUseTemplate(defaultTemplate);
+        return;
+      }
+    }
+    setIsRepeatEnabled(false);
+    setFormName("");
+    setFormPMId("");
+    setFormStatusId("");
+    setFormPriority("MEDIUM");
+    setFormStartDate("");
+    setFormEndDate("");
+    setFormBudget("");
+    setFormAllocatedHours("");
+    setFormNotes("");
+    setDescription("");
+    setFormDepartment("");
+    setFormTeam("");
+    setProjectTasks([]);
+    setCustomFields([]);
+    setAttachedRuleIds([]);
+    setIsCreateOpen(true);
   };
 
   const handleSaveTemplate = async (e: React.FormEvent) => {
@@ -510,15 +565,66 @@ export default function TeamOpsClient({
     });
   };
 
-  const handleDeleteProject = async (projectId: string) => {
-    if (!confirm("Are you sure you want to delete this internal project? This will permanently delete all related tasks.")) return;
-    const res = await deleteTeamOpsProjectAction(projectId);
-    if (res.error) {
-      toast.error(res.error);
+  const toggleSelectProject = (projectId: string) => {
+    setSelectedProjectIds((prev) =>
+      prev.includes(projectId) ? prev.filter((id) => id !== projectId) : [...prev, projectId]
+    );
+  };
+
+  const toggleSelectAllProjects = () => {
+    if (selectedProjectIds.length === filteredProjects.length) {
+      setSelectedProjectIds([]);
     } else {
-      toast.success("Project deleted successfully");
-      setProjects(projects.filter((p) => p.id !== projectId));
+      setSelectedProjectIds(filteredProjects.map((p) => p.id));
     }
+  };
+
+  const confirmDeleteProject = (projectId: string) => {
+    setProjectToDelete(projectId);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const confirmBulkDelete = () => {
+    setProjectToDelete(null);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const executeDeletion = async () => {
+    startTransition(async () => {
+      if (projectToDelete) {
+        // Single delete
+        const res = await deleteTeamOpsProjectAction(projectToDelete);
+        if (res.error) {
+          toast.error(res.error);
+        } else {
+          toast.success("Project deleted successfully");
+          setProjects((prev) => prev.filter((p) => p.id !== projectToDelete));
+          setSelectedProjectIds((prev) => prev.filter((id) => id !== projectToDelete));
+        }
+      } else {
+        // Bulk delete
+        let successCount = 0;
+        let failCount = 0;
+        for (const id of selectedProjectIds) {
+          const res = await deleteTeamOpsProjectAction(id);
+          if (res.success) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        }
+        if (successCount > 0) {
+          toast.success(`Deleted ${successCount} project(s) successfully.`);
+          setProjects((prev) => prev.filter((p) => !selectedProjectIds.includes(p.id)));
+          setSelectedProjectIds([]);
+        }
+        if (failCount > 0) {
+          toast.error(`Failed to delete ${failCount} project(s).`);
+        }
+      }
+      setIsDeleteConfirmOpen(false);
+      setProjectToDelete(null);
+    });
   };
 
   const members = users.filter((u) => u.role === "MEMBER" || u.role === "OWNER");
@@ -617,25 +723,7 @@ export default function TeamOpsClient({
         {/* Buttons */}
         <div className="flex items-center -space-x-px shadow-sm rounded-xl overflow-hidden self-stretch sm:self-auto">
           <Button
-            onClick={() => {
-              setIsRepeatEnabled(false);
-              setFormName("");
-              setFormPMId("");
-              setFormStatusId("");
-              setFormPriority("MEDIUM");
-              setFormStartDate("");
-              setFormEndDate("");
-              setFormBudget("");
-              setFormAllocatedHours("");
-              setFormNotes("");
-              setDescription("");
-              setFormDepartment("");
-              setFormTeam("");
-              setProjectTasks([]);
-              setCustomFields([]);
-              setAttachedRuleIds([]);
-              setIsCreateOpen(true);
-            }}
+            onClick={handleOpenCreateProject}
             className="rounded-r-none h-10 px-4 flex-1 sm:flex-initial"
           >
             <Plus className="mr-2 h-4 w-4" /> New Internal Project
@@ -648,10 +736,7 @@ export default function TeamOpsClient({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1.5 z-50">
               <DropdownMenuItem
-                onClick={() => {
-                  setIsRepeatEnabled(false);
-                  setIsCreateOpen(true);
-                }}
+                onClick={handleOpenCreateProject}
                 className="cursor-pointer rounded-lg px-3 py-2 text-sm hover:bg-muted"
               >
                 Create New Internal Project
@@ -851,12 +936,54 @@ export default function TeamOpsClient({
             </div>
           </div>
 
+          {/* Bulk Actions Panel */}
+          {selectedProjectIds.length > 0 && (
+            <div className="flex items-center justify-between p-3.5 bg-purple-50 dark:bg-purple-950/15 border border-purple-100 dark:border-purple-900/30 rounded-2xl animate-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center gap-2.5">
+                <div className="h-5 w-5 bg-purple-600 text-white rounded-full flex items-center justify-center text-[10px] font-extrabold shadow-sm">
+                  {selectedProjectIds.length}
+                </div>
+                <span className="text-xs font-semibold text-purple-950 dark:text-purple-300">
+                  Project{selectedProjectIds.length > 1 ? 's' : ''} Selected
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedProjectIds([])}
+                  className="h-8 rounded-xl text-xs font-semibold"
+                >
+                  Clear Selection
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={confirmBulkDelete}
+                  className="h-8 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-700 flex items-center gap-1.5"
+                >
+                  <Trash2 size={13} /> Delete Selected
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Table View */}
           {viewMode === "TABLE" && (
             <div className="border rounded-2xl bg-white dark:bg-zinc-900 overflow-hidden shadow-sm">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12 px-4">
+                      <input
+                        type="checkbox"
+                        checked={filteredProjects.length > 0 && selectedProjectIds.length === filteredProjects.length}
+                        onChange={toggleSelectAllProjects}
+                        className="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                      />
+                    </TableHead>
                     <TableHead>Internal Project</TableHead>
                     <TableHead>Department</TableHead>
                     <TableHead>Team</TableHead>
@@ -867,51 +994,63 @@ export default function TeamOpsClient({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredProjects.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-semibold">
-                        <Link href={`/workspace/teamops/${p.id}`} className="hover:underline text-purple-600 dark:text-purple-400">
-                          {p.name}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                        {p.department || "—"}
-                      </TableCell>
-                      <TableCell className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                        {p.team || "—"}
-                      </TableCell>
-                      <TableCell>
-                        {p.projectManager ? (
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-6 w-6">
-                              <AvatarFallback className="text-[10px]">{p.projectManager.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <span className="text-xs font-medium">{p.projectManager.name}</span>
-                          </div>
-                        ) : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground font-semibold">
-                        {formatDate(p.startDate)} - {p.isOngoing ? "Ongoing" : formatDate(p.endDate)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={getStatusColor(p.status?.name)}>
-                          {p.status?.name || "No Status"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <button
-                          onClick={() => handleDeleteProject(p.id)}
-                          className="text-muted-foreground hover:text-destructive p-1 rounded transition-colors"
-                          title="Delete internal project"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredProjects.map((p) => {
+                    const isSel = selectedProjectIds.includes(p.id);
+                    return (
+                      <TableRow key={p.id} className={isSel ? "bg-purple-50/20 dark:bg-purple-950/5 hover:bg-purple-50/30 dark:hover:bg-purple-950/10" : ""}>
+                        <TableCell className="w-12 px-4">
+                          <input
+                            type="checkbox"
+                            checked={isSel}
+                            onChange={() => toggleSelectProject(p.id)}
+                            className="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                          />
+                        </TableCell>
+                        <TableCell className="font-semibold">
+                          <Link href={`/workspace/teamops/${p.id}`} className="hover:underline text-purple-600 dark:text-purple-400">
+                            {p.name}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                          {p.department || "—"}
+                        </TableCell>
+                        <TableCell className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                          {p.team || "—"}
+                        </TableCell>
+                        <TableCell>
+                          {p.projectManager ? (
+                            <div className="flex items-center gap-2">
+                              <Avatar className="h-6 w-6">
+                                <AvatarFallback className="text-[10px]">{p.projectManager.name.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              <span className="text-xs font-medium">{p.projectManager.name}</span>
+                            </div>
+                          ) : "—"}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground font-semibold">
+                          {formatDate(p.startDate)} - {p.isOngoing ? "Ongoing" : formatDate(p.endDate)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={getStatusColor(p.status?.name)}>
+                            {p.status?.name || "No Status"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <button
+                            type="button"
+                            onClick={() => confirmDeleteProject(p.id)}
+                            className="text-muted-foreground hover:text-destructive p-1 rounded transition-colors"
+                            title="Delete internal project"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                   {filteredProjects.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-10 text-muted-foreground text-sm">
+                      <TableCell colSpan={8} className="text-center py-10 text-muted-foreground text-sm">
                         No projects match filters.
                       </TableCell>
                     </TableRow>
@@ -972,32 +1111,42 @@ export default function TeamOpsClient({
           {/* List View */}
           {viewMode === "LIST" && (
             <div className="space-y-4">
-              {filteredProjects.map((p) => (
-                <div key={p.id} className="bg-white dark:bg-zinc-900 border rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:border-purple-400 transition-colors">
-                  <div className="space-y-1.5 min-w-0">
-                    <Link href={`/workspace/teamops/${p.id}`} className="text-base font-bold hover:underline text-purple-600 dark:text-purple-400 block truncate">
-                      {p.name}
-                    </Link>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground font-semibold">
-                      {p.department && <span>Dept: {p.department}</span>}
-                      {p.team && <span>• Team: {p.team}</span>}
-                      <span>• PM: {p.projectManager?.name || "Unassigned"}</span>
-                      <span>• Timeline: {formatDate(p.startDate)} - {p.isOngoing ? "Ongoing" : formatDate(p.endDate)}</span>
+              {filteredProjects.map((p) => {
+                const isSel = selectedProjectIds.includes(p.id);
+                return (
+                  <div key={p.id} className={`bg-white dark:bg-zinc-900 border rounded-2xl p-5 shadow-sm flex flex-row items-center gap-4 hover:border-purple-400 transition-colors ${isSel ? 'border-purple-300 dark:border-purple-800 bg-purple-50/10' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={isSel}
+                      onChange={() => toggleSelectProject(p.id)}
+                      className="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4 cursor-pointer shrink-0"
+                    />
+                    <div className="space-y-1.5 min-w-0 flex-1">
+                      <Link href={`/workspace/teamops/${p.id}`} className="text-base font-bold hover:underline text-purple-600 dark:text-purple-400 block truncate">
+                        {p.name}
+                      </Link>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground font-semibold">
+                        {p.department && <span>Dept: {p.department}</span>}
+                        {p.team && <span>• Team: {p.team}</span>}
+                        <span>• PM: {p.projectManager?.name || "Unassigned"}</span>
+                        <span>• Timeline: {formatDate(p.startDate)} - {p.isOngoing ? "Ongoing" : formatDate(p.endDate)}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <Badge variant="outline" className={getStatusColor(p.status?.name)}>
+                        {p.status?.name || "No Status"}
+                      </Badge>
+                      <button
+                        type="button"
+                        onClick={() => confirmDeleteProject(p.id)}
+                        className="text-muted-foreground hover:text-destructive p-1 rounded transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Badge variant="outline" className={getStatusColor(p.status?.name)}>
-                      {p.status?.name || "No Status"}
-                    </Badge>
-                    <button
-                      onClick={() => handleDeleteProject(p.id)}
-                      className="text-muted-foreground hover:text-destructive p-1 rounded transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {filteredProjects.length === 0 && (
                 <div className="text-center py-12 text-sm text-muted-foreground bg-white dark:bg-zinc-900 border rounded-2xl">
                   No projects match filters.
@@ -1163,90 +1312,65 @@ export default function TeamOpsClient({
       {/* CREATE MODAL */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent className="sm:max-w-[700px] h-[90vh] p-0 flex flex-col overflow-hidden">
-          <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shrink-0 shadow-sm">
-            <DialogTitle>Create New Internal Project</DialogTitle>
-            <DialogDescription>
-              Create a checklist and workspace for internal department, team operations, or planning.
-            </DialogDescription>
+          <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shrink-0 shadow-sm flex flex-row justify-between items-center gap-4">
+            <div className="space-y-1">
+              <DialogTitle>Create New Internal Project</DialogTitle>
+              <DialogDescription>
+                Create a checklist and workspace for internal department, team operations, or planning.
+              </DialogDescription>
+            </div>
+
+            {/* Rules Selector in Header */}
+            <div className="flex items-center gap-2 shrink-0">
+              {attachedRuleIds.length > 0 && (
+                <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border border-indigo-100 dark:bg-indigo-950/30 dark:text-indigo-400 text-[10px] font-bold px-2 py-0.5 rounded-lg">
+                  {attachedRuleIds.length} Rule{attachedRuleIds.length > 1 ? 's' : ''} Attached
+                </Badge>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline" size="sm" className="h-9 rounded-xl border bg-background px-3 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                    Select Rules... <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-58 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1.5 z-50">
+                  {rules.length === 0 ? (
+                    <div className="p-2.5 text-center text-xs text-muted-foreground">No active rules</div>
+                  ) : (
+                    rules.map((r) => {
+                      const isAttached = attachedRuleIds.includes(r.id);
+                      return (
+                        <DropdownMenuItem
+                          key={r.id}
+                          onClick={() => {
+                            if (isAttached) {
+                              setAttachedRuleIds(prev => prev.filter(id => id !== r.id));
+                            } else {
+                              setAttachedRuleIds(prev => [...prev, r.id]);
+                            }
+                          }}
+                          className="cursor-pointer rounded-lg px-2.5 py-2 text-xs flex items-center justify-between hover:bg-muted"
+                        >
+                          <span>{r.name}</span>
+                          {isAttached && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />}
+                        </DropdownMenuItem>
+                      );
+                    })
+                  )}
+                  <DropdownMenuSeparator className="my-1 border-t" />
+                  <DropdownMenuItem
+                    onClick={() => setIsCreateRuleOpen(true)}
+                    className="cursor-pointer rounded-lg px-2.5 py-2 text-xs text-primary hover:bg-primary/5 font-semibold flex items-center gap-1"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Create New Rule
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 custom-scrollbar">
             <form onSubmit={handleCreateProject} className="space-y-6 pb-6">
-              
-              {/* Rules Selector */}
-              <div className="space-y-3 bg-indigo-50/50 dark:bg-indigo-950/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/30">
-                <div className="flex justify-between items-center">
-                  <label className="text-sm font-bold text-foreground flex items-center gap-1">
-                    <Cpu size={14} className="text-indigo-600 dark:text-indigo-400" />
-                    Automation Rules
-                  </label>
-                  <span className="text-xs text-muted-foreground">Select automation rules to run on this project.</span>
-                </div>
-                <div className="flex gap-2 items-center flex-wrap">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button type="button" variant="outline" size="sm" className="h-9 rounded-xl border bg-background px-3 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
-                        Select Rules... <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-58 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1.5 z-50">
-                      {rules.length === 0 ? (
-                        <div className="p-2.5 text-center text-xs text-muted-foreground">No active rules</div>
-                      ) : (
-                        rules.map((r) => {
-                          const isAttached = attachedRuleIds.includes(r.id);
-                          return (
-                            <DropdownMenuItem
-                              key={r.id}
-                              onClick={() => {
-                                if (isAttached) {
-                                  setAttachedRuleIds(prev => prev.filter(id => id !== r.id));
-                                } else {
-                                  setAttachedRuleIds(prev => [...prev, r.id]);
-                                }
-                              }}
-                              className="cursor-pointer rounded-lg px-2.5 py-2 text-xs flex items-center justify-between hover:bg-muted"
-                            >
-                              <span>{r.name}</span>
-                              {isAttached && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />}
-                            </DropdownMenuItem>
-                          );
-                        })
-                      )}
-                      <DropdownMenuSeparator className="my-1 border-t" />
-                      <DropdownMenuItem
-                        onClick={() => setIsCreateRuleOpen(true)}
-                        className="cursor-pointer rounded-lg px-2.5 py-2 text-xs text-primary hover:bg-primary/5 font-semibold flex items-center gap-1"
-                      >
-                        <Plus className="h-3.5 w-3.5" /> Create New Rule
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  <div className="flex flex-wrap gap-1.5 items-center">
-                    {attachedRuleIds.map((id) => {
-                      const r = rules.find((rule) => rule.id === id);
-                      if (!r) return null;
-                      return (
-                        <Badge
-                          key={id}
-                          variant="secondary"
-                          className="py-1 px-2.5 rounded-lg flex items-center gap-1.5 bg-indigo-50 text-indigo-700 border border-indigo-100 dark:bg-indigo-950/30 dark:text-indigo-400 text-xs font-semibold"
-                        >
-                          {r.name}
-                          <button
-                            type="button"
-                            onClick={() => setAttachedRuleIds((prev) => prev.filter((rid) => rid !== id))}
-                            className="hover:text-destructive text-indigo-500 rounded-full p-0.5"
-                          >
-                            <X size={10} />
-                          </button>
-                        </Badge>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
 
               {/* Project Basics */}
               <div className="grid grid-cols-2 gap-4">
@@ -1634,10 +1758,12 @@ export default function TeamOpsClient({
 
       {/* TEMPLATE SELECTION DIALOG */}
       <Dialog open={isTemplateSelectOpen} onOpenChange={setIsTemplateSelectOpen}>
-        <DialogContent className="sm:max-w-[620px] h-[75vh] flex flex-col overflow-hidden bg-background border-border p-0 rounded-2xl shadow-xl">
+        <DialogContent className="sm:max-w-[850px] h-[80vh] flex flex-col overflow-hidden bg-background border-border p-0 rounded-2xl shadow-xl">
           <DialogHeader className="px-6 py-5 border-b shrink-0 bg-slate-50/50 dark:bg-zinc-900/50 z-10 sticky top-0">
-            <DialogTitle className="text-xl font-bold">Select an Operational Checklist</DialogTitle>
-            <DialogDescription className="text-xs mt-1">Apply a saved workflow template configuration.</DialogDescription>
+            <DialogTitle className="text-xl font-extrabold tracking-tight">Select an Operational Checklist</DialogTitle>
+            <DialogDescription className="text-xs mt-1 text-muted-foreground">
+              Choose one of your saved custom configurations. You can set any template as default using the star icon.
+            </DialogDescription>
           </DialogHeader>
 
           {/* Search bar inside modal */}
@@ -1648,13 +1774,17 @@ export default function TeamOpsClient({
                 placeholder="Search templates by name..."
                 value={templateSearchQuery}
                 onChange={(e) => setTemplateSearchQuery(e.target.value)}
-                className="pl-9 h-9.5 rounded-xl border bg-background text-sm shadow-sm"
+                className="pl-9 h-10 rounded-xl border bg-background text-sm shadow-sm"
               />
             </div>
           </div>
 
           <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
-            {templates.length === 0 ? (
+            {isLoadingTemplates ? (
+              <div className="flex items-center justify-center h-48">
+                <span className="text-sm text-muted-foreground animate-pulse font-medium">Loading templates...</span>
+              </div>
+            ) : templates.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 border border-dashed rounded-2xl p-6 text-center">
                 <FolderKanban className="h-8 w-8 text-muted-foreground mb-2" />
                 <h3 className="font-semibold text-sm">No templates saved yet</h3>
@@ -1663,30 +1793,57 @@ export default function TeamOpsClient({
                 </p>
               </div>
             ) : (() => {
-              const filtered = templates.filter(t => t.name.toLowerCase().includes(templateSearchQuery.toLowerCase()));
+              const query = templateSearchQuery.toLowerCase();
+              const filtered = templates.filter(t => t.name.toLowerCase().includes(query));
+
               if (filtered.length === 0) {
                 return (
-                  <div className="text-center py-12 text-sm text-muted-foreground font-medium italic">
+                  <div className="text-center py-16 text-sm text-muted-foreground font-medium italic border border-dashed rounded-2xl p-8">
                     No templates match "{templateSearchQuery}"
                   </div>
                 );
               }
+
+              // Sort default template to the top
+              const sorted = [...filtered].sort((a, b) => {
+                if (a.id === defaultTemplateId) return -1;
+                if (b.id === defaultTemplateId) return 1;
+                return 0;
+              });
+
               return (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {filtered.map((template) => {
+                  {sorted.map((template) => {
                     const config = template.config || {};
-                    const customFieldsCount = Array.isArray(config.customFields)
-                      ? config.customFields.length
-                      : 0;
+                    const customFieldsCount = Array.isArray(config.customFields) ? config.customFields.length : 0;
                     const tasksCount = Array.isArray(config.tasks) ? config.tasks.length : 0;
                     const isPinned = pinnedTemplateIds.includes(template.id);
+                    const isDefault = template.id === defaultTemplateId;
 
                     return (
                       <div
                         key={template.id}
-                        className="border border-slate-200/60 dark:border-zinc-800/80 rounded-2xl p-4.5 bg-slate-50/40 dark:bg-zinc-900/20 hover:bg-slate-50/90 dark:hover:bg-zinc-900/50 hover:border-purple-400 hover:shadow-md transition-all duration-300 flex flex-col justify-between group relative animate-in fade-in duration-200"
+                        className={`border rounded-2xl p-4.5 bg-slate-50/40 dark:bg-zinc-900/20 hover:shadow-md transition-all duration-300 flex flex-col justify-between group relative animate-in fade-in duration-200 ${
+                          isDefault 
+                            ? 'border-amber-400 dark:border-amber-600 bg-amber-50/5 dark:bg-amber-950/5 shadow-sm' 
+                            : 'border-slate-200/60 dark:border-zinc-800/80 hover:border-purple-400'
+                        }`}
                       >
-                        <div className="absolute right-3 top-3 flex items-center gap-1">
+                        <div className="absolute right-3 top-3 flex items-center gap-1.5">
+                          {isDefault && (
+                            <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 text-[9px] font-bold py-0.5 px-1.5 rounded-lg border border-amber-200 dark:border-amber-900 mr-1.5">
+                              Default
+                            </Badge>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => handleSetDefaultTemplate(template.id, e)}
+                            className="text-muted-foreground hover:text-amber-400 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
+                            title={isDefault ? "Remove default status" : "Set as default template"}
+                          >
+                            <Star className={`h-4 w-4 transition-all duration-200 ${isDefault ? "fill-amber-400 text-amber-400" : "opacity-40 group-hover:opacity-100"}`} />
+                          </button>
+
                           <button
                             type="button"
                             onClick={(e) => handleTogglePinTemplate(template.id, e)}
@@ -1707,7 +1864,7 @@ export default function TeamOpsClient({
                         </div>
 
                         <div className="space-y-3.5 mb-4">
-                          <h4 className="font-bold text-base text-slate-900 dark:text-white leading-tight truncate pr-16" title={template.name}>
+                          <h4 className="font-bold text-base text-slate-900 dark:text-white leading-tight truncate pr-28" title={template.name}>
                             {template.name}
                           </h4>
                           
@@ -1729,9 +1886,13 @@ export default function TeamOpsClient({
                         <Button
                           type="button"
                           onClick={() => handleUseTemplate(template)}
-                          className="w-full text-xs font-semibold h-9 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-sm transition-all duration-200"
+                          className={`w-full text-xs font-semibold h-9 rounded-xl shadow-sm transition-all duration-200 ${
+                            isDefault
+                              ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                              : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white'
+                          }`}
                         >
-                          Apply Template
+                          Use Template
                         </Button>
                       </div>
                     );
@@ -1977,6 +2138,56 @@ export default function TeamOpsClient({
               <Button type="submit" disabled={isPending}>{isPending ? "Creating..." : "Create Rule"}</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+      {/* DELETE CONFIRMATION DIALOG */}
+      <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-[420px] bg-background border-border p-6 flex flex-col gap-4">
+          <div className="flex items-center gap-3 text-red-600">
+            <div className="p-2 bg-red-50 dark:bg-red-950/30 rounded-full">
+              <ShieldAlert className="h-6 w-6" />
+            </div>
+            <DialogHeader className="p-0 border-none shrink-0 shadow-none text-left">
+              <DialogTitle className="text-lg font-bold text-foreground">
+                {projectToDelete ? "Delete Internal Project" : "Delete Selected Projects"}
+              </DialogTitle>
+            </DialogHeader>
+          </div>
+
+          <div className="text-sm text-muted-foreground leading-relaxed">
+            {projectToDelete ? (
+              <>
+                Are you sure you want to delete this internal project? This action cannot be undone and will permanently delete all related tasks.
+              </>
+            ) : (
+              <>
+                Are you sure you want to delete the <span className="font-semibold text-foreground">{selectedProjectIds.length}</span> selected internal projects? This action cannot be undone and will permanently delete all related tasks for these projects.
+              </>
+            )}
+          </div>
+
+          <DialogFooter className="pt-2 border-t flex flex-row justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsDeleteConfirmOpen(false);
+                setProjectToDelete(null);
+              }}
+              className="rounded-xl px-4 py-2 text-xs font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isPending}
+              onClick={executeDeletion}
+              className="rounded-xl px-4 py-2 text-xs font-semibold bg-red-600 hover:bg-red-700"
+            >
+              {isPending ? "Deleting..." : "Permanently Delete"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
