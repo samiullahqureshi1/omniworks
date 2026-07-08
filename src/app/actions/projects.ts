@@ -485,7 +485,7 @@ export async function updateProjectAction(
       clientVisible: true
     });
 
-    triggerEventRules(session.organizationId, 'update', 'project', updated);
+    triggerEventRules(session.organizationId, 'update', 'project', updated, project);
 
     return { success: true, project: updated };
   } catch (error: any) {
@@ -511,7 +511,7 @@ export async function updateProjectStatusAction(projectId: string, statusId: str
       data: { statusId },
     });
 
-    triggerEventRules(session.organizationId, 'update', 'project', updated);
+    triggerEventRules(session.organizationId, 'update', 'project', updated, project);
 
     return { success: true, project: updated };
   } catch (error: any) {

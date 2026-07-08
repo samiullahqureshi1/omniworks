@@ -395,7 +395,7 @@ export async function updateTeamOpsProjectAction(
       clientVisible: false
     });
 
-    triggerEventRules(session.organizationId, 'update', 'project', updated);
+    triggerEventRules(session.organizationId, 'update', 'project', updated, project);
 
     return { success: true, project: updated };
   } catch (error: any) {

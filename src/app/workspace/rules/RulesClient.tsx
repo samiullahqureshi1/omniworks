@@ -296,14 +296,15 @@ export default function RulesClient({
                       </div>
                       <div className="flex items-center gap-1">
                         <Button
-                          variant="ghost"
-                          size="icon"
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleRunRule(rule.id)}
                           disabled={!rule.isActive || isPending}
-                          className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 rounded-lg"
-                          title="Run Automation Simulation"
+                          className="h-8 gap-1.5 text-xs text-emerald-600 hover:text-emerald-700 border-emerald-200 hover:bg-emerald-50 dark:border-emerald-900/50 dark:hover:bg-emerald-950/20 rounded-xl"
+                          title="Test Rule"
                         >
-                          <Play size={14} className="fill-current" />
+                          <Play size={12} className="fill-current" />
+                          <span>Test Rule</span>
                         </Button>
                         <Button
                           variant="ghost"
@@ -419,7 +420,15 @@ export default function RulesClient({
                             )}
                             {log.triggerData && (
                               <div className="text-[10px] bg-slate-50 dark:bg-zinc-800 p-1.5 rounded mt-1 font-mono text-muted-foreground leading-tight text-[9.5px]">
-                                {log.triggerData}
+                                {(() => {
+                                  try {
+                                    const parsed = JSON.parse(log.triggerData);
+                                    if (parsed && typeof parsed === 'object' && parsed.triggerField) {
+                                      return `Field "${parsed.triggerField}" changed: "${parsed.previousValue}" → "${parsed.newValue}"`;
+                                    }
+                                  } catch (e) {}
+                                  return log.triggerData;
+                                })()}
                               </div>
                             )}
                             <div className="text-[10px] text-muted-foreground mt-1">

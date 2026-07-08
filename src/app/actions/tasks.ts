@@ -425,7 +425,7 @@ export async function updateTaskAction(
         clientVisible: true
       });
       
-      triggerEventRules(session.organizationId, 'update', 'task', updated);
+      triggerEventRules(session.organizationId, 'update', 'task', updated, task);
 
       return { success: true, task: updated };
     }
@@ -498,7 +498,7 @@ export async function updateTaskAction(
       clientVisible: true
     });
 
-    triggerEventRules(session.organizationId, 'update', 'task', updated);
+    triggerEventRules(session.organizationId, 'update', 'task', updated, task);
 
     return { success: true, task: updated };
   } catch (error: any) {
