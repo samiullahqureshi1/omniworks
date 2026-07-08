@@ -519,21 +519,25 @@ model TaskTemplate {
 }
 
 model Rule {
-  id             String        @id @default(uuid())
-  name           String
-  description    String?
-  isActive       Boolean       @default(true)
-  organizationId String
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  frequency      String        // DAILY, WEEKLY, MONTHLY
-  reminderTime   String        // e.g. "09:00 AM"
-  actionType     String        // SEND_REMINDER, CREATE_TASK, UPDATE_STATUS, SEND_NOTIFICATION
-  recipients     Json          // e.g. ["PROJECT_MANAGER"] or custom user IDs
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id               String        @id @default(uuid())
+  name             String
+  description      String?
+  isActive         Boolean       @default(true)
+  organizationId   String
+  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  frequency        String?       // DAILY, WEEKLY, MONTHLY (Deprecated)
+  reminderTime     String?       // e.g. "09:00 AM" (Deprecated)
+  triggerField     String?       // Title, Status, Priority, Due Date, Assigned User, Project
+  triggerOperator  String?       // Contains, Equals, Starts With, Ends With
+  triggerValue     String?       // e.g. "urgent"
+  actionType       String        // SEND_REMINDER, CREATE_TASK, UPDATE_STATUS, SEND_NOTIFICATION, In-app Notification, Notification Email
+  recipients       Json          // Keep for PM / PM roles
+  actionRecipients Json?         // specific user IDs selected in dropdown
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  projects       ProjectRule[]
-  logs           RuleLog[]
+  projects         ProjectRule[]
+  logs             RuleLog[]
 
   @@index([organizationId])
 }
@@ -556,6 +560,7 @@ model RuleLog {
   executedAt  DateTime @default(now())
   sentTo      String
   status      String   // SUCCESSFUL, FAILED
+  triggerData String?
   error       String?
 
   @@index([ruleId])

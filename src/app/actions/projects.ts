@@ -8,6 +8,7 @@ import { hashPassword } from '@/lib/auth'; // Ensure this is imported
 
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
+import { triggerEventRules } from './rules';
 
 // Quick Client Creation inside project form:
 // Owner can quickly create a Client user directly during project creation/editing.
@@ -139,6 +140,7 @@ export async function quickCreateProjectAction(name: string) {
         priority: 'MEDIUM',
       },
     });
+    triggerEventRules(session.organizationId, 'create', 'project', project);
     return { success: true, project };
   } catch (error: any) {
     return { error: error.message || 'Failed to quickly create project.' };
@@ -301,6 +303,8 @@ export async function createProjectAction(data: {
             clientVisible: true
           });
 
+          triggerEventRules(session.organizationId, 'create', 'project', created);
+
           if (!firstProject) {
             firstProject = created;
           }
@@ -364,6 +368,8 @@ export async function createProjectAction(data: {
       actionUrl: `/workspace/projects/${project.id}`,
       clientVisible: true
     });
+
+    triggerEventRules(session.organizationId, 'create', 'project', project);
 
     return { success: true, project };
   } catch (error: any) {
@@ -479,6 +485,8 @@ export async function updateProjectAction(
       clientVisible: true
     });
 
+    triggerEventRules(session.organizationId, 'update', 'project', updated);
+
     return { success: true, project: updated };
   } catch (error: any) {
     return { error: error.message || 'Failed to update project.' };
@@ -502,6 +510,8 @@ export async function updateProjectStatusAction(projectId: string, statusId: str
       where: { id: projectId },
       data: { statusId },
     });
+
+    triggerEventRules(session.organizationId, 'update', 'project', updated);
 
     return { success: true, project: updated };
   } catch (error: any) {

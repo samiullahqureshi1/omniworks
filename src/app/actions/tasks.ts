@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { Priority, Role } from '@prisma/client';
 import { createNotification } from './notifications';
+import { triggerEventRules } from './rules';
 
 /**
  * Task Status Management Actions
@@ -285,6 +286,8 @@ export async function createTaskAction(
             clientVisible: true
           });
 
+          triggerEventRules(session.organizationId, 'create', 'task', created);
+
           if (!firstTask) {
             firstTask = created;
           }
@@ -346,6 +349,8 @@ export async function createTaskAction(
       actionUrl: `/workspace/projects/${task.projectId}?taskId=${task.id}`,
       clientVisible: true
     });
+
+    triggerEventRules(session.organizationId, 'create', 'task', task);
 
     return { success: true, task };
   } catch (error: any) {
@@ -420,6 +425,8 @@ export async function updateTaskAction(
         clientVisible: true
       });
       
+      triggerEventRules(session.organizationId, 'update', 'task', updated);
+
       return { success: true, task: updated };
     }
 
@@ -490,6 +497,8 @@ export async function updateTaskAction(
       actionUrl: `/workspace/projects/${updated.projectId}?taskId=${updated.id}`,
       clientVisible: true
     });
+
+    triggerEventRules(session.organizationId, 'update', 'task', updated);
 
     return { success: true, task: updated };
   } catch (error: any) {

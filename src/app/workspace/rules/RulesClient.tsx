@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useState, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Play, Edit, Trash2, ShieldAlert, Cpu, Calendar, Clock, User, Check, AlertCircle } from 'lucide-react';
+import { Plus, Play, Edit, Trash2, ShieldAlert, Cpu, Calendar, Clock, User, Check, AlertCircle, Search, ArrowRight, Shield, Users, Crown, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { createRuleAction, updateRuleAction, deleteRuleAction, executeRuleAction } from '@/app/actions/rules';
 
@@ -38,21 +38,53 @@ export default function RulesClient({
   // Form states
   const [formName, setFormName] = useState('');
   const [formDescription, setFormDescription] = useState('');
-  const [formFrequency, setFormFrequency] = useState('DAILY');
-  const [formReminderTime, setFormReminderTime] = useState('09:00 AM');
-  const [formActionType, setFormActionType] = useState('SEND_REMINDER');
-  const [formRecipients, setFormRecipients] = useState<string[]>(['PROJECT_MANAGER']);
+  const [triggerField, setTriggerField] = useState('Title');
+  const [triggerOperator, setTriggerOperator] = useState('Contains');
+  const [triggerValue, setTriggerValue] = useState('');
+  const [actionType, setActionType] = useState('In-app Notification');
+  const [actionRecipients, setActionRecipients] = useState<string[]>(['PROJECT_MANAGER']);
   const [formAttachedProjectIds, setFormAttachedProjectIds] = useState<string[]>([]);
+  const [recipientSearchQuery, setRecipientSearchQuery] = useState('');
+
+  const getInitials = (name: string) => {
+    return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  };
+
+  // Extract all unique users from organization projects
+  const allOrgUsers = useMemo(() => {
+    const userMap = new Map<string, { id: string; name: string; email: string }>();
+    projects.forEach((proj: any) => {
+      if (proj.projectManager) {
+        userMap.set(proj.projectManager.id, {
+          id: proj.projectManager.id,
+          name: proj.projectManager.name,
+          email: proj.projectManager.email || '',
+        });
+      }
+      proj.assignees?.forEach((a: any) => {
+        if (a.user) {
+          userMap.set(a.user.id, {
+            id: a.user.id,
+            name: a.user.name,
+            email: a.user.email || '',
+          });
+        }
+      });
+    });
+    return Array.from(userMap.values());
+  }, [projects]);
 
   // Open creation modal
   const handleOpenCreate = () => {
     setFormName('');
     setFormDescription('');
-    setFormFrequency('DAILY');
-    setFormReminderTime('09:00 AM');
-    setFormActionType('SEND_REMINDER');
-    setFormRecipients(['PROJECT_MANAGER']);
+    setTriggerField('Title');
+    setTriggerOperator('Contains');
+    setTriggerValue('');
+    setActionType('In-app Notification');
+    setActionRecipients(['PROJECT_MANAGER']);
     setFormAttachedProjectIds([]);
+    setRecipientSearchQuery('');
     setIsCreateOpen(true);
   };
 
@@ -61,11 +93,24 @@ export default function RulesClient({
     setSelectedRule(rule);
     setFormName(rule.name);
     setFormDescription(rule.description || '');
-    setFormFrequency(rule.frequency);
-    setFormReminderTime(rule.reminderTime);
-    setFormActionType(rule.actionType);
-    setFormRecipients(rule.recipients || []);
+    setTriggerField(rule.triggerField || 'Title');
+    setTriggerOperator(rule.triggerOperator || 'Contains');
+    setTriggerValue(rule.triggerValue || '');
+
+    // Map legacy database actionType values
+    let displayAction = rule.actionType;
+    if (rule.actionType === 'SEND_REMINDER' || rule.actionType === 'SEND_NOTIFICATION') {
+      displayAction = 'In-app Notification';
+    } else if (rule.actionType === 'CREATE_TASK') {
+      displayAction = 'Create Task';
+    } else if (rule.actionType === 'SEND_EMAIL') {
+      displayAction = 'Notification Email';
+    }
+    setActionType(displayAction);
+
+    setActionRecipients(rule.actionRecipients || rule.recipients || []);
     setFormAttachedProjectIds(rule.projects.map((pr: any) => pr.projectId));
+    setRecipientSearchQuery('');
     setIsEditOpen(true);
   };
 
@@ -97,15 +142,20 @@ export default function RulesClient({
       toast.error('Rule name is required.');
       return;
     }
+    if (!triggerValue.trim()) {
+      toast.error('Trigger value is required.');
+      return;
+    }
 
     startTransition(async () => {
       const res = await createRuleAction({
         name: formName,
         description: formDescription,
-        frequency: formFrequency,
-        reminderTime: formReminderTime,
-        actionType: formActionType,
-        recipients: formRecipients,
+        triggerField,
+        triggerOperator,
+        triggerValue,
+        actionType,
+        actionRecipients,
         attachedProjectIds: formAttachedProjectIds,
       });
 
@@ -114,8 +164,6 @@ export default function RulesClient({
       } else {
         toast.success('Automation rule created successfully');
         setIsCreateOpen(false);
-        // Refresh page to load fully populated relation list
-        const updated = await fetch('/api/project-statuses').then(() => router.refresh());
         window.location.reload();
       }
     });
@@ -128,15 +176,20 @@ export default function RulesClient({
       toast.error('Rule name is required.');
       return;
     }
+    if (!triggerValue.trim()) {
+      toast.error('Trigger value is required.');
+      return;
+    }
 
     startTransition(async () => {
       const res = await updateRuleAction(selectedRule.id, {
         name: formName,
         description: formDescription,
-        frequency: formFrequency,
-        reminderTime: formReminderTime,
-        actionType: formActionType,
-        recipients: formRecipients,
+        triggerField,
+        triggerOperator,
+        triggerValue,
+        actionType,
+        actionRecipients,
         attachedProjectIds: formAttachedProjectIds,
       });
 
@@ -165,53 +218,54 @@ export default function RulesClient({
     });
   };
 
-  // Handle run rule action (Trigger Automation immediately)
+  // Trigger automation execution manually
   const handleRunRule = async (ruleId: string) => {
-    toast.info('Triggering automation rule...');
+    toast.info('Triggering automation rule simulation...');
     const res = await executeRuleAction(ruleId);
     if (res.error) {
       toast.error(res.error);
     } else {
-      toast.success('Rule execution completed');
-      // Refresh execution logs
-      const updatedLogsRes = await fetch('/api/project-statuses').then(() => {
+      toast.success(res.message || 'Rule execution simulation completed.');
+      setTimeout(() => {
         window.location.reload();
-      });
+      }, 1000);
     }
   };
 
-  // Toggle recipient role selection
-  const toggleRecipient = (role: string) => {
-    if (formRecipients.includes(role)) {
-      setFormRecipients(prev => prev.filter(r => r !== role));
-    } else {
-      setFormRecipients(prev => [...prev, role]);
-    }
+  const toggleRecipient = (userId: string) => {
+    setActionRecipients(prev => 
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+    );
   };
 
-  // Toggle attached project selection
-  const toggleProject = (projectId: string) => {
-    if (formAttachedProjectIds.includes(projectId)) {
-      setFormAttachedProjectIds(prev => prev.filter(id => id !== projectId));
-    } else {
-      setFormAttachedProjectIds(prev => [...prev, projectId]);
-    }
+  const toggleAttachedProject = (projectId: string) => {
+    setFormAttachedProjectIds(prev => 
+      prev.includes(projectId) ? prev.filter(id => id !== projectId) : [...prev, projectId]
+    );
+  };
+
+  const getReadableActionType = (action: string) => {
+    if (action === 'SEND_REMINDER' || action === 'SEND_NOTIFICATION') return 'In-app Notification';
+    if (action === 'CREATE_TASK') return 'Create Task';
+    if (action === 'SEND_EMAIL') return 'Notification Email';
+    return action;
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-7xl mx-auto p-6">
+    <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-foreground flex items-center gap-2">
-            <Cpu className="text-primary" size={28} />
-            Rules & Automation
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-5">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-2.5 text-slate-900 dark:text-white">
+            <Cpu className="h-8 w-8 text-primary" />
+            Event-Based Rules
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Define global reminders and automatic tasks to attach to your projects.
+            Build custom IF &rarr; THEN automations triggered on task and project changes.
           </p>
         </div>
-        <Button onClick={handleOpenCreate} className="shadow-md">
+        <Button onClick={handleOpenCreate} className="shadow-md rounded-xl h-10 px-4">
           <Plus className="mr-2 h-4 w-4" /> Create Rule
         </Button>
       </div>
@@ -223,13 +277,13 @@ export default function RulesClient({
           {rules.length === 0 ? (
             <div className="h-64 flex flex-col items-center justify-center border border-dashed rounded-2xl text-muted-foreground p-6 bg-background">
               <Cpu size={40} className="opacity-20 mb-3" />
-              <p className="text-sm font-semibold">No rules created yet.</p>
-              <p className="text-xs text-center mt-1">Create rules to send progress reminders, update statuses, or auto-assign tasks.</p>
+              <p className="text-sm font-semibold">No automation rules created yet.</p>
+              <p className="text-xs text-center mt-1">Create event-based rules to auto-notify or create checklist tasks when criteria are met.</p>
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-1">
               {rules.map((rule: any) => (
-                <Card key={rule.id} className="relative overflow-hidden group hover:shadow-md transition-shadow border-slate-200/60 dark:border-slate-800/60">
+                <Card key={rule.id} className="relative overflow-hidden group hover:shadow-md transition-shadow border-slate-200/60 dark:border-slate-800/60 rounded-2xl">
                   <div className={`absolute top-0 left-0 w-1.5 h-full ${rule.isActive ? 'bg-primary' : 'bg-muted-foreground/30'}`} />
                   <CardHeader className="pb-3 pl-6">
                     <div className="flex items-center justify-between">
@@ -247,7 +301,7 @@ export default function RulesClient({
                           onClick={() => handleRunRule(rule.id)}
                           disabled={!rule.isActive || isPending}
                           className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 rounded-lg"
-                          title="Run Rule Now"
+                          title="Run Automation Simulation"
                         >
                           <Play size={14} className="fill-current" />
                         </Button>
@@ -270,23 +324,40 @@ export default function RulesClient({
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="pt-0 pl-6 text-xs text-muted-foreground flex flex-wrap gap-x-6 gap-y-2">
-                    <span className="flex items-center gap-1">
-                      <Calendar size={12} /> {rule.frequency}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock size={12} /> {rule.reminderTime}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Cpu size={12} /> Action: <strong className="text-foreground uppercase">{rule.actionType.replace('_', ' ')}</strong>
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <User size={12} /> Recipients: <strong className="text-foreground">{rule.recipients?.join(', ') || 'None'}</strong>
-                    </span>
-                    <div className="w-full mt-2 pt-2 border-t flex flex-wrap items-center gap-1.5">
+                  <CardContent className="pt-0 pl-6 text-xs text-muted-foreground space-y-4">
+                    {/* IF -> THEN Statement Block */}
+                    <div className="bg-muted/30 p-3 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center gap-3 text-slate-800 dark:text-slate-200">
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/20 font-bold uppercase tracking-wider text-[10px] py-0.5 px-1.5">IF</Badge>
+                        <span className="font-semibold text-xs">{rule.triggerField || 'Title'}</span>
+                        <span className="italic text-muted-foreground text-xs">{rule.triggerOperator?.toLowerCase() || 'contains'}</span>
+                        <Badge variant="outline" className="font-mono text-[11px] bg-background">"{rule.triggerValue}"</Badge>
+                      </div>
+                      <ArrowRight size={14} className="text-muted-foreground hidden sm:block shrink-0" />
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold uppercase tracking-wider text-[10px] py-0.5 px-1.5">THEN</Badge>
+                        <span className="font-bold text-xs">{getReadableActionType(rule.actionType)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs">
+                      <span className="flex items-center gap-1">
+                        <User size={12} /> Recipients: <strong className="text-foreground">
+                          {((rule.actionRecipients || rule.recipients) as string[])?.map(rec => {
+                            if (rec === 'PROJECT_MANAGER') return 'Project Manager';
+                            if (rec === 'PROJECT_OWNER') return 'Project Owner';
+                            if (rec === 'ASSIGNED_USER') return 'Assigned Users';
+                            const match = allOrgUsers.find(u => u.id === rec);
+                            return match ? match.name : rec;
+                          }).join(', ') || 'None'}
+                        </strong>
+                      </span>
+                    </div>
+
+                    <div className="pt-2 border-t flex flex-wrap items-center gap-1.5">
                       <span className="text-[11px] font-semibold text-foreground mr-1">Attached Projects:</span>
                       {rule.projects.length === 0 ? (
-                        <span className="italic text-[11px]">None</span>
+                        <span className="italic text-[11px]">All Projects</span>
                       ) : (
                         rule.projects.map((pr: any) => (
                           <Badge key={pr.projectId} variant="outline" className="text-[10px] bg-slate-50 dark:bg-slate-900">
@@ -295,7 +366,8 @@ export default function RulesClient({
                         ))
                       )}
                     </div>
-                    <div className="w-full mt-3 flex items-center justify-between">
+
+                    <div className="pt-2 flex items-center justify-between border-t">
                       <span className="text-[11px]">Toggle Rule State:</span>
                       <button
                         onClick={() => handleToggleActive(rule)}
@@ -318,7 +390,7 @@ export default function RulesClient({
         {/* Execution History */}
         <div className="space-y-4">
           <h2 className="text-xl font-bold tracking-tight">Execution History</h2>
-          <Card className="border-slate-200/60 dark:border-slate-800/60">
+          <Card className="border-slate-200/60 dark:border-slate-800/60 rounded-2xl">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold">Rule Execution History</CardTitle>
               <CardDescription className="text-xs">Logs of automation runs in this organization.</CardDescription>
@@ -345,7 +417,12 @@ export default function RulesClient({
                             {log.project && (
                               <div className="text-[10px] text-muted-foreground mt-0.5">Project: {log.project.name}</div>
                             )}
-                            <div className="text-[10px] text-muted-foreground mt-0.5">
+                            {log.triggerData && (
+                              <div className="text-[10px] bg-slate-50 dark:bg-zinc-800 p-1.5 rounded mt-1 font-mono text-muted-foreground leading-tight text-[9.5px]">
+                                {log.triggerData}
+                              </div>
+                            )}
+                            <div className="text-[10px] text-muted-foreground mt-1">
                               {new Date(log.executedAt).toLocaleString('en-US', {
                                 day: '2-digit',
                                 month: 'short',
@@ -382,131 +459,230 @@ export default function RulesClient({
 
       {/* CREATE RULE MODAL */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="sm:max-w-[550px] bg-background border-border max-h-[85vh] overflow-y-auto custom-scrollbar">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[550px] bg-background border-border max-h-[85vh] p-0 flex flex-col overflow-hidden">
+          <DialogHeader className="p-6 pb-4 border-b shrink-0">
             <DialogTitle>Create Automation Rule</DialogTitle>
             <DialogDescription>
-              Define recurring actions or progress reminders.
+              Define IF &rarr; THEN event trigger criteria.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreateSubmit} className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Rule Name</label>
-              <Input
-                required
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="e.g. Daily Project Report Reminder"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Description</label>
-              <Input
-                value={formDescription}
-                onChange={(e) => setFormDescription(e.target.value)}
-                placeholder="Send reminder to submit progress report."
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border">
+          <form onSubmit={handleCreateSubmit} className="flex flex-col flex-1 overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Frequency</label>
-                <select
-                  value={formFrequency}
-                  onChange={(e) => setFormFrequency(e.target.value)}
-                  className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
-                >
-                  <option value="DAILY">Daily</option>
-                  <option value="WEEKLY">Weekly</option>
-                  <option value="MONTHLY">Monthly</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Reminder Time</label>
+                <label className="text-xs font-semibold text-muted-foreground">Rule Name</label>
                 <Input
-                  value={formReminderTime}
-                  onChange={(e) => setFormReminderTime(e.target.value)}
-                  placeholder="e.g. 06:00 PM"
+                  required
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  placeholder="e.g. Urgent Bug Assigned Alert"
                 />
               </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Action Type</label>
-              <select
-                value={formActionType}
-                onChange={(e) => setFormActionType(e.target.value)}
-                className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
-              >
-                <option value="SEND_REMINDER">Send Reminder</option>
-                <option value="CREATE_TASK">Create Task</option>
-                <option value="SEND_NOTIFICATION">Send Notification</option>
-              </select>
-            </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Description</label>
+                <Input
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
+                  placeholder="Description of rule and action."
+                />
+              </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground">Send Reminder To</label>
-              <div className="flex flex-col gap-2 p-3 border rounded-xl bg-muted/20">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formRecipients.includes('PROJECT_OWNER')}
-                    onChange={() => toggleRecipient('PROJECT_OWNER')}
-                    className="rounded border-gray-300 text-primary"
-                  />
-                  Project Owner
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formRecipients.includes('PROJECT_MANAGER')}
-                    onChange={() => toggleRecipient('PROJECT_MANAGER')}
-                    className="rounded border-gray-300 text-primary"
-                  />
-                  Project Manager
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formRecipients.includes('ASSIGNED_USER')}
-                    onChange={() => toggleRecipient('ASSIGNED_USER')}
-                    className="rounded border-gray-300 text-primary"
-                  />
-                  Assigned Users
-                </label>
+              {/* IF Trigger block */}
+              <div className="space-y-3 p-4 border rounded-2xl bg-muted/15">
+                <div className="text-xs font-bold text-primary flex items-center gap-1">
+                  <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold">IF</Badge>
+                  Condition
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Field</label>
+                    <select
+                      value={triggerField}
+                      onChange={(e) => setTriggerField(e.target.value)}
+                      className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                    >
+                      <option value="Title">Title</option>
+                      <option value="Status">Status</option>
+                      <option value="Priority">Priority</option>
+                      <option value="Due Date">Due Date</option>
+                      <option value="Assigned User">Assigned User</option>
+                      <option value="Project">Project</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Condition</label>
+                    <select
+                      value={triggerOperator}
+                      onChange={(e) => setTriggerOperator(e.target.value)}
+                      className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                    >
+                      <option value="Contains">Contains</option>
+                      <option value="Equals">Equals</option>
+                      <option value="Starts With">Starts With</option>
+                      <option value="Ends With">Ends With</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5 col-span-2">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Value</label>
+                    <Input
+                      required
+                      value={triggerValue}
+                      onChange={(e) => setTriggerValue(e.target.value)}
+                      placeholder="e.g. Bug"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* THEN Action block */}
+              <div className="space-y-3 p-4 border rounded-2xl bg-muted/15">
+                <div className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                  <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold">THEN</Badge>
+                  Action & Recipients
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Action</label>
+                  <select
+                    value={actionType}
+                    onChange={(e) => setActionType(e.target.value)}
+                    className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1"
+                  >
+                    <option value="In-app Notification">In-app Notification</option>
+                    <option value="Notification Email">Notification Email</option>
+                    <option value="Create Task">Create Task</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">To (Recipients)</label>
+                  
+                  {/* Selected Pills */}
+                  {actionRecipients.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50 dark:bg-zinc-900 border rounded-xl">
+                      {actionRecipients.map(id => {
+                        const roleLabel = id === 'PROJECT_MANAGER' ? 'Project Manager' : id === 'PROJECT_OWNER' ? 'Project Owner' : id === 'ASSIGNED_USER' ? 'All Assigned Users' : '';
+                        const userLabel = allOrgUsers.find(u => u.id === id)?.name || id;
+                        const displayName = roleLabel || userLabel;
+                        return (
+                          <Badge key={id} variant="secondary" className="gap-1.5 pl-2 pr-1 py-0.5 rounded-lg text-[10px] font-semibold bg-background shadow-sm border border-slate-200 text-slate-800 dark:text-slate-200">
+                            {displayName}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); toggleRecipient(id); }}
+                              className="hover:bg-muted p-0.5 rounded-full text-slate-500 hover:text-slate-900"
+                            >
+                              <X size={10} />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input
+                      placeholder="Search roles or team members..."
+                      value={recipientSearchQuery}
+                      onChange={(e) => setRecipientSearchQuery(e.target.value)}
+                      className="pl-9 pr-4 rounded-xl text-sm"
+                    />
+                  </div>
+
+                  {/* Scroll Box */}
+                  <div className="border rounded-2xl p-2.5 max-h-[220px] overflow-y-auto space-y-3 bg-background custom-scrollbar">
+                    
+                    {/* Default Roles Grid */}
+                    {('project manager'.includes(recipientSearchQuery.toLowerCase()) || 
+                      'project owner'.includes(recipientSearchQuery.toLowerCase()) || 
+                      'all assigned users'.includes(recipientSearchQuery.toLowerCase())) && (
+                      <div className="space-y-1.5">
+                        <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider block px-1">Roles</span>
+                        <div className="grid grid-cols-1 gap-2">
+                          {[
+                            { id: 'PROJECT_MANAGER', label: 'Project Manager (PM)', desc: 'Person leading project operations', icon: Shield },
+                            { id: 'PROJECT_OWNER', label: 'Project Owner', desc: 'Organization owner or creator', icon: Crown },
+                            { id: 'ASSIGNED_USER', label: 'All Assigned Users', desc: 'All members assigned to the task/project', icon: Users }
+                          ].filter(role => role.label.toLowerCase().includes(recipientSearchQuery.toLowerCase())).map(role => {
+                            const isSel = actionRecipients.includes(role.id);
+                            const IconComp = role.icon;
+                            return (
+                              <div 
+                                key={role.id} 
+                                onClick={() => toggleRecipient(role.id)}
+                                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                                  isSel 
+                                    ? 'border-primary bg-primary/5 text-primary' 
+                                    : 'border-slate-100 dark:border-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-900'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-lg shrink-0 ${isSel ? 'bg-primary/10 text-primary' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500'}`}>
+                                    <IconComp size={16} />
+                                  </div>
+                                  <div className="text-left">
+                                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-none">{role.label}</p>
+                                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{role.desc}</p>
+                                  </div>
+                                </div>
+                                <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${isSel ? 'border-primary bg-primary text-white' : 'border-slate-300'}`}>
+                                  {isSel && <Check size={10} className="stroke-[3]" />}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Specific Users List */}
+                    <div className="space-y-1.5 pt-1.5 border-t border-dashed">
+                      <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider block px-1">Specific Users</span>
+                      <div className="space-y-1.5">
+                        {allOrgUsers.filter(u => 
+                          u.name.toLowerCase().includes(recipientSearchQuery.toLowerCase()) || 
+                          u.email.toLowerCase().includes(recipientSearchQuery.toLowerCase())
+                        ).map(user => {
+                          const isSel = actionRecipients.includes(user.id);
+                          return (
+                            <div 
+                              key={user.id} 
+                              onClick={() => toggleRecipient(user.id)}
+                              className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
+                                isSel 
+                                  ? 'border-primary bg-primary/5 text-primary' 
+                                  : 'border-slate-100 dark:border-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-900'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                {/* Avatar */}
+                                <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-slate-200 to-slate-300 text-slate-700 dark:from-zinc-700 dark:to-zinc-800 dark:text-zinc-300 flex items-center justify-center text-xs font-extrabold shrink-0">
+                                  {getInitials(user.name)}
+                                </div>
+                                <div className="text-left">
+                                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-none">{user.name}</p>
+                                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{user.email}</p>
+                                </div>
+                              </div>
+                              <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${isSel ? 'border-primary bg-primary text-white' : 'border-slate-300'}`}>
+                                {isSel && <Check size={10} className="stroke-[3]" />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground">Attach to Projects</label>
-              <div className="flex flex-col gap-2 p-3 border rounded-xl max-h-[150px] overflow-y-auto bg-muted/20 custom-scrollbar">
-                {projects.length === 0 ? (
-                  <p className="text-xs italic text-muted-foreground">No projects available.</p>
-                ) : (
-                  projects.map(p => (
-                    <label key={p.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formAttachedProjectIds.includes(p.id)}
-                        onChange={() => toggleProject(p.id)}
-                        className="rounded border-gray-300 text-primary"
-                      />
-                      {p.name}
-                    </label>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <DialogFooter className="pt-4 border-t">
-              <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? 'Creating...' : 'Create Rule'}
-              </Button>
+            <DialogFooter className="p-6 pt-4 border-t bg-muted/10 shrink-0">
+              <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={isPending}>Create Rule</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -514,131 +690,224 @@ export default function RulesClient({
 
       {/* EDIT RULE MODAL */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="sm:max-w-[550px] bg-background border-border max-h-[85vh] overflow-y-auto custom-scrollbar">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[550px] bg-background border-border max-h-[85vh] p-0 flex flex-col overflow-hidden">
+          <DialogHeader className="p-6 pb-4 border-b shrink-0">
             <DialogTitle>Edit Automation Rule</DialogTitle>
-            <DialogDescription>
-              Modify trigger schedules, actions, or project mappings.
-            </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleEditSubmit} className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Rule Name</label>
-              <Input
-                required
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="e.g. Daily Project Report Reminder"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Description</label>
-              <Input
-                value={formDescription}
-                onChange={(e) => setFormDescription(e.target.value)}
-                placeholder="Send reminder to submit progress report."
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border">
+          <form onSubmit={handleEditSubmit} className="flex flex-col flex-1 overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Frequency</label>
-                <select
-                  value={formFrequency}
-                  onChange={(e) => setFormFrequency(e.target.value)}
-                  className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
-                >
-                  <option value="DAILY">Daily</option>
-                  <option value="WEEKLY">Weekly</option>
-                  <option value="MONTHLY">Monthly</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Reminder Time</label>
+                <label className="text-xs font-semibold text-muted-foreground">Rule Name</label>
                 <Input
-                  value={formReminderTime}
-                  onChange={(e) => setFormReminderTime(e.target.value)}
-                  placeholder="e.g. 06:00 PM"
+                  required
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
                 />
               </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Action Type</label>
-              <select
-                value={formActionType}
-                onChange={(e) => setFormActionType(e.target.value)}
-                className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
-              >
-                <option value="SEND_REMINDER">Send Reminder</option>
-                <option value="CREATE_TASK">Create Task</option>
-                <option value="SEND_NOTIFICATION">Send Notification</option>
-              </select>
-            </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Description</label>
+                <Input
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
+                />
+              </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground">Send Reminder To</label>
-              <div className="flex flex-col gap-2 p-3 border rounded-xl bg-muted/20">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formRecipients.includes('PROJECT_OWNER')}
-                    onChange={() => toggleRecipient('PROJECT_OWNER')}
-                    className="rounded border-gray-300 text-primary"
-                  />
-                  Project Owner
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formRecipients.includes('PROJECT_MANAGER')}
-                    onChange={() => toggleRecipient('PROJECT_MANAGER')}
-                    className="rounded border-gray-300 text-primary"
-                  />
-                  Project Manager
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formRecipients.includes('ASSIGNED_USER')}
-                    onChange={() => toggleRecipient('ASSIGNED_USER')}
-                    className="rounded border-gray-300 text-primary"
-                  />
-                  Assigned Users
-                </label>
+              {/* IF Trigger block */}
+              <div className="space-y-3 p-4 border rounded-2xl bg-muted/15">
+                <div className="text-xs font-bold text-primary flex items-center gap-1">
+                  <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold">IF</Badge>
+                  Condition
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Field</label>
+                    <select
+                      value={triggerField}
+                      onChange={(e) => setTriggerField(e.target.value)}
+                      className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                    >
+                      <option value="Title">Title</option>
+                      <option value="Status">Status</option>
+                      <option value="Priority">Priority</option>
+                      <option value="Due Date">Due Date</option>
+                      <option value="Assigned User">Assigned User</option>
+                      <option value="Project">Project</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Condition</label>
+                    <select
+                      value={triggerOperator}
+                      onChange={(e) => setTriggerOperator(e.target.value)}
+                      className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                    >
+                      <option value="Contains">Contains</option>
+                      <option value="Equals">Equals</option>
+                      <option value="Starts With">Starts With</option>
+                      <option value="Ends With">Ends With</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5 col-span-2">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Value</label>
+                    <Input
+                      required
+                      value={triggerValue}
+                      onChange={(e) => setTriggerValue(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* THEN Action block */}
+              <div className="space-y-3 p-4 border rounded-2xl bg-muted/15">
+                <div className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                  <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold">THEN</Badge>
+                  Action & Recipients
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Action</label>
+                  <select
+                    value={actionType}
+                    onChange={(e) => setActionType(e.target.value)}
+                    className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1"
+                  >
+                    <option value="In-app Notification">In-app Notification</option>
+                    <option value="Notification Email">Notification Email</option>
+                    <option value="Create Task">Create Task</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">To (Recipients)</label>
+                  
+                  {/* Selected Pills */}
+                  {actionRecipients.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50 dark:bg-zinc-900 border rounded-xl">
+                      {actionRecipients.map(id => {
+                        const roleLabel = id === 'PROJECT_MANAGER' ? 'Project Manager' : id === 'PROJECT_OWNER' ? 'Project Owner' : id === 'ASSIGNED_USER' ? 'All Assigned Users' : '';
+                        const userLabel = allOrgUsers.find(u => u.id === id)?.name || id;
+                        const displayName = roleLabel || userLabel;
+                        return (
+                          <Badge key={id} variant="secondary" className="gap-1.5 pl-2 pr-1 py-0.5 rounded-lg text-[10px] font-semibold bg-background shadow-sm border border-slate-200 text-slate-800 dark:text-slate-200">
+                            {displayName}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); toggleRecipient(id); }}
+                              className="hover:bg-muted p-0.5 rounded-full text-slate-500 hover:text-slate-900"
+                            >
+                              <X size={10} />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input
+                      placeholder="Search roles or team members..."
+                      value={recipientSearchQuery}
+                      onChange={(e) => setRecipientSearchQuery(e.target.value)}
+                      className="pl-9 pr-4 rounded-xl text-sm"
+                    />
+                  </div>
+
+                  {/* Scroll Box */}
+                  <div className="border rounded-2xl p-2.5 max-h-[220px] overflow-y-auto space-y-3 bg-background custom-scrollbar">
+                    
+                    {/* Default Roles Grid */}
+                    {('project manager'.includes(recipientSearchQuery.toLowerCase()) || 
+                      'project owner'.includes(recipientSearchQuery.toLowerCase()) || 
+                      'all assigned users'.includes(recipientSearchQuery.toLowerCase())) && (
+                      <div className="space-y-1.5">
+                        <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider block px-1">Roles</span>
+                        <div className="grid grid-cols-1 gap-2">
+                          {[
+                            { id: 'PROJECT_MANAGER', label: 'Project Manager (PM)', desc: 'Person leading project operations', icon: Shield },
+                            { id: 'PROJECT_OWNER', label: 'Project Owner', desc: 'Organization owner or creator', icon: Crown },
+                            { id: 'ASSIGNED_USER', label: 'All Assigned Users', desc: 'All members assigned to the task/project', icon: Users }
+                          ].filter(role => role.label.toLowerCase().includes(recipientSearchQuery.toLowerCase())).map(role => {
+                            const isSel = actionRecipients.includes(role.id);
+                            const IconComp = role.icon;
+                            return (
+                              <div 
+                                key={role.id} 
+                                onClick={() => toggleRecipient(role.id)}
+                                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                                  isSel 
+                                    ? 'border-primary bg-primary/5 text-primary' 
+                                    : 'border-slate-100 dark:border-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-900'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-lg shrink-0 ${isSel ? 'bg-primary/10 text-primary' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500'}`}>
+                                    <IconComp size={16} />
+                                  </div>
+                                  <div className="text-left">
+                                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-none">{role.label}</p>
+                                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{role.desc}</p>
+                                  </div>
+                                </div>
+                                <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${isSel ? 'border-primary bg-primary text-white' : 'border-slate-300'}`}>
+                                  {isSel && <Check size={10} className="stroke-[3]" />}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Specific Users List */}
+                    <div className="space-y-1.5 pt-1.5 border-t border-dashed">
+                      <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider block px-1">Specific Users</span>
+                      <div className="space-y-1.5">
+                        {allOrgUsers.filter(u => 
+                          u.name.toLowerCase().includes(recipientSearchQuery.toLowerCase()) || 
+                          u.email.toLowerCase().includes(recipientSearchQuery.toLowerCase())
+                        ).map(user => {
+                          const isSel = actionRecipients.includes(user.id);
+                          return (
+                            <div 
+                              key={user.id} 
+                              onClick={() => toggleRecipient(user.id)}
+                              className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
+                                isSel 
+                                  ? 'border-primary bg-primary/5 text-primary' 
+                                  : 'border-slate-100 dark:border-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-900'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                {/* Avatar */}
+                                <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-slate-200 to-slate-300 text-slate-700 dark:from-zinc-700 dark:to-zinc-800 dark:text-zinc-300 flex items-center justify-center text-xs font-extrabold shrink-0">
+                                  {getInitials(user.name)}
+                                </div>
+                                <div className="text-left">
+                                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-none">{user.name}</p>
+                                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{user.email}</p>
+                                </div>
+                              </div>
+                              <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${isSel ? 'border-primary bg-primary text-white' : 'border-slate-300'}`}>
+                                {isSel && <Check size={10} className="stroke-[3]" />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground">Attach to Projects</label>
-              <div className="flex flex-col gap-2 p-3 border rounded-xl max-h-[150px] overflow-y-auto bg-muted/20 custom-scrollbar">
-                {projects.length === 0 ? (
-                  <p className="text-xs italic text-muted-foreground">No projects available.</p>
-                ) : (
-                  projects.map(p => (
-                    <label key={p.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formAttachedProjectIds.includes(p.id)}
-                        onChange={() => toggleProject(p.id)}
-                        className="rounded border-gray-300 text-primary"
-                      />
-                      {p.name}
-                    </label>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <DialogFooter className="pt-4 border-t">
-              <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? 'Saving...' : 'Save Changes'}
-              </Button>
+            <DialogFooter className="p-6 pt-4 border-t bg-muted/10 shrink-0">
+              <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={isPending}>Save Changes</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -646,25 +915,20 @@ export default function RulesClient({
 
       {/* CONFIRM DELETE MODAL */}
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-md bg-background border-border">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <ShieldAlert size={20} /> Confirm Delete
-            </DialogTitle>
+            <DialogTitle>Delete Automation Rule</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete rule <strong>&quot;{selectedRule?.name}&quot;</strong>? This action is permanent.
+              Are you sure you want to permanently delete rule "{selectedRule?.name}"?
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="pt-4">
-            <Button variant="outline" onClick={() => setIsDeleteOpen(false)} disabled={isPending}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={isPending}>
-              {isPending ? 'Deleting...' : 'Delete Rule'}
-            </Button>
+          <DialogFooter className="mt-4 gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={isPending}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </div>
   );
 }

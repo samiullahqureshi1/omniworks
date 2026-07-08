@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { createNotification } from './notifications';
 import { Prisma } from '@prisma/client';
+import { triggerEventRules } from './rules';
 
 function parseTime(timeStr?: string): { hours: number; minutes: number } {
   if (!timeStr) return { hours: 9, minutes: 0 };
@@ -184,6 +185,8 @@ export async function createTeamOpsProjectAction(data: {
             clientVisible: false
           });
 
+          triggerEventRules(session.organizationId, 'create', 'project', created);
+
           if (!firstProject) {
             firstProject = created;
           }
@@ -261,6 +264,8 @@ export async function createTeamOpsProjectAction(data: {
       actionUrl: `/workspace/teamops/${project.id}`,
       clientVisible: false
     });
+
+    triggerEventRules(session.organizationId, 'create', 'project', project);
 
     return { success: true, project };
   } catch (error: any) {
@@ -389,6 +394,8 @@ export async function updateTeamOpsProjectAction(
       actionUrl: `/workspace/teamops/${projectId}`,
       clientVisible: false
     });
+
+    triggerEventRules(session.organizationId, 'update', 'project', updated);
 
     return { success: true, project: updated };
   } catch (error: any) {
