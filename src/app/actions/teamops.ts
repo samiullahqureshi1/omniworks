@@ -37,7 +37,7 @@ export async function createTeamOpsProjectAction(data: {
   isRepeated?: boolean;
   repeatSettings?: {
     enabled: boolean;
-    frequency: "DAILY" | "WEEKLY" | "MONTHLY";
+    frequency: "DAILY" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY";
   };
   repeatTime?: string;
   tasks?: {
@@ -87,7 +87,7 @@ export async function createTeamOpsProjectAction(data: {
 
     // Repeated Projects Creation Logic
     if (repeatSettings?.enabled && endDate) {
-      const generateRepeatDates = (start: Date, end: Date, freq: "DAILY" | "WEEKLY" | "MONTHLY"): Date[] => {
+      const generateRepeatDates = (start: Date, end: Date, freq: "DAILY" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY"): Date[] => {
         const dates: Date[] = [];
         let current = new Date(start);
         const limit = new Date(end);
@@ -105,6 +105,10 @@ export async function createTeamOpsProjectAction(data: {
             current.setDate(current.getDate() + 7);
           } else if (freq === "MONTHLY") {
             current.setMonth(current.getMonth() + 1);
+          } else if (freq === "QUARTERLY") {
+            current.setMonth(current.getMonth() + 3);
+          } else if (freq === "YEARLY") {
+            current.setFullYear(current.getFullYear() + 1);
           } else {
             break;
           }

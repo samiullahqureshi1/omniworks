@@ -165,7 +165,8 @@ export default function TeamOpsClient({
 
   // Repeat Settings
   const [isRepeatEnabled, setIsRepeatEnabled] = useState(false);
-  const [repeatFrequency, setRepeatFrequency] = useState<"DAILY" | "WEEKLY" | "MONTHLY">("DAILY");
+  const [repeatFrequency, setRepeatFrequency] = useState<"DAILY" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY">("DAILY");
+  const [repeatTime, setRepeatTime] = useState("09:00");
   const [repeatHour, setRepeatHour] = useState("09");
   const [repeatMinute, setRepeatMinute] = useState("00");
   const [repeatAmPm, setRepeatAmPm] = useState("AM");
@@ -305,6 +306,7 @@ export default function TeamOpsClient({
     setFormTeam(config.team || "");
     setIsRepeatEnabled(config.isRepeatEnabled || false);
     setRepeatFrequency(config.repeatFrequency || "DAILY");
+    setRepeatTime(config.repeatTime || "09:00");
     if (config.repeatTime) {
       const match = config.repeatTime.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
       if (match) {
@@ -518,6 +520,7 @@ export default function TeamOpsClient({
       repeatSettings: {
         enabled: isRepeatEnabled,
         frequency: repeatFrequency,
+          time: repeatTime,
       },
       repeatTime,
       tasks: projectTasks
@@ -556,6 +559,7 @@ export default function TeamOpsClient({
         setFormTeam("");
         setIsRepeatEnabled(false);
         setRepeatFrequency("DAILY");
+        setRepeatTime("09:00");
         // Reload projects list
         const reloadRes = await getTeamOpsProjectsAction();
         if (reloadRes.success && reloadRes.projects) {
@@ -1479,11 +1483,16 @@ export default function TeamOpsClient({
                         checked={isOngoing}
                         disabled={isRepeatEnabled}
                         onChange={(e) => setIsOngoing(e.target.checked)}
-                        className="rounded text-primary focus:ring-primary cursor-pointer h-3.5 w-3.5"
+                        className="rounded text-primary focus:ring-primary cursor-pointer h-3.5 w-3.5 disabled:opacity-50 disabled:cursor-not-allowed"
                       />
-                      <label htmlFor="form-ongoing" className="text-xs text-muted-foreground cursor-pointer select-none font-semibold">Ongoing</label>
+                      <label htmlFor="form-ongoing" className={`text-xs ${isRepeatEnabled ? 'text-muted-foreground/50 cursor-not-allowed' : 'text-muted-foreground cursor-pointer'} select-none font-semibold`}>Ongoing</label>
                     </div>
                   </div>
+                  {isRepeatEnabled && (
+                    <div className="text-[10px] text-amber-600 dark:text-amber-400 -mt-1 mb-1">
+                      * Ongoing is disabled for repeating projects.
+                    </div>
+                  )}
                   {!isOngoing ? (
                     <Input
                       type="date"
@@ -1543,10 +1552,24 @@ export default function TeamOpsClient({
                           <option value="DAILY">Daily</option>
                           <option value="WEEKLY">Weekly</option>
                           <option value="MONTHLY">Monthly</option>
+                          <option value="QUARTERLY">Quarterly</option>
+                          <option value="YEARLY">Yearly</option>
                         </select>
                         <ChevronDown className="absolute right-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
                       </div>
                     </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-muted-foreground tracking-wide uppercase">Repeat Time</label>
+                      <div className="relative">
+                        <input
+                          type="time"
+                          value={repeatTime}
+                          onChange={(e) => setRepeatTime(e.target.value)}
+                          className="flex h-10 w-full appearance-none rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-muted-foreground tracking-wide uppercase">Execution Time (Repeat At)</label>
                       <div className="flex gap-1.5 items-center">

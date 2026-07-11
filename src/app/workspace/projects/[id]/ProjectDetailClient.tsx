@@ -394,7 +394,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-7xl mx-auto">
+    <div className="flex flex-col gap-6 animate-in fade-in duration-500 max-w-7xl mx-auto w-full">
       
       {/* Header */}
       <div className="relative flex flex-col gap-4 overflow-hidden bg-background p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm transition-all hover:shadow-md">
@@ -863,18 +863,18 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
       </div>
 
       {/* Tabs Layout */}
-      <Tabs defaultValue="overview" className="space-y-6">
+      <Tabs defaultValue="overview" className="flex flex-col gap-6">
         <TabsList className="bg-muted/30 border border-slate-200/60 dark:border-slate-800/60 shadow-sm p-1.5 rounded-xl">
           <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-sm flex items-center gap-2 transition-all px-4"><LayoutDashboard size={14}/> Overview</TabsTrigger>
           <TabsTrigger value="tasks" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-sm flex items-center gap-2 transition-all px-4"><CheckSquare size={14}/> Tasks <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 font-bold bg-muted-foreground/10">{project.tasks.length}</Badge></TabsTrigger>
         </TabsList>
 
         {/* OVERVIEW TAB */}
-        <TabsContent value="overview" className="space-y-6">
+        <TabsContent value="overview" className="mt-0">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             
             {/* Left Column: Tasks + Members */}
-            <div className="col-span-1 space-y-6">
+            <div className="col-span-1 flex flex-col gap-6">
               {/* Project Tasks */}
               <Card className="shadow-sm border-slate-200/60 dark:border-slate-800/60 hover:shadow-md transition-all duration-300">
                 <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/50 bg-muted/10">
@@ -1108,7 +1108,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                     <Badge variant="secondary">{statusTasks.length}</Badge>
                   </div>
                   
-                  <div className="flex-1 space-y-3">
+                  <div className="flex-1 flex flex-col gap-3">
                     {statusTasks.length === 0 ? (
                       <div className="h-24 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-lg flex items-center justify-center text-xs text-muted-foreground">
                         No tasks

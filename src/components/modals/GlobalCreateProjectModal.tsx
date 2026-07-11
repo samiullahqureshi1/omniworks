@@ -4,7 +4,7 @@ import React, { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Users, Trash2, X, Loader2, ChevronDown, Check, Repeat } from "lucide-react";
+import { Plus, Users, Trash2, X, Loader2, ChevronDown, Check, Repeat, FolderKanban, Pin, Star, LayoutGrid, Search, Edit2, Calendar, Clock, ShieldAlert, Crown, Shield, MoreHorizontal, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { createProjectAction, quickCreateClientAction, createProjectTemplateAction } from "@/app/actions/projects";
+import { createProjectAction, quickCreateClientAction, createProjectTemplateAction, getProjectTemplatesAction, deleteProjectTemplateAction } from "@/app/actions/projects";
 import { getProjectFormDataAction } from "@/app/actions/getProjectFormDataAction";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { getRulesAction, createRuleAction } from "@/app/actions/rules";
@@ -61,11 +61,19 @@ export default function GlobalCreateProjectModal({
 
   // Repeat Settings States
   const [isRepeatEnabled, setIsRepeatEnabled] = useState(false);
-  const [repeatFrequency, setRepeatFrequency] = useState<"DAILY" | "WEEKLY" | "MONTHLY">("DAILY");
+  const [repeatFrequency, setRepeatFrequency] = useState<"DAILY" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY">("DAILY");
+  const [repeatTime, setRepeatTime] = useState("09:00");
 
   // Template Save States
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
+
+  const [isTemplateSelectOpen, setIsTemplateSelectOpen] = useState(false);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [templateSearchQuery, setTemplateSearchQuery] = useState("");
+  const [pinnedTemplateIds, setPinnedTemplateIds] = useState<string[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [defaultTemplateId, setDefaultTemplateId] = useState<string | null>(null);
 
   // Rule States
   const [rules, setRules] = useState<any[]>([]);
@@ -129,6 +137,28 @@ export default function GlobalCreateProjectModal({
     }
   };
 
+  const fetchTemplates = async () => {
+    setIsLoadingTemplates(true);
+    try {
+      const res = await getProjectTemplatesAction();
+      if (res.success && res.templates) {
+        setTemplates(res.templates);
+      } else {
+        toast.error(res.error || "Failed to load templates");
+      }
+    } catch (e) {
+      toast.error("Failed to load templates");
+    } finally {
+      setIsLoadingTemplates(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isTemplateSelectOpen) {
+      fetchTemplates();
+    }
+  }, [isTemplateSelectOpen]);
+
   const handleSaveTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!templateName.trim()) {
@@ -160,6 +190,7 @@ export default function GlobalCreateProjectModal({
       attachedRuleIds,
       isRepeatEnabled,
       repeatFrequency,
+      repeatTime,
     };
 
     startTransition(async () => {
@@ -173,6 +204,117 @@ export default function GlobalCreateProjectModal({
       }
     });
   };
+
+  const handleDeleteTemplate = async (templateId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Are you sure you want to delete this template?")) return;
+    try {
+      const res = await deleteProjectTemplateAction(templateId);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("Template deleted");
+        setTemplates(templates.filter((t) => t.id !== templateId));
+        // Remove from pinned list if deleted
+        setPinnedTemplateIds((prev) => {
+          const next = prev.filter((id) => id !== templateId);
+          localStorage.setItem("omniwork_pinned_templates", JSON.stringify(next));
+          return next;
+        });
+      }
+    } catch (err) {
+      toast.error("Failed to delete template");
+    }
+  };
+
+  const handleSetDefaultTemplate = (templateId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newDefault = defaultTemplateId === templateId ? null : templateId;
+    setDefaultTemplateId(newDefault);
+    if (newDefault) {
+      localStorage.setItem("omniwork_default_project_template_id", newDefault);
+      toast.success("Template set as default");
+    } else {
+      localStorage.removeItem("omniwork_default_project_template_id");
+      toast.success("Default template removed");
+    }
+  };
+
+  const handleTogglePinTemplate = (templateId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPinnedTemplateIds((prev) => {
+      const isPinned = prev.includes(templateId);
+      const next = isPinned
+        ? prev.filter((id) => id !== templateId)
+        : [...prev, templateId];
+      localStorage.setItem("omniwork_pinned_templates", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  
+  const handleUseTemplate = (template: any) => {
+    const config = template.config;
+    if (!config) return;
+
+    setFormName(config.name || "");
+    setFormClientId(config.clientId || "");
+    setFormPMId(config.projectManagerId || "");
+    setFormStatusId(config.statusId || "");
+    setFormPriority(config.priority || "MEDIUM");
+    
+    const formatDateForInput = (dateStr: string) => {
+      if (!dateStr) return "";
+      try {
+        return new Date(dateStr).toISOString().split("T")[0];
+      } catch (err) {
+        return "";
+      }
+    };
+    
+    setFormStartDate(formatDateForInput(config.startDate));
+    setFormEndDate(formatDateForInput(config.endDate));
+    setIsOngoing(config.isOngoing || false);
+    setFormBudget(config.projectBudget ? String(config.projectBudget) : "");
+    setFormAllocatedHours(config.totalAllocatedHours ? String(config.totalAllocatedHours) : "");
+    setFormNotes(config.notes || "");
+    setDescription(config.description || "");
+
+    if (config.customFields && Array.isArray(config.customFields)) {
+      setCustomFields(config.customFields);
+    } else {
+      setCustomFields([]);
+    }
+
+    if (config.tasks && Array.isArray(config.tasks)) {
+      setProjectTasks(
+        config.tasks.map((t: any) => ({
+          id: t.id || Math.random().toString(),
+          title: t.title || "",
+          description: t.description || "",
+          status: t.statusId || t.status || "",
+          priority: t.priority || "MEDIUM",
+          assigneeId: (t.assigneeIds && t.assigneeIds[0]) || t.assigneeId || "",
+        }))
+      );
+    } else {
+      setProjectTasks([]);
+    }
+
+    if (config.attachedRuleIds && Array.isArray(config.attachedRuleIds)) {
+      setAttachedRuleIds(config.attachedRuleIds);
+    } else {
+      setAttachedRuleIds([]);
+    }
+
+    setIsRepeatEnabled(config.isRepeatEnabled || false);
+    setRepeatFrequency(config.repeatFrequency || "DAILY");
+    setRepeatTime(config.repeatTime || "09:00");
+
+    setIsTemplateSelectOpen(false);
+    setIsOpen(true);
+  };
+
   const [projectTasks, setProjectTasks] = useState<
     {
       id: string;
@@ -266,6 +408,7 @@ export default function GlobalCreateProjectModal({
       repeatSettings: {
         enabled: isRepeatEnabled,
         frequency: repeatFrequency,
+          time: repeatTime,
       },
       tasks: projectTasks
         .filter((t) => t.title.trim() !== "")
@@ -301,6 +444,7 @@ export default function GlobalCreateProjectModal({
         setDescription("");
         setIsRepeatEnabled(false);
         setRepeatFrequency("DAILY");
+        setRepeatTime("09:00");
         setAttachedRuleIds([]);
         router.refresh();
       }
@@ -337,94 +481,75 @@ export default function GlobalCreateProjectModal({
             if (isQuickClientOpen) e.preventDefault();
           }}
         >
-          <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shrink-0 shadow-sm">
-            <DialogTitle>Create New Project</DialogTitle>
-            <DialogDescription>
-              Setup a new project workspace, assign a PM, and configure
-              timelines.
-            </DialogDescription>
+          <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shrink-0 shadow-sm flex flex-row justify-between items-center gap-4">
+            <div className="space-y-1">
+              <DialogTitle>Create New Project</DialogTitle>
+              <DialogDescription>
+                Setup a new project workspace, assign a PM, and configure
+                timelines.
+              </DialogDescription>
+            </div>
+            
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Templates Selector in Header */}
+              <Button type="button" variant="outline" size="sm" className="h-9 rounded-xl border bg-background px-3 text-xs font-semibold flex items-center gap-1.5 shadow-sm" onClick={() => setIsTemplateSelectOpen(true)}>
+                <FolderKanban className="h-3.5 w-3.5 text-muted-foreground" /> Select from Template...
+              </Button>
+              
+              {/* Rules Selector in Header */}
+              {attachedRuleIds.length > 0 && (
+                <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border border-indigo-100 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900/50 text-[10px] font-bold px-2 py-0.5 rounded-lg">
+                  {attachedRuleIds.length} Rule{attachedRuleIds.length > 1 ? 's' : ''} Attached
+                </Badge>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline" size="sm" className="h-9 rounded-xl border bg-background px-3 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                    Select Rules... <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1.5 z-50">
+                  {rules.filter(r => r.isActive).length === 0 ? (
+                    <div className="p-2.5 text-center text-xs text-muted-foreground">
+                      No active rules
+                    </div>
+                  ) : (
+                    rules
+                      .filter((r) => r.isActive)
+                      .map((r) => {
+                        const isAttached = attachedRuleIds.includes(r.id);
+                        return (
+                          <DropdownMenuItem
+                            key={r.id}
+                            onClick={() => {
+                              if (isAttached) {
+                                setAttachedRuleIds(prev => prev.filter(id => id !== r.id));
+                              } else {
+                                setAttachedRuleIds(prev => [...prev, r.id]);
+                              }
+                            }}
+                            className="cursor-pointer rounded-lg px-2.5 py-2 text-xs flex items-center justify-between hover:bg-muted focus:bg-muted"
+                          >
+                            <span>{r.name}</span>
+                            {isAttached && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />}
+                          </DropdownMenuItem>
+                        );
+                      })
+                  )}
+                  <DropdownMenuSeparator className="my-1 border-t" />
+                  <DropdownMenuItem
+                    onClick={() => setIsCreateRuleOpen(true)}
+                    className="cursor-pointer rounded-lg px-2.5 py-2 text-xs text-primary hover:bg-primary/5 focus:bg-primary/5 font-semibold flex items-center gap-1"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Create New Rule
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
             <form onSubmit={handleCreateProject} className="space-y-6 pb-6">
-              {/* Rules Selector */}
-              <div className="space-y-3 bg-indigo-50/50 dark:bg-indigo-950/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/30">
-                <div className="flex justify-between items-center">
-                  <label className="text-sm font-bold text-foreground">
-                    Automation Rules
-                  </label>
-                  <span className="text-xs text-muted-foreground">Select rules to run automatically on this project.</span>
-                </div>
-                <div className="flex gap-2 items-center flex-wrap">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button type="button" variant="outline" size="sm" className="h-9 rounded-xl border bg-background px-3 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
-                        Select Rules... <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-56 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1.5 z-50">
-                      {rules.filter(r => r.isActive).length === 0 ? (
-                        <div className="p-2.5 text-center text-xs text-muted-foreground">
-                          No active rules
-                        </div>
-                      ) : (
-                        rules
-                          .filter((r) => r.isActive)
-                          .map((r) => {
-                            const isAttached = attachedRuleIds.includes(r.id);
-                            return (
-                              <DropdownMenuItem
-                                key={r.id}
-                                onClick={() => {
-                                  if (isAttached) {
-                                    setAttachedRuleIds(prev => prev.filter(id => id !== r.id));
-                                  } else {
-                                    setAttachedRuleIds(prev => [...prev, r.id]);
-                                  }
-                                }}
-                                className="cursor-pointer rounded-lg px-2.5 py-2 text-xs flex items-center justify-between hover:bg-muted focus:bg-muted"
-                              >
-                                <span>{r.name}</span>
-                                {isAttached && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />}
-                              </DropdownMenuItem>
-                            );
-                          })
-                      )}
-                      <DropdownMenuSeparator className="my-1 border-t" />
-                      <DropdownMenuItem
-                        onClick={() => setIsCreateRuleOpen(true)}
-                        className="cursor-pointer rounded-lg px-2.5 py-2 text-xs text-primary hover:bg-primary/5 focus:bg-primary/5 font-semibold flex items-center gap-1"
-                      >
-                        <Plus className="h-3.5 w-3.5" /> Create New Rule
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  <div className="flex flex-wrap gap-1.5 items-center">
-                    {attachedRuleIds.map((id) => {
-                      const r = rules.find((rule) => rule.id === id);
-                      if (!r) return null;
-                      return (
-                        <Badge
-                          key={id}
-                          variant="secondary"
-                          className="py-1 px-2.5 rounded-lg flex items-center gap-1.5 bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900/50 text-xs font-semibold"
-                        >
-                          {r.name}
-                          <button
-                            type="button"
-                            onClick={() => setAttachedRuleIds((prev) => prev.filter((rid) => rid !== id))}
-                            className="hover:text-destructive text-indigo-500 hover:bg-indigo-200/50 rounded-full p-0.5"
-                          >
-                            <X size={10} />
-                          </button>
-                        </Badge>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Basics */}
+{/* Basics */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2 col-span-2">
                   <label className="text-sm font-medium">
@@ -595,16 +720,22 @@ export default function GlobalCreateProjectModal({
                         id="ongoing"
                         checked={isOngoing}
                         onChange={(e) => setIsOngoing(e.target.checked)}
-                        className="rounded border-gray-300 text-primary focus:ring-primary"
+                        disabled={isRepeatEnabled}
+                        className="rounded border-gray-300 text-primary focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                       <label
                         htmlFor="ongoing"
-                        className="text-xs text-muted-foreground cursor-pointer"
+                        className={`text-xs ${isRepeatEnabled ? 'text-muted-foreground/50 cursor-not-allowed' : 'text-muted-foreground cursor-pointer'}`}
                       >
                         Ongoing
                       </label>
                     </div>
                   </div>
+                  {isRepeatEnabled && (
+                    <div className="text-[10px] text-amber-600 dark:text-amber-400 -mt-1 mb-1">
+                      * Ongoing is disabled for repeating projects.
+                    </div>
+                  )}
                   {!isOngoing ? (
                     <Input
                       name="endDate"
@@ -658,7 +789,7 @@ export default function GlobalCreateProjectModal({
                 </div>
 
                 {isRepeatEnabled && (
-                  <div className="grid grid-cols-1 gap-4 pt-4 border-t border-purple-100/50 dark:border-purple-900/20 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-purple-100/50 dark:border-purple-900/20 animate-in fade-in slide-in-from-top-2 duration-200">
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-muted-foreground tracking-wide uppercase">Repeat Frequency</label>
                       <div className="relative">
@@ -670,10 +801,24 @@ export default function GlobalCreateProjectModal({
                           <option value="DAILY">Daily</option>
                           <option value="WEEKLY">Weekly</option>
                           <option value="MONTHLY">Monthly</option>
+                          <option value="QUARTERLY">Quarterly</option>
+                          <option value="YEARLY">Yearly</option>
                         </select>
                         <ChevronDown className="absolute right-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
                       </div>
                     </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-muted-foreground tracking-wide uppercase">Repeat Time</label>
+                      <div className="relative">
+                        <input
+                          type="time"
+                          value={repeatTime}
+                          onChange={(e) => setRepeatTime(e.target.value)}
+                          className="flex h-10 w-full appearance-none rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
                   </div>
                 )}
               </div>
@@ -1098,8 +1243,10 @@ export default function GlobalCreateProjectModal({
                   className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
                 >
                   <option value="DAILY">Daily</option>
-                  <option value="WEEKLY">Weekly</option>
-                  <option value="MONTHLY">Monthly</option>
+                          <option value="WEEKLY">Weekly</option>
+                          <option value="MONTHLY">Monthly</option>
+                          <option value="QUARTERLY">Quarterly</option>
+                          <option value="YEARLY">Yearly</option>
                 </select>
               </div>
 
@@ -1168,6 +1315,164 @@ export default function GlobalCreateProjectModal({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+      {/* Template Selection Modal */}
+      <Dialog open={isTemplateSelectOpen} onOpenChange={setIsTemplateSelectOpen}>
+        <DialogContent className="sm:max-w-[850px] h-[80vh] flex flex-col overflow-hidden bg-background border-border p-0 rounded-2xl shadow-xl">
+          <DialogHeader className="px-6 py-5 border-b shrink-0 bg-slate-50/50 dark:bg-zinc-900/50 z-10 sticky top-0">
+            <DialogTitle className="text-xl font-extrabold tracking-tight">Select a Template</DialogTitle>
+            <DialogDescription className="text-xs mt-1 text-muted-foreground">
+              Choose one of your saved custom configurations. You can set any template as default using the star icon.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Search bar inside modal */}
+          <div className="px-6 pt-4 shrink-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search templates by name..."
+                value={templateSearchQuery}
+                onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                className="pl-9 h-10 rounded-xl border bg-background text-sm shadow-sm"
+              />
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+            {isLoadingTemplates ? (
+              <div className="flex items-center justify-center h-48">
+                <span className="text-sm text-muted-foreground animate-pulse font-medium">Loading templates...</span>
+              </div>
+            ) : templates.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 border border-dashed rounded-2xl p-6 text-center">
+                <FolderKanban className="h-8 w-8 text-muted-foreground mb-2" />
+                <h3 className="font-semibold text-sm">No templates saved yet</h3>
+                <p className="text-xs text-muted-foreground mt-1 max-w-[280px]">
+                  Create a new project and click "Save as Template" to add one.
+                </p>
+              </div>
+            ) : (() => {
+              const query = templateSearchQuery.toLowerCase();
+              const filtered = templates.filter(t => t.name.toLowerCase().includes(query));
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="text-center py-16 text-sm text-muted-foreground font-medium italic border border-dashed rounded-2xl p-8">
+                    No templates match "{templateSearchQuery}"
+                  </div>
+                );
+              }
+
+              // Sort default template to the top
+              const sorted = [...filtered].sort((a, b) => {
+                if (a.id === defaultTemplateId) return -1;
+                if (b.id === defaultTemplateId) return 1;
+                return 0;
+              });
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {sorted.map((template) => {
+                    const config = template.config || {};
+                    const customFieldsCount = Array.isArray(config.customFields) ? config.customFields.length : 0;
+                    const tasksCount = Array.isArray(config.tasks) ? config.tasks.length : 0;
+                    const isPinned = pinnedTemplateIds.includes(template.id);
+                    const isDefault = template.id === defaultTemplateId;
+
+                    return (
+                      <div
+                        key={template.id}
+                        className={`border rounded-2xl p-4.5 bg-slate-50/40 dark:bg-zinc-900/20 hover:shadow-md transition-all duration-300 flex flex-col justify-between group relative animate-in fade-in duration-200 ${
+                          isDefault 
+                            ? 'border-amber-400 dark:border-amber-600 bg-amber-50/5 dark:bg-amber-950/5 shadow-sm' 
+                            : 'border-slate-200/60 dark:border-zinc-800/80 hover:border-purple-400'
+                        }`}
+                      >
+                        <div className="absolute right-3 top-3 flex items-center gap-1.5">
+                          {isDefault && (
+                            <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 text-[9px] font-bold py-0.5 px-1.5 rounded-lg border border-amber-200 dark:border-amber-900 mr-1.5">
+                              Default
+                            </Badge>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => handleSetDefaultTemplate(template.id, e)}
+                            className="text-muted-foreground hover:text-amber-400 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
+                            title={isDefault ? "Remove default status" : "Set as default template"}
+                          >
+                            <Star className={`h-4 w-4 transition-all duration-200 ${isDefault ? "fill-amber-400 text-amber-400" : "opacity-40 group-hover:opacity-100"}`} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleTogglePinTemplate(template.id, e)}
+                            className="text-muted-foreground hover:text-purple-600 dark:hover:text-purple-400 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
+                            title={isPinned ? "Unpin template" : "Pin template"}
+                          >
+                            <Pin className={`h-4 w-4 transition-all duration-200 ${isPinned ? "fill-purple-600 text-purple-600 dark:fill-purple-400 dark:text-purple-400 rotate-45" : "opacity-40 group-hover:opacity-100"}`} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteTemplate(template.id, e)}
+                            className="text-muted-foreground hover:text-destructive p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 opacity-0 group-hover:opacity-100 transition-all duration-200"
+                            title="Delete template"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+
+                        <div className="space-y-3.5 mb-4">
+                          <h4 className="font-bold text-base text-slate-900 dark:text-white leading-tight truncate pr-28" title={template.name}>
+                            {template.name}
+                          </h4>
+                          
+                          <div className="flex flex-wrap gap-1.5">
+                            <Badge variant="secondary" className="bg-purple-50 text-purple-700 dark:bg-purple-950/20 dark:text-purple-400 border border-purple-100/50 dark:border-purple-900/30 text-[10px] font-bold py-0.5 px-2">
+                              {customFieldsCount} {customFieldsCount === 1 ? 'Field' : 'Fields'}
+                            </Badge>
+                            <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/20 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-900/30 text-[10px] font-bold py-0.5 px-2">
+                              {tasksCount} {tasksCount === 1 ? 'Task' : 'Tasks'}
+                            </Badge>
+                          </div>
+
+                          <p className="text-[10px] text-muted-foreground font-semibold flex items-center">
+                            <Calendar className="h-3 w-3 mr-1" />
+                            Created: {new Date(template.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                          </p>
+                        </div>
+
+                        <Button
+                          type="button"
+                          onClick={() => handleUseTemplate(template)}
+                          className={`w-full text-xs font-semibold h-9 rounded-xl shadow-sm transition-all duration-200 ${
+                            isDefault
+                              ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                              : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white'
+                          }`}
+                        >
+                          Use Template
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+
+          <DialogFooter className="px-6 py-4 border-t shrink-0 bg-slate-50/50 dark:bg-zinc-900/50 sticky bottom-0 z-10">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsTemplateSelectOpen(false)}
+              className="rounded-xl shadow-sm text-xs font-bold"
+            >
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

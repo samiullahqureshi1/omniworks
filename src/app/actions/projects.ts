@@ -165,7 +165,8 @@ export async function createProjectAction(data: {
   isRepeated?: boolean;
   repeatSettings?: {
     enabled: boolean;
-    frequency: "DAILY" | "WEEKLY" | "MONTHLY";
+    frequency: "DAILY" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY";
+    time?: string;
   };
   tasks?: {
     title: string;
@@ -212,7 +213,7 @@ export async function createProjectAction(data: {
 
     // Repeated Projects Creation Logic
     if (repeatSettings?.enabled && endDate) {
-      const generateRepeatDates = (start: Date, end: Date, freq: "DAILY" | "WEEKLY" | "MONTHLY"): Date[] => {
+      const generateRepeatDates = (start: Date, end: Date, freq: "DAILY" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY"): Date[] => {
         const dates: Date[] = [];
         let current = new Date(start);
         const limit = new Date(end);
@@ -230,6 +231,10 @@ export async function createProjectAction(data: {
             current.setDate(current.getDate() + 7);
           } else if (freq === "MONTHLY") {
             current.setMonth(current.getMonth() + 1);
+          } else if (freq === "QUARTERLY") {
+            current.setMonth(current.getMonth() + 3);
+          } else if (freq === "YEARLY") {
+            current.setFullYear(current.getFullYear() + 1);
           } else {
             break;
           }
@@ -266,6 +271,7 @@ export async function createProjectAction(data: {
               priority,
               customFields: customFields || null,
               isRepeated: true,
+              repeatTime: repeatSettings?.time || null,
               assignees: {
                 create: assigneeIds.map((userId) => ({
                   userId,
@@ -332,6 +338,7 @@ export async function createProjectAction(data: {
         priority,
         customFields: customFields || null,
         isRepeated: isRepeated || false,
+        repeatTime: repeatSettings?.time || null,
         assignees: {
           create: assigneeIds.map((userId) => ({
             userId,

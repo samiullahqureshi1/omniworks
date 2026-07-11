@@ -165,6 +165,7 @@ function KanbanCard({ project, currentUser, handleDelete }: any) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: project.id,
     data: project,
+    disabled: currentUser?.role === 'CLIENT',
   });
 
   const style = transform ? {
@@ -318,7 +319,8 @@ export default function ProjectsClient({
   const [formNotes, setFormNotes] = useState("");
 
   const [isRepeatEnabled, setIsRepeatEnabled] = useState(false);
-  const [repeatFrequency, setRepeatFrequency] = useState<"DAILY" | "WEEKLY" | "MONTHLY">("DAILY");
+  const [repeatFrequency, setRepeatFrequency] = useState<"DAILY" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY">("DAILY");
+  const [repeatTime, setRepeatTime] = useState("09:00");
 
   // Template Management States
   const [isTemplateSelectOpen, setIsTemplateSelectOpen] = useState(false);
@@ -463,6 +465,7 @@ export default function ProjectsClient({
       attachedRuleIds,
       isRepeatEnabled,
       repeatFrequency,
+      repeatTime,
     };
 
     startTransition(async () => {
@@ -580,6 +583,7 @@ export default function ProjectsClient({
 
     setIsRepeatEnabled(config.isRepeatEnabled || false);
     setRepeatFrequency(config.repeatFrequency || "DAILY");
+    setRepeatTime(config.repeatTime || "09:00");
 
     setIsTemplateSelectOpen(false);
     setIsCreateOpen(true);
@@ -676,11 +680,16 @@ export default function ProjectsClient({
   };
 
   const handleDragStart = (e: any) => {
+    if (currentUser?.role === 'CLIENT') return;
     setActiveDragProject(e.active.data.current);
   };
 
   const handleDragEnd = (e: DragEndEvent) => {
     setActiveDragProject(null);
+    if (currentUser?.role === 'CLIENT') {
+      toast.error("Clients cannot change project statuses.");
+      return;
+    }
     const { active, over } = e;
     
     if (!over) return;
@@ -748,6 +757,7 @@ export default function ProjectsClient({
       repeatSettings: {
         enabled: isRepeatEnabled,
         frequency: repeatFrequency,
+          time: repeatTime,
       },
       tasks: projectTasks
         .filter((t) => t.title.trim() !== "")
@@ -783,6 +793,7 @@ export default function ProjectsClient({
         setDescription("");
         setIsRepeatEnabled(false);
         setRepeatFrequency("DAILY");
+        setRepeatTime("09:00");
         setAttachedRuleIds([]);
         router.refresh();
       }
@@ -1454,16 +1465,22 @@ export default function ProjectsClient({
                       id="ongoing"
                       checked={isOngoing}
                       onChange={(e) => setIsOngoing(e.target.checked)}
-                      className="rounded border-gray-300 text-primary focus:ring-primary"
+                      disabled={isRepeatEnabled}
+                      className="rounded border-gray-300 text-primary focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     <label
                       htmlFor="ongoing"
-                      className="text-xs text-muted-foreground cursor-pointer"
+                      className={`text-xs ${isRepeatEnabled ? 'text-muted-foreground/50 cursor-not-allowed' : 'text-muted-foreground cursor-pointer'}`}
                     >
                       Ongoing
                     </label>
                   </div>
                 </div>
+                {isRepeatEnabled && (
+                  <div className="text-[10px] text-amber-600 dark:text-amber-400 -mt-1 mb-1">
+                    * Ongoing is disabled for repeating projects.
+                  </div>
+                )}
                 {!isOngoing ? (
                   <Input
                     name="endDate"
@@ -1517,7 +1534,7 @@ export default function ProjectsClient({
               </div>
 
               {isRepeatEnabled && (
-                <div className="grid grid-cols-1 gap-4 pt-4 border-t border-purple-100/50 dark:border-purple-900/20 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-purple-100/50 dark:border-purple-900/20 animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-muted-foreground tracking-wide uppercase">Repeat Frequency</label>
                     <div className="relative">
@@ -1527,12 +1544,26 @@ export default function ProjectsClient({
                         className="flex h-10 w-full appearance-none rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 cursor-pointer pr-10"
                       >
                         <option value="DAILY">Daily</option>
-                        <option value="WEEKLY">Weekly</option>
-                        <option value="MONTHLY">Monthly</option>
+                          <option value="WEEKLY">Weekly</option>
+                          <option value="MONTHLY">Monthly</option>
+                          <option value="QUARTERLY">Quarterly</option>
+                          <option value="YEARLY">Yearly</option>
                       </select>
                       <ChevronDown className="absolute right-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
                     </div>
                   </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-muted-foreground tracking-wide uppercase">Repeat Time</label>
+                      <div className="relative">
+                        <input
+                          type="time"
+                          value={repeatTime}
+                          onChange={(e) => setRepeatTime(e.target.value)}
+                          className="flex h-10 w-full appearance-none rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
                 </div>
               )}
             </div>
