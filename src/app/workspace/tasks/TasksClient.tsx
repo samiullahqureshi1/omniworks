@@ -13,19 +13,21 @@ import { Badge } from '@/components/ui/badge';
 import {
   Search, Plus, Settings, Calendar, Clock, LayoutGrid, List, Columns,
   X, Type, Hash, Tags, Sparkles, PlusSquare, CheckSquare, Globe, Mail, Phone,
-  AlignLeft, ChevronDown,
+  AlignLeft, ChevronDown, Check, CircleDashed, CircleDot, CheckCircle2, Circle
 } from 'lucide-react';
 import { List as ListIcon2 } from 'lucide-react';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, Edit, Trash2, Repeat } from 'lucide-react';
-import { deleteTaskAction, updateTaskAction, getTaskTemplatesAction, deleteTaskTemplateAction } from '@/app/actions/tasks';
+import { deleteTaskAction, updateTaskAction, getTaskTemplatesAction, deleteTaskTemplateAction, createTaskStatusAction, updateTaskStatusAction, deleteTaskStatusAction } from '@/app/actions/tasks';
 import { getTaskHiddenColumnsAction, setTaskHiddenColumnsAction } from '@/app/actions/settings';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import TaskFormModal from './TaskFormModal';
 import StatusManagementModal from './StatusManagementModal';
 import { DndContext, DragOverlay, useDraggable, useDroppable, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, horizontalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // ─── TableCustomFieldCell ────────────────────────────────────────────────────
 
@@ -216,39 +218,116 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
   );
 }
 
-function KanbanColumn({ status, statusTasks, currentUser, openEdit, handleDelete, router }: any) {
-  const { setNodeRef } = useDroppable({
-    id: status.id,
-    data: status,
+function KanbanColumn({ status, title, count, taskStatuses, children, onAddTask, currentUser, handleDeleteStage, handleRenameStage }: any) {
+  const { setNodeRef, attributes, listeners, transform, transition, isDragging, isOver } = useSortable({
+    id: status,
+    data: { type: "COLUMN", status }
   });
 
-  return (
-    <div className="flex flex-col w-[320px] shrink-0 bg-muted/30 rounded-2xl border border-border/50">
-      <div className="flex items-center justify-between p-4 pb-2">
-        <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: status.color }} />
-          <h3 className="font-semibold text-sm text-foreground/80 tracking-wide uppercase">{status.name}</h3>
-          <span className="text-xs font-medium bg-background border px-1.5 py-0.5 rounded-md text-muted-foreground">{statusTasks.length}</span>
-        </div>
-      </div>
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(title);
 
-      <div ref={setNodeRef} className="flex-1 p-3 flex flex-col gap-3 min-h-[150px] transition-colors rounded-b-2xl">
-        {statusTasks.length === 0 ? (
-          <div className="h-24 border-2 border-dashed border-border/50 rounded-xl flex items-center justify-center text-xs font-medium text-muted-foreground/60 bg-background/30">
-            Drag tasks here
+  const getStatusColor = (statusId: string) => {
+    const statusObj = taskStatuses?.find((s: any) => s.id === statusId);
+    return statusObj?.color || '#94a3b8';
+  };
+
+  const statusColor = getStatusColor(status);
+
+  const getStatusIcon = (name: string) => {
+    const t = name.toLowerCase();
+    if (t.includes('todo') || t.includes('to do') || t.includes('pending')) return <CircleDashed size={14} />;
+    if (t.includes('progress') || t.includes('doing') || t.includes('active')) return <CircleDot size={14} />;
+    if (t.includes('done') || t.includes('complete') || t.includes('finish')) return <CheckCircle2 size={14} />;
+    return <Circle size={14} />;
+  };
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    backgroundColor: `${statusColor}15`
+  };
+
+  const submitRename = () => {
+    if (editName.trim() !== "" && editName.trim() !== title) {
+      handleRenameStage(status, editName.trim());
+    } else {
+      setEditName(title);
+    }
+    setIsEditing(false);
+  };
+
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style}
+      className={`flex flex-col min-w-[320px] max-w-[320px] rounded-2xl p-3.5 transition-all duration-300 ${isOver ? 'shadow-md scale-[1.01] opacity-90' : ''} ${isDragging ? 'opacity-50 z-50 shadow-2xl scale-105 rotate-1 cursor-grabbing' : ''}`}
+    >
+      <div className="flex items-center justify-between mb-4 px-1" {...attributes} {...listeners}>
+        <div className="flex items-center gap-2">
+          {isEditing ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-slate-300 shadow-sm" onPointerDown={(e) => e.stopPropagation()}>
+              {getStatusIcon(title)}
+              <input 
+                autoFocus
+                type="text" 
+                value={editName} 
+                onChange={(e) => setEditName(e.target.value)} 
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submitRename();
+                  if (e.key === 'Escape') { setEditName(title); setIsEditing(false); }
+                }}
+                className="font-bold text-[12px] tracking-wide uppercase bg-transparent outline-none w-28 text-slate-800"
+              />
+              <button onClick={submitRename} className="text-emerald-600 hover:text-emerald-700 ml-1">
+                <Check size={14} />
+              </button>
+            </div>
+          ) : (
+            <div 
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-white shadow-sm cursor-pointer hover:opacity-90" 
+              style={{ backgroundColor: statusColor }}
+              onPointerDown={(e) => {
+                if (currentUser?.role === 'OWNER') {
+                  e.stopPropagation();
+                  setIsEditing(true);
+                }
+              }}
+            >
+              {getStatusIcon(title)}
+              <h3 className="font-bold text-[12px] tracking-wide uppercase">{title}</h3>
+            </div>
+          )}
+          <span className="text-[13px] font-medium text-slate-500 dark:text-slate-400 ml-1">
+            {count}
+          </span>
+        </div>
+        
+        {currentUser?.role === 'OWNER' && (
+          <div className="flex items-center gap-1 text-slate-400" onPointerDown={(e) => e.stopPropagation()}>
+            <button 
+              onClick={() => handleDeleteStage(status)}
+              className="hover:text-red-500 p-1 rounded-md transition-colors"
+            >
+              <Trash2 size={14} />
+            </button>
+            <button className="hover:text-slate-700 dark:hover:text-slate-200 p-1 rounded-md transition-colors">
+              <MoreHorizontal size={14} />
+            </button>
           </div>
-        ) : (
-          statusTasks.map((task: any) => (
-            <KanbanTaskCard
-              key={task.id}
-              task={task}
-              currentUser={currentUser}
-              openEdit={openEdit}
-              handleDelete={handleDelete}
-              router={router}
-            />
-          ))
         )}
+      </div>
+      
+      <button 
+        onClick={onAddTask}
+        className="flex items-center gap-2 px-2 py-1.5 mb-3 text-sm font-medium transition-colors hover:opacity-80 rounded-md hover:bg-black/5 dark:hover:bg-white/5"
+        style={{ color: statusColor }}
+      >
+        <Plus size={16} /> Add Task
+      </button>
+
+      <div className="flex flex-col gap-2.5 overflow-y-auto custom-scrollbar pr-1 flex-1 pb-2">
+        {children}
       </div>
     </div>
   );
@@ -288,27 +367,61 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
 
   // ── Drag & Drop
-  const [activeDragTask, setActiveDragTask] = useState<any>(null);
+  const [activeDragItem, setActiveDragItem] = useState<any>(null);
   const [confirmDropState, setConfirmDropState] = useState<{ task: any, targetStatus: any } | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 5 },
+      activationConstraint: { distance: 8 },
     })
   );
 
   const handleDragStart = (event: any) => {
-    setActiveDragTask(event.active.data.current);
+    if (currentUser?.role === 'CLIENT') return;
+    setActiveDragItem(event.active.data.current);
   };
 
   const handleDragEnd = (event: any) => {
-    setActiveDragTask(null);
+    setActiveDragItem(null);
     const { active, over } = event;
+    if (currentUser?.role === 'CLIENT') {
+      toast.error("Clients cannot make changes.");
+      return;
+    }
     if (!over) return;
-    const task = active.data.current;
-    const targetStatus = over.data.current;
-    if (task.statusId !== targetStatus.id) {
+
+    const activeData = active.data.current as any;
+
+    // Column Reordering Logic
+    if (activeData?.type === "COLUMN") {
+      if (active.id !== over.id) {
+        const oldIndex = taskStatuses.findIndex((s: any) => s.id === active.id);
+        const newIndex = taskStatuses.findIndex((s: any) => s.id === over.id);
+        
+        const newStatuses = arrayMove(taskStatuses, oldIndex, newIndex);
+        
+        startTransition(async () => {
+          try {
+            await Promise.all(newStatuses.map((s: any, index: number) => 
+              updateTaskStatusAction(s.id, s.name, s.color, index)
+            ));
+            router.refresh();
+          } catch(e) {
+            toast.error("Failed to reorder columns.");
+          }
+        });
+      }
+      return;
+    }
+
+    // Task Drag Logic
+    const taskId = active.id as string;
+    const task = tasks.find(t => t.id === taskId);
+    const newStatusId = over.id as string;
+    const targetStatus = taskStatuses.find(s => s.id === newStatusId);
+
+    if (task && task.statusId !== newStatusId && targetStatus) {
       setConfirmDropState({ task, targetStatus });
     }
   };
@@ -347,6 +460,74 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   };
 
   const [isPending, startTransition] = useTransition();
+
+  // ── Status creation / editing / deleting (Part 2 inline status)
+  const [isCreateStatusOpen, setIsCreateStatusOpen] = useState(false);
+  const [newStatusName, setNewStatusName] = useState("");
+  const [newStatusColor, setNewStatusColor] = useState("#94a3b8");
+  const [isCreatingStatus, setIsCreatingStatus] = useState(false);
+  const [isDeleteStageDialogOpen, setIsDeleteStageDialogOpen] = useState(false);
+  const [deleteStageId, setDeleteStageId] = useState<string | null>(null);
+
+  const handleDeleteStage = (statusId: string) => {
+    setDeleteStageId(statusId);
+    setIsDeleteStageDialogOpen(true);
+  };
+
+  const confirmDeleteStage = async () => {
+    if (!deleteStageId) return;
+    try {
+      const res = await deleteTaskStatusAction(deleteStageId);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("Stage deleted!");
+        setIsDeleteStageDialogOpen(false);
+        setDeleteStageId(null);
+        router.refresh();
+      }
+    } catch (e) {
+      toast.error("Failed to delete stage.");
+    }
+  };
+
+  const handleRenameStage = async (statusId: string, newName: string) => {
+    const statusObj = taskStatuses.find((s: any) => s.id === statusId);
+    if (!statusObj) return;
+    try {
+      const res = await updateTaskStatusAction(statusId, newName, statusObj.color, statusObj.order);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("Stage renamed!");
+        router.refresh();
+      }
+    } catch (e) {
+      toast.error("Failed to rename stage.");
+    }
+  };
+
+  const handleCreateStatus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStatusName.trim() || !newStatusColor) return;
+    setIsCreatingStatus(true);
+    try {
+      const order = taskStatuses.length;
+      const res = await createTaskStatusAction(newStatusName.trim(), newStatusColor, order);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        setIsCreateStatusOpen(false);
+        setNewStatusName("");
+        router.refresh();
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to create status.");
+    } finally {
+      setIsCreatingStatus(false);
+    }
+  };
 
   // ── Modals
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -814,33 +995,68 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
       )}
 
       {viewMode === 'kanban' && (
-        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="flex gap-5 overflow-x-auto pb-6 pt-2 custom-scrollbar min-h-[calc(100vh-220px)] animate-in fade-in zoom-in-95 duration-200 px-2">
-            {taskStatuses.map((status) => {
-              const statusTasks = filteredTasks.filter(t => t.statusId === status.id);
-              return (
-                <KanbanColumn
-                  key={status.id}
-                  status={status}
-                  statusTasks={statusTasks}
-                  currentUser={currentUser}
-                  openEdit={openEdit}
-                  handleDelete={handleDelete}
-                  router={router}
-                />
-              );
-            })}
+            <SortableContext items={taskStatuses.map((s: any) => s.id)} strategy={horizontalListSortingStrategy}>
+              {taskStatuses.map((status) => {
+                const statusTasks = filteredTasks.filter(t => t.statusId === status.id);
+                return (
+                  <KanbanColumn
+                    key={status.id}
+                    status={status.id}
+                    title={status.name}
+                    count={statusTasks.length}
+                    taskStatuses={taskStatuses}
+                    onAddTask={() => {
+                      setEditingTask({ statusId: status.id });
+                      setIsCreateOpen(true);
+                    }}
+                    currentUser={currentUser}
+                    handleDeleteStage={handleDeleteStage}
+                    handleRenameStage={handleRenameStage}
+                  >
+                    {statusTasks.map((task: any) => (
+                      <KanbanTaskCard
+                        key={task.id}
+                        task={task}
+                        currentUser={currentUser}
+                        openEdit={openEdit}
+                        handleDelete={handleDelete}
+                        router={router}
+                      />
+                    ))}
+                  </KanbanColumn>
+                );
+              })}
+            </SortableContext>
+
+            {currentUser.role === 'OWNER' && (
+              <div className="shrink-0 flex items-start">
+                <button 
+                  onClick={() => setIsCreateStatusOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 mt-2 text-[14px] font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors bg-transparent border border-dashed border-transparent rounded-lg hover:bg-slate-50 dark:hover:bg-white/5"
+                >
+                  <Plus size={16} /> Add group
+                </button>
+              </div>
+            )}
           </div>
           <DragOverlay>
-            {activeDragTask ? (
-              <KanbanTaskCard
-                task={activeDragTask}
-                currentUser={currentUser}
-                openEdit={openEdit}
-                handleDelete={handleDelete}
-                router={router}
-                isDraggingOverlay
-              />
+            {activeDragItem ? (
+              activeDragItem.type === "COLUMN" ? (
+                <div className="opacity-80 scale-105 transition-transform cursor-grabbing w-[320px] rounded-2xl border-2 border-dashed border-primary bg-background shadow-2xl h-[200px]" />
+              ) : (
+                <div className="opacity-80 rotate-2 scale-105 transition-transform cursor-grabbing">
+                  <KanbanTaskCard
+                    task={activeDragItem}
+                    currentUser={currentUser}
+                    openEdit={openEdit}
+                    handleDelete={handleDelete}
+                    router={router}
+                    isDraggingOverlay
+                  />
+                </div>
+              )
             ) : null}
           </DragOverlay>
         </DndContext>
@@ -1305,6 +1521,75 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
       </DialogPrimitive.Root>
+
+      {/* CREATE STATUS DIALOG */}
+      <Dialog open={isCreateStatusOpen} onOpenChange={setIsCreateStatusOpen}>
+        <DialogContent className="sm:max-w-sm bg-background border-border">
+          <DialogHeader>
+            <DialogTitle>Add New Group</DialogTitle>
+            <DialogDescription>
+              Create a new status column for your workflow.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateStatus} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Status Name</label>
+              <Input 
+                value={newStatusName} 
+                onChange={(e) => setNewStatusName(e.target.value)} 
+                placeholder="e.g. In Review" 
+                required 
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Color</label>
+              <div className="flex gap-2">
+                {["#94a3b8", "#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7"].map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setNewStatusColor(color)}
+                    className={`w-8 h-8 rounded-full transition-transform ${newStatusColor === color ? 'scale-110 ring-2 ring-offset-2 ring-slate-400' : 'hover:scale-105'}`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+            </div>
+            <DialogFooter className="mt-6">
+              <Button type="button" variant="outline" onClick={() => setIsCreateStatusOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isCreatingStatus || !newStatusName.trim()}>
+                {isCreatingStatus ? "Creating..." : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Stage Confirmation Modal */}
+      <Dialog open={isDeleteStageDialogOpen} onOpenChange={setIsDeleteStageDialogOpen}>
+        <DialogContent className="sm:max-w-md bg-background border-border">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-destructive flex items-center gap-2">
+              <Trash2 size={20} /> Delete Stage
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete this stage? Ensure there are no tasks inside it first.
+            </p>
+          </div>
+          <DialogFooter className="mt-6">
+            <Button variant="outline" onClick={() => setIsDeleteStageDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteStage}>
+              Delete Stage
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
