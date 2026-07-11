@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useTransition, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -8,15 +10,122 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { formatHours } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Search, Plus, Settings, Calendar, Clock, LayoutGrid, List, Columns } from 'lucide-react';
+import {
+  Search, Plus, Settings, Calendar, Clock, LayoutGrid, List, Columns,
+  X, Type, Hash, Tags, Sparkles, PlusSquare, CheckSquare, Globe, Mail, Phone,
+  AlignLeft, ChevronDown,
+} from 'lucide-react';
+import { List as ListIcon2 } from 'lucide-react';
+import { Calendar as CalendarIcon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Edit, Trash2, ChevronDown, Repeat } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, Repeat } from 'lucide-react';
 import { deleteTaskAction, updateTaskAction, getTaskTemplatesAction, deleteTaskTemplateAction } from '@/app/actions/tasks';
+import { getTaskHiddenColumnsAction, setTaskHiddenColumnsAction } from '@/app/actions/settings';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import TaskFormModal from './TaskFormModal';
 import StatusManagementModal from './StatusManagementModal';
 import { DndContext, DragOverlay, useDraggable, useDroppable, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+
+// ─── TableCustomFieldCell ────────────────────────────────────────────────────
+
+function TableCustomFieldCell({ task, col, setTasks, tasks }: any) {
+  const customFields = Array.isArray(task.customFields) ? task.customFields : [];
+  const field = customFields.find((f: any) => f.name === col.name);
+  const value = field ? field.value : undefined;
+
+  let options = field?.options;
+  if (!options && Array.isArray(tasks)) {
+    const otherTask = tasks.find((t: any) => {
+      const tFields = Array.isArray(t.customFields) ? t.customFields : [];
+      return tFields.some((f: any) => f.name === col.name && Array.isArray(f.options) && f.options.length > 0);
+    });
+    if (otherTask) {
+      const f = otherTask.customFields.find((f: any) => f.name === col.name);
+      options = f?.options;
+    }
+  }
+
+  const updateValue = (val: any) => {
+    setTasks((prev: any) => prev.map((t: any) => {
+      if (t.id === task.id) {
+        const tFields = Array.isArray(t.customFields) ? [...t.customFields] : [];
+        const fIndex = tFields.findIndex((f: any) => f.name === col.name);
+        if (fIndex >= 0) {
+          tFields[fIndex] = { ...tFields[fIndex], value: val };
+        } else {
+          tFields.push({ name: col.name, type: col.type, value: val, options });
+        }
+        import('@/app/actions/tasks').then(m => {
+          m.updateTaskCustomFieldsAction(t.id, tFields).catch(console.error);
+        });
+        return { ...t, customFields: tFields };
+      }
+      return t;
+    }));
+  };
+
+  const commonClasses = "w-full h-full border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 bg-transparent text-[13px] text-slate-700 dark:text-slate-300 rounded-none shadow-none outline-none appearance-none min-h-[40px]";
+  const typeStr = (col.type || 'text').toLowerCase();
+
+  switch (typeStr) {
+    case 'text area':
+      return <textarea value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} py-2 resize-none custom-scrollbar`} />;
+    case 'checkbox':
+      return (
+        <div className="flex items-center justify-center h-full min-h-[40px]">
+          <input type="checkbox" checked={!!value} onChange={e => updateValue(e.target.checked)} className="h-4 w-4 cursor-pointer" />
+        </div>
+      );
+    case 'dropdown':
+      return (
+        <select value={value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer`}>
+          <option value="">—</option>
+          {(options || []).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      );
+    case 'labels': {
+      const currentValues = Array.isArray(value) ? value : [];
+      return (
+        <div className="flex items-center flex-wrap gap-1.5 h-full px-3 py-1 overflow-y-auto custom-scrollbar min-h-[40px]">
+          {currentValues.map((v: string) => (
+            <span key={v} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300">
+              {v}
+              <button type="button" onClick={() => updateValue(currentValues.filter((val: string) => val !== v))} className="text-slate-400 hover:text-red-500"><X size={10} /></button>
+            </span>
+          ))}
+          <select
+            value=""
+            onChange={e => {
+              if (e.target.value && !currentValues.includes(e.target.value)) {
+                updateValue([...currentValues, e.target.value]);
+              }
+            }}
+            className="bg-transparent text-[11px] text-slate-500 outline-none cursor-pointer"
+          >
+            <option value="">+ Add</option>
+            {(options || []).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
+        </div>
+      );
+    }
+    case 'date':
+      return <input type="date" value={value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer`} />;
+    case 'number':
+      return <input type="number" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+    case 'email':
+      return <input type="email" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+    case 'phone':
+      return <input type="tel" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+    case 'website':
+    case 'url':
+      return <input type="url" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+    default:
+      return <input type="text" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+  }
+}
+
+// ─── Kanban helpers ───────────────────────────────────────────────────────────
 
 function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isDraggingOverlay = false }: any) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -31,15 +140,15 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
   const priorityHex = task.priority === 'CRITICAL' ? '#ef4444' : task.priority === 'HIGH' ? '#f97316' : task.priority === 'MEDIUM' ? '#3b82f6' : '#cbd5e1';
 
   return (
-    <div 
-      ref={isDraggingOverlay ? null : setNodeRef} 
-      style={style} 
-      {...(isDraggingOverlay ? {} : attributes)} 
+    <div
+      ref={isDraggingOverlay ? null : setNodeRef}
+      style={style}
+      {...(isDraggingOverlay ? {} : attributes)}
       {...(isDraggingOverlay ? {} : listeners)}
       className={`bg-background border border-border/40 rounded-xl p-4 shadow-sm hover:shadow-lg hover:border-primary/30 transition-all duration-300 group flex flex-col gap-3 cursor-grab active:cursor-grabbing relative overflow-hidden ${isDragging ? 'opacity-40' : ''} ${isDraggingOverlay ? 'cursor-grabbing shadow-2xl scale-105' : ''}`}
     >
       <div className="absolute top-0 left-0 w-[4px] h-full transition-all duration-300 group-hover:w-[6px]" style={{ backgroundColor: priorityHex }} />
-      
+
       <div className="flex justify-between items-start gap-3 pl-2">
         <span className="font-semibold text-[14px] leading-snug text-foreground/90 transition-colors line-clamp-2 flex items-center gap-1.5 flex-wrap">
           {task.title}
@@ -69,19 +178,19 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
           </DropdownMenu>
         )}
       </div>
-      
+
       <div className="pl-2 flex items-center justify-between">
         <span className="text-[12px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded flex items-center hover:bg-primary/20 transition-colors cursor-pointer" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); router.push(`/workspace/projects/${task.projectId}`); }}>
           {task.project?.name}
         </span>
-        
+
         {task.dueDate && (
           <div className="text-[11px] font-semibold flex items-center gap-1.5 text-muted-foreground">
             <Calendar size={12} className="opacity-70" /> {formatDate(task.dueDate)}
           </div>
         )}
       </div>
-      
+
       <div className="flex justify-between items-center mt-2 pl-2">
         <div className="flex -space-x-2 overflow-hidden py-1">
           {task.assignees?.map((a: any) => (
@@ -95,7 +204,7 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
             </div>
           )}
         </div>
-        
+
         {task.allocatedHours > 0 && (
           <div className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
             <Clock size={12} className="opacity-70" />
@@ -107,7 +216,7 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
   );
 }
 
-function KanbanColumn({ status, statusTasks, currentUser, openEdit, handleDelete, router, setSelectedTaskForChat }: any) {
+function KanbanColumn({ status, statusTasks, currentUser, openEdit, handleDelete, router }: any) {
   const { setNodeRef } = useDroppable({
     id: status.id,
     data: status,
@@ -122,7 +231,7 @@ function KanbanColumn({ status, statusTasks, currentUser, openEdit, handleDelete
           <span className="text-xs font-medium bg-background border px-1.5 py-0.5 rounded-md text-muted-foreground">{statusTasks.length}</span>
         </div>
       </div>
-      
+
       <div ref={setNodeRef} className="flex-1 p-3 flex flex-col gap-3 min-h-[150px] transition-colors rounded-b-2xl">
         {statusTasks.length === 0 ? (
           <div className="h-24 border-2 border-dashed border-border/50 rounded-xl flex items-center justify-center text-xs font-medium text-muted-foreground/60 bg-background/30">
@@ -130,14 +239,13 @@ function KanbanColumn({ status, statusTasks, currentUser, openEdit, handleDelete
           </div>
         ) : (
           statusTasks.map((task: any) => (
-            <KanbanTaskCard 
-              key={task.id} 
-              task={task} 
+            <KanbanTaskCard
+              key={task.id}
+              task={task}
               currentUser={currentUser}
               openEdit={openEdit}
               handleDelete={handleDelete}
               router={router}
-              setSelectedTaskForChat={setSelectedTaskForChat}
             />
           ))
         )}
@@ -145,6 +253,8 @@ function KanbanColumn({ status, statusTasks, currentUser, openEdit, handleDelete
     </div>
   );
 }
+
+// ─── Utility ──────────────────────────────────────────────────────────────────
 
 const formatDate = (dateInput: any) => {
   if (!dateInput) return '';
@@ -160,12 +270,14 @@ const formatDate = (dateInput: any) => {
   }
 };
 
-export default function TasksClient({ initialTasks, taskStatuses, projects, users, currentUser }: { 
-  initialTasks: any[], 
-  taskStatuses: any[], 
-  projects: any[], 
-  users: any[], 
-  currentUser: any 
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+export default function TasksClient({ initialTasks, taskStatuses, projects, users, currentUser }: {
+  initialTasks: any[],
+  taskStatuses: any[],
+  projects: any[],
+  users: any[],
+  currentUser: any
 }) {
   const router = useRouter();
   const [tasks, setTasks] = useState(initialTasks);
@@ -174,16 +286,15 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   const [selectedStatusId, setSelectedStatusId] = useState<string>('all');
   const [selectedAssigneeId, setSelectedAssigneeId] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
-  
+
+  // ── Drag & Drop
   const [activeDragTask, setActiveDragTask] = useState<any>(null);
   const [confirmDropState, setConfirmDropState] = useState<{ task: any, targetStatus: any } | null>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 5,
-      },
+      activationConstraint: { distance: 5 },
     })
   );
 
@@ -195,10 +306,8 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
     setActiveDragTask(null);
     const { active, over } = event;
     if (!over) return;
-
     const task = active.data.current;
     const targetStatus = over.data.current;
-
     if (task.statusId !== targetStatus.id) {
       setConfirmDropState({ task, targetStatus });
     }
@@ -239,14 +348,100 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
 
   const [isPending, startTransition] = useTransition();
 
+  // ── Modals
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isStatusManageOpen, setIsStatusManageOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<any>(null);
 
+  // ── Templates
   const [taskTemplates, setTaskTemplates] = useState<any[]>([]);
   const [isTemplateSelectOpen, setIsTemplateSelectOpen] = useState(false);
   const [selectedTemplateConfig, setSelectedTemplateConfig] = useState<any>(null);
   const [isRepeatFromDropdown, setIsRepeatFromDropdown] = useState(false);
+
+  // ── Delete Confirmation – Task
+  const [isDeleteTaskOpen, setIsDeleteTaskOpen] = useState(false);
+  const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
+
+  // ── Delete Confirmation – Template
+  const [isDeleteTemplateOpen, setIsDeleteTemplateOpen] = useState(false);
+  const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
+
+  // ── Custom Columns / Fields Drawer
+  const [customColumns, setCustomColumns] = useState<{ id: string, name: string, type: string }[]>([]);
+  const [hiddenColumns, setHiddenColumns] = useState<string[]>([]);
+  const [isFieldsDrawerOpen, setIsFieldsDrawerOpen] = useState(false);
+  const [fieldsTab, setFieldsTab] = useState('create_new');
+  const [selectedFieldType, setSelectedFieldType] = useState<string | null>(null);
+  const [newFieldOptions, setNewFieldOptions] = useState<string[]>([]);
+  const [newOptionInput, setNewOptionInput] = useState('');
+  const [newCustomFieldName, setNewCustomFieldName] = useState('');
+
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => setIsMounted(true), []);
+
+  // ── Load hidden columns from DB on mount
+  useEffect(() => {
+    getTaskHiddenColumnsAction().then(res => {
+      if (res.success && res.columns) {
+        setHiddenColumns(res.columns);
+      }
+    }).catch(console.error);
+  }, []);
+
+  const hideColumn = (colName: string) => {
+    if (hiddenColumns.includes(colName)) return;
+    const next = [...hiddenColumns, colName];
+    setHiddenColumns(next);
+    setCustomColumns(prev => prev.filter(c => c.name !== colName));
+    setTaskHiddenColumnsAction(next).catch(console.error);
+  };
+
+  const unhideColumn = (colName: string) => {
+    if (!hiddenColumns.includes(colName)) return;
+    const next = hiddenColumns.filter(n => n !== colName);
+    setHiddenColumns(next);
+    setTaskHiddenColumnsAction(next).catch(console.error);
+  };
+
+  // ── Sync custom columns from all tasks' customFields
+  useEffect(() => {
+    if (tasks.length > 0) {
+      setCustomColumns(prev => {
+        const allFieldsMap = new Map<string, any>();
+        prev.forEach(col => {
+          if (!hiddenColumns.includes(col.name)) {
+            allFieldsMap.set(col.name, col);
+          }
+        });
+        tasks.forEach((t: any) => {
+          if (Array.isArray(t.customFields)) {
+            t.customFields.forEach((f: any) => {
+              if (f.name && !allFieldsMap.has(f.name) && !hiddenColumns.includes(f.name)) {
+                allFieldsMap.set(f.name, { id: crypto.randomUUID(), name: f.name, type: f.type || 'Text' });
+              }
+            });
+          }
+        });
+        const nextCols = Array.from(allFieldsMap.values());
+        if (nextCols.length !== prev.length || nextCols.some((c, i) => c.name !== prev[i]?.name)) {
+          return nextCols;
+        }
+        return prev;
+      });
+    }
+  }, [tasks, hiddenColumns]);
+
+  // ── Existing custom field names (for "Add existing" tab)
+  const existingCustomFields = React.useMemo(() => {
+    return Array.from(
+      new Set(
+        tasks
+          .filter((t: any) => t.customFields && Array.isArray(t.customFields))
+          .flatMap((t: any) => t.customFields.map((f: any) => f.name).filter(Boolean))
+      )
+    ).sort() as string[];
+  }, [tasks]);
 
   useEffect(() => {
     if (isTemplateSelectOpen) {
@@ -258,28 +453,17 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
     }
   }, [isTemplateSelectOpen]);
 
-  const handleDeleteTemplate = async (templateId: string) => {
-    const res = await deleteTaskTemplateAction(templateId);
-    if (res.error) {
-      toast.error(res.error);
-    } else {
-      toast.success("Task template deleted");
-      setTaskTemplates((prev) => prev.filter((t) => t.id !== templateId));
-    }
-  };
-
   const isClient = currentUser.role === 'CLIENT';
-  const canCreateTask = currentUser.role === 'OWNER' || 
-                        (currentUser.role === 'MEMBER' && projects.some(p => p.projectManagerId === currentUser.userId)) ||
-                        isClient;
+  const canCreateTask = currentUser.role === 'OWNER' ||
+    (currentUser.role === 'MEMBER' && projects.some((p: any) => p.projectManagerId === currentUser.userId)) ||
+    isClient;
   const canManageStatuses = currentUser.role === 'OWNER';
 
-  // For Client role, only show assignees who are actually assigned to tasks in their projects
-  const availableUsers = isClient ? 
-    users.filter(u => initialTasks.some(t => t.assignees.some((a: any) => a.userId === u.id))) 
+  const availableUsers = isClient
+    ? users.filter(u => initialTasks.some(t => t.assignees.some((a: any) => a.userId === u.id)))
     : users;
 
-  // Filters
+  // ── Filters
   const filteredTasks = tasks.filter(t => {
     if (searchQuery && !t.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (selectedProjectId !== 'all' && t.projectId !== selectedProjectId) return false;
@@ -292,18 +476,47 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   const totalTracked = filteredTasks.reduce((acc, t) => acc + (t.trackedHours || 0), 0);
   const remainingHours = Math.max(0, totalAllocated - totalTracked);
 
+  // ── Task deletion with modal confirm
   const handleDelete = (taskId: string) => {
-    if (!confirm('Are you sure you want to delete this task?')) return;
+    setDeleteTaskId(taskId);
+    setIsDeleteTaskOpen(true);
+  };
+
+  const confirmDeleteTask = () => {
+    if (!deleteTaskId) return;
+    const id = deleteTaskId;
+    setIsDeleteTaskOpen(false);
+    setDeleteTaskId(null);
     startTransition(async () => {
-      const res = await deleteTaskAction(taskId);
+      const res = await deleteTaskAction(id);
       if (res.error) {
         toast.error(res.error);
       } else {
         toast.success('Task deleted successfully');
-        setTasks(tasks.filter(t => t.id !== taskId));
+        setTasks(prev => prev.filter(t => t.id !== id));
         router.refresh();
       }
     });
+  };
+
+  // ── Template deletion with modal confirm
+  const handleDeleteTemplate = (templateId: string) => {
+    setDeleteTemplateId(templateId);
+    setIsDeleteTemplateOpen(true);
+  };
+
+  const confirmDeleteTemplate = async () => {
+    if (!deleteTemplateId) return;
+    const id = deleteTemplateId;
+    setIsDeleteTemplateOpen(false);
+    setDeleteTemplateId(null);
+    const res = await deleteTaskTemplateAction(id);
+    if (res.error) {
+      toast.error(res.error);
+    } else {
+      toast.success('Task template deleted');
+      setTaskTemplates(prev => prev.filter(t => t.id !== id));
+    }
   };
 
   const openEdit = (task: any) => {
@@ -312,7 +525,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   };
 
   const getPriorityColor = (priority: string) => {
-    switch(priority) {
+    switch (priority) {
       case 'CRITICAL': return 'bg-red-100 text-red-800';
       case 'HIGH': return 'bg-orange-100 text-orange-800';
       case 'MEDIUM': return 'bg-blue-100 text-blue-800';
@@ -367,9 +580,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                     Create New Task
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() => {
-                      setIsTemplateSelectOpen(true);
-                    }}
+                    onClick={() => setIsTemplateSelectOpen(true)}
                     className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
                   >
                     Use Existing Task Template
@@ -416,16 +627,16 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
       <div className="flex flex-col md:flex-row gap-4 items-center bg-card p-4 rounded-lg border shadow-sm">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Search tasks..." 
+          <Input
+            placeholder="Search tasks..."
             className="pl-8 w-full bg-background"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        
-        <select 
-          value={selectedProjectId} 
+
+        <select
+          value={selectedProjectId}
           onChange={(e) => setSelectedProjectId(e.target.value)}
           className="flex h-10 w-full md:w-[180px] rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
         >
@@ -435,8 +646,8 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
           ))}
         </select>
 
-        <select 
-          value={selectedStatusId} 
+        <select
+          value={selectedStatusId}
           onChange={(e) => setSelectedStatusId(e.target.value)}
           className="flex h-10 w-full md:w-[180px] rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
         >
@@ -447,8 +658,8 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
         </select>
 
         {currentUser.role !== 'MEMBER' && (
-          <select 
-            value={selectedAssigneeId} 
+          <select
+            value={selectedAssigneeId}
             onChange={(e) => setSelectedAssigneeId(e.target.value)}
             className="flex h-10 w-full md:w-[180px] rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
           >
@@ -480,13 +691,45 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                 <TableHead>Priority</TableHead>
                 <TableHead>Assignees</TableHead>
                 <TableHead>Hours</TableHead>
-                <TableHead className="w-[50px]"></TableHead>
+                {customColumns.map(col => (
+                  <TableHead key={col.id} className="w-[180px] text-slate-500 font-medium text-[13px] border-l border-slate-100 dark:border-white/5">
+                    <div className="flex items-center justify-between group/col">
+                      <div className="flex items-center gap-2">
+                        {col.type === 'Text' && <Type size={14} className="text-slate-400 shrink-0" />}
+                        {col.type === 'Date' && <CalendarIcon size={14} className="text-slate-400 shrink-0" />}
+                        {col.type === 'Number' && <Hash size={14} className="text-slate-400 shrink-0" />}
+                        {col.type === 'Dropdown' && <ListIcon2 size={14} className="text-slate-400 shrink-0" />}
+                        {col.type === 'Checkbox' && <CheckSquare size={14} className="text-slate-400 shrink-0" />}
+                        {col.type === 'Website' && <Globe size={14} className="text-slate-400 shrink-0" />}
+                        {col.type === 'Email' && <Mail size={14} className="text-slate-400 shrink-0" />}
+                        {col.type === 'Phone' && <Phone size={14} className="text-slate-400 shrink-0" />}
+                        {(col.type === 'Text area' || col.type === 'Labels' || col.type === 'AI Autofill') && <AlignLeft size={14} className="text-slate-400 shrink-0" />}
+                        <span className="truncate">{col.name}</span>
+                      </div>
+                      <button
+                        onClick={() => hideColumn(col.name)}
+                        className="opacity-0 group-hover/col:opacity-100 transition-opacity text-slate-400 hover:text-red-500 shrink-0 ml-1"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  </TableHead>
+                ))}
+                <TableHead className="w-[60px] text-center border-l border-slate-100 dark:border-white/5">
+                  <button
+                    onClick={() => { setFieldsTab('create_new'); setIsFieldsDrawerOpen(true); }}
+                    className="p-1 hover:bg-slate-100 dark:hover:bg-white/5 rounded text-slate-400 transition-colors"
+                    title="Add custom field"
+                  >
+                    <Plus size={16} className="mx-auto" />
+                  </button>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredTasks.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center h-24 text-muted-foreground">
+                  <TableCell colSpan={7 + customColumns.length} className="text-center h-24 text-muted-foreground">
                     No tasks found matching your filters.
                   </TableCell>
                 </TableRow>
@@ -538,6 +781,11 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                         <span className="text-muted-foreground"> / {task.allocatedHours ? formatHours(task.allocatedHours) : '-'}</span>
                       </div>
                     </TableCell>
+                    {customColumns.map(col => (
+                      <TableCell key={col.id} className="border-l border-slate-100 dark:border-white/5 p-0 align-top">
+                        <TableCustomFieldCell task={task} col={col} setTasks={setTasks} tasks={tasks} />
+                      </TableCell>
+                    ))}
                     <TableCell>
                       {currentUser.role !== 'CLIENT' && (
                         <DropdownMenu>
@@ -571,9 +819,9 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
             {taskStatuses.map((status) => {
               const statusTasks = filteredTasks.filter(t => t.statusId === status.id);
               return (
-                <KanbanColumn 
-                  key={status.id} 
-                  status={status} 
+                <KanbanColumn
+                  key={status.id}
+                  status={status}
                   statusTasks={statusTasks}
                   currentUser={currentUser}
                   openEdit={openEdit}
@@ -585,8 +833,8 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
           </div>
           <DragOverlay>
             {activeDragTask ? (
-              <KanbanTaskCard 
-                task={activeDragTask} 
+              <KanbanTaskCard
+                task={activeDragTask}
                 currentUser={currentUser}
                 openEdit={openEdit}
                 handleDelete={handleDelete}
@@ -598,6 +846,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
         </DndContext>
       )}
 
+      {/* Confirm Status Change (Kanban drag) */}
       <Dialog open={!!confirmDropState} onOpenChange={(open) => !open && !isUpdatingStatus && setConfirmDropState(null)}>
         <DialogContent>
           <DialogHeader>
@@ -615,11 +864,46 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
         </DialogContent>
       </Dialog>
 
+      {/* Delete Task Confirmation */}
+      <Dialog open={isDeleteTaskOpen} onOpenChange={setIsDeleteTaskOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Task</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this task? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteTaskOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDeleteTask} disabled={isPending}>
+              {isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
+      {/* Delete Template Confirmation */}
+      <Dialog open={isDeleteTemplateOpen} onOpenChange={setIsDeleteTemplateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Template</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this task template? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteTemplateOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDeleteTemplate}>
+              Delete Template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
+      {/* Task Form Modal */}
       {isCreateOpen && (
-        <TaskFormModal 
-          isOpen={isCreateOpen} 
+        <TaskFormModal
+          isOpen={isCreateOpen}
           onOpenChange={(open) => {
             setIsCreateOpen(open);
             if (!open) {
@@ -627,11 +911,11 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
               setSelectedTemplateConfig(null);
               setIsRepeatFromDropdown(false);
             }
-          }} 
-          task={editingTask} 
-          projects={projects} 
-          taskStatuses={taskStatuses} 
-          users={users} 
+          }}
+          task={editingTask}
+          projects={projects}
+          taskStatuses={taskStatuses}
+          users={users}
           currentUser={currentUser}
           initialRepeatEnabled={isRepeatFromDropdown}
           initialTemplateConfig={selectedTemplateConfig}
@@ -731,6 +1015,296 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
           }}
         />
       )}
+
+      {/* ── Fields Drawer ── */}
+      <DialogPrimitive.Root open={isFieldsDrawerOpen} onOpenChange={setIsFieldsDrawerOpen}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay
+            id="omniwork-task-fields-drawer-overlay"
+            className="fixed inset-0 z-[9999] transition-opacity bg-black/10"
+          />
+          <DialogPrimitive.Content
+            id="omniwork-task-fields-drawer"
+            onInteractOutside={(e) => {
+              e.preventDefault();
+              setIsFieldsDrawerOpen(false);
+            }}
+            className="fixed z-[9999] outline-none bg-white dark:bg-[#1C1C1C] flex flex-col inset-y-0 right-0 w-full sm:w-[360px] shadow-2xl border-l border-slate-200 dark:border-white/10 transform transition-transform duration-300 animate-in slide-in-from-right-full"
+          >
+            {selectedFieldType ? (
+              <div className="flex flex-col h-full">
+                <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-white/5">
+                  <div className="flex items-center gap-2 text-slate-800 dark:text-slate-100 font-semibold">
+                    <span className="capitalize">{selectedFieldType}</span>
+                  </div>
+                  <button
+                    onClick={() => { setSelectedFieldType(null); setNewCustomFieldName(''); }}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-full transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className="p-5 flex-1">
+                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
+                    Field name <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative mb-8">
+                    <Input
+                      autoFocus
+                      placeholder="Enter name..."
+                      value={newCustomFieldName}
+                      onChange={(e) => setNewCustomFieldName(e.target.value)}
+                      className="h-10 bg-white dark:bg-[#252525] border-slate-300 dark:border-white/10 rounded-lg text-[14px]"
+                    />
+                  </div>
+
+                  {(selectedFieldType === 'Dropdown' || selectedFieldType === 'Labels') && (
+                    <div className="mb-6 border border-slate-200 dark:border-white/10 rounded-lg p-4 bg-slate-50 dark:bg-[#151515]">
+                      <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 block">Options <span className="text-red-500">*</span></label>
+                      <div className="flex gap-2 mb-3">
+                        <Input
+                          placeholder="Type an option and press Add..."
+                          value={newOptionInput}
+                          onChange={(e) => setNewOptionInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && newOptionInput.trim()) {
+                              e.preventDefault();
+                              if (!newFieldOptions.includes(newOptionInput.trim())) {
+                                setNewFieldOptions([...newFieldOptions, newOptionInput.trim()]);
+                              }
+                              setNewOptionInput('');
+                            }
+                          }}
+                          className="h-9 text-[13px] bg-white dark:bg-[#252525]"
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-9 px-3"
+                          onClick={() => {
+                            if (newOptionInput.trim() && !newFieldOptions.includes(newOptionInput.trim())) {
+                              setNewFieldOptions([...newFieldOptions, newOptionInput.trim()]);
+                              setNewOptionInput('');
+                            }
+                          }}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {newFieldOptions.map((opt) => (
+                          <span key={opt} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[13px] font-medium bg-white dark:bg-[#252525] border border-slate-200 dark:border-white/10">
+                            {opt}
+                            <button
+                              type="button"
+                              onClick={() => setNewFieldOptions(newFieldOptions.filter(o => o !== opt))}
+                              className="text-slate-400 hover:text-red-500 ml-1 focus:outline-none"
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        ))}
+                        {newFieldOptions.length === 0 && (
+                          <span className="text-[13px] text-slate-400 italic">No options added yet.</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 border-t border-slate-100 dark:border-white/5 flex justify-end gap-3 bg-slate-50 dark:bg-[#151515]">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 px-4 rounded-lg font-medium"
+                    onClick={() => { setSelectedFieldType(null); setNewCustomFieldName(''); }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={!newCustomFieldName.trim() || ((selectedFieldType === 'Dropdown' || selectedFieldType === 'Labels') && newFieldOptions.length === 0)}
+                    onClick={() => {
+                      const newFieldType = (selectedFieldType || 'text').toLowerCase();
+                      const newField: any = { name: newCustomFieldName, type: newFieldType, value: '' };
+                      if (newFieldType === 'dropdown' || newFieldType === 'labels') {
+                        newField.options = newFieldOptions;
+                        if (newFieldType === 'labels') newField.value = [];
+                      }
+
+                      // Propagate to ALL existing tasks locally
+                      const updatedTasks = tasks.map((t: any) => {
+                        const existingFields = Array.isArray(t.customFields) ? t.customFields : [];
+                        return { ...t, customFields: [...existingFields, newField] };
+                      });
+                      setTasks(updatedTasks);
+
+                      // Save to DB for all tasks
+                      updatedTasks.forEach((t: any) => {
+                        import('@/app/actions/tasks').then(m => {
+                          m.updateTaskCustomFieldsAction(t.id, t.customFields).catch(console.error);
+                        });
+                      });
+
+                      // Add column immediately
+                      setCustomColumns(prev => [...prev, { id: crypto.randomUUID(), name: newCustomFieldName, type: selectedFieldType || 'Text' }]);
+
+                      setSelectedFieldType(null);
+                      setNewCustomFieldName('');
+                      setNewFieldOptions([]);
+                      setNewOptionInput('');
+                      setIsFieldsDrawerOpen(false);
+                    }}
+                    className="h-9 px-5 rounded-lg font-medium bg-slate-700 hover:bg-slate-800 text-white disabled:opacity-50 transition-colors"
+                  >
+                    Create
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-white/5">
+                  <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Fields</h2>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setIsFieldsDrawerOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-full transition-colors">
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4 border-b border-slate-100 dark:border-white/5 space-y-4">
+                  <div className="flex gap-6 text-sm font-medium">
+                    <button
+                      onClick={() => setFieldsTab('create_new')}
+                      className={`relative pb-2 ${fieldsTab === 'create_new' ? 'text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                    >
+                      Create new
+                      {fieldsTab === 'create_new' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-slate-900 dark:bg-white rounded-t" />}
+                    </button>
+                    <button
+                      onClick={() => setFieldsTab('add_existing')}
+                      className={`relative pb-2 ${fieldsTab === 'add_existing' ? 'text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                    >
+                      Add existing
+                      {fieldsTab === 'add_existing' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-slate-900 dark:bg-white rounded-t" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                  {fieldsTab === 'create_new' && (
+                    <div className="py-2">
+                      <div className="px-4 py-2">
+                        <h3 className="text-[13px] font-medium text-slate-500 mb-2">Popular</h3>
+                        <div className="space-y-1">
+                          <button onClick={() => setSelectedFieldType('Dropdown')} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                            <ListIcon2 size={16} className="text-emerald-600" /> Dropdown
+                          </button>
+                          <button onClick={() => setSelectedFieldType('Text')} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                            <Type size={16} className="text-blue-500" /> Text
+                          </button>
+                          <button onClick={() => setSelectedFieldType('Date')} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                            <CalendarIcon size={16} className="text-emerald-600" /> Date
+                          </button>
+                          <button onClick={() => setSelectedFieldType('Text area')} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                            <AlignLeft size={16} className="text-blue-500" /> Text area <span className="text-slate-400 ml-1">(Long Text)</span>
+                          </button>
+                          <button onClick={() => setSelectedFieldType('Number')} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                            <Hash size={16} className="text-emerald-500" /> Number
+                          </button>
+                          <button onClick={() => setSelectedFieldType('Checkbox')} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                            <CheckSquare size={16} className="text-purple-500" /> Checkbox
+                          </button>
+                          <button onClick={() => setSelectedFieldType('Website')} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                            <Globe size={16} className="text-pink-500" /> Website
+                          </button>
+                          <button onClick={() => setSelectedFieldType('Phone')} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                            <Phone size={16} className="text-emerald-600" /> Phone
+                          </button>
+                          <button onClick={() => setSelectedFieldType('Email')} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                            <Mail size={16} className="text-blue-500" /> Email
+                          </button>
+                          <button onClick={() => setSelectedFieldType('Labels')} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                            <Tags size={16} className="text-emerald-600" /> Labels <span className="text-slate-400 ml-1">(Multi-select)</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {fieldsTab === 'add_existing' && (
+                    <div className="py-2">
+                      <div className="px-4 py-2">
+                        {existingCustomFields.length > 0 ? (
+                          <div className="space-y-1">
+                            {existingCustomFields.map((fieldName) => (
+                              <button
+                                key={fieldName}
+                                type="button"
+                                onClick={() => {
+                                  // Find type/options from any task that has it
+                                  let matchedType = 'Text';
+                                  let matchedOptions: string[] | undefined;
+                                  const otherTask = tasks.find((t: any) => {
+                                    const tFields = Array.isArray(t.customFields) ? t.customFields : [];
+                                    return tFields.some((f: any) => f.name === fieldName);
+                                  });
+                                  if (otherTask) {
+                                    const f = otherTask.customFields.find((f: any) => f.name === fieldName);
+                                    matchedType = f?.type || 'Text';
+                                    matchedOptions = f?.options;
+                                  }
+
+                                  // Unhide if hidden
+                                  unhideColumn(fieldName);
+
+                                  // Add field to all tasks that don't have it
+                                  const newField = { name: fieldName, type: matchedType, value: '', options: matchedOptions };
+                                  const updatedTasks = tasks.map((t: any) => {
+                                    const existingFields = Array.isArray(t.customFields) ? t.customFields : [];
+                                    if (existingFields.some((f: any) => f.name === fieldName)) return t;
+                                    return { ...t, customFields: [...existingFields, newField] };
+                                  });
+                                  setTasks(updatedTasks);
+
+                                  updatedTasks.forEach((t: any) => {
+                                    import('@/app/actions/tasks').then(m => {
+                                      m.updateTaskCustomFieldsAction(t.id, t.customFields).catch(console.error);
+                                    });
+                                  });
+
+                                  // Add column if not present
+                                  if (!customColumns.some(c => c.name === fieldName)) {
+                                    setCustomColumns(prev => [...prev, { id: crypto.randomUUID(), name: fieldName, type: matchedType }]);
+                                  }
+
+                                  setIsFieldsDrawerOpen(false);
+                                }}
+                                className="w-full flex items-center justify-between px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors group"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <Tags size={16} className="text-slate-400" />
+                                  <span className="truncate">{fieldName}</span>
+                                </div>
+                                <Plus size={14} className="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center text-sm text-slate-500 py-6">
+                            No existing custom fields found.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
     </div>
   );
 }

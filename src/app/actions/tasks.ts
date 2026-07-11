@@ -5,6 +5,7 @@ import { getSession } from '@/lib/auth';
 import { Priority, Role } from '@prisma/client';
 import { createNotification } from './notifications';
 import { triggerEventRules } from './rules';
+import { revalidatePath } from 'next/cache';
 
 /**
  * Task Status Management Actions
@@ -595,5 +596,25 @@ export async function deleteTaskTemplateAction(templateId: string) {
     return { success: true };
   } catch (error: any) {
     return { error: error.message || 'Failed to delete task template.' };
+  }
+}
+
+export async function updateTaskCustomFieldsAction(taskId: string, customFields: any) {
+  try {
+    const session = await getSession();
+    if (!session?.userId) {
+      return { error: "Unauthorized" };
+    }
+
+    const updated = await prisma.task.update({
+      where: { id: taskId },
+      data: { customFields },
+    });
+
+    revalidatePath("/workspace/tasks");
+    return { success: true, task: updated };
+  } catch (error: any) {
+    console.error("Failed to update task custom fields:", error);
+    return { error: "Failed to update task custom fields" };
   }
 }
