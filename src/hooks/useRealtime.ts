@@ -24,8 +24,8 @@ export function useRealtime(channels: { projectId?: string; taskId?: string }[])
     };
 
     eventSource.onerror = (e) => {
-      console.error('SSE Error', e);
-      eventSource.close();
+      // Browsers natively reconnect SSE on drops. Do NOT close the connection here.
+      // e is an opaque Event object, so logging it is usually unhelpful.
     };
 
     return () => {

@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useTransition, useEffect } from "react";
+import { createPortal } from "react-dom";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -9,7 +11,7 @@ import {
   FolderKanban,
   Search,
   Plus,
-  Calendar,
+  Calendar as CalendarIcon,
   Clock,
   MoreHorizontal,
   Users,
@@ -28,6 +30,28 @@ import {
   Shield,
   Crown,
   Star,
+  Inbox,
+  Briefcase,
+  CircleDashed,
+  CircleDot,
+  CheckCircle2,
+  Circle,
+  Flag,
+  Settings,
+  DollarSign,
+  MessageSquare,
+  AlignLeft,
+  Type,
+  Hash,
+  Tags,
+  Sparkles,
+  PlusSquare,
+  CheckSquare,
+  Globe,
+  Mail,
+  Phone,
+  Smile,
+  EyeOff,
 } from "lucide-react";
 import {
   Table,
@@ -57,16 +81,26 @@ import {
 import { toast } from "sonner";
 import {
   createProjectAction,
+  updateProjectAction,
   deleteProjectAction,
   quickCreateClientAction,
   updateProjectStatusAction,
   createProjectTemplateAction,
   getProjectTemplatesAction,
   deleteProjectTemplateAction,
+  updateProjectDueDateAction,
+  updateProjectPriorityAction,
+  updateProjectCustomFieldsAction,
 } from "@/app/actions/projects";
+import { addDays, addWeeks, format } from "date-fns";
+import { ChevronRight } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { getRulesAction, createRuleAction } from "@/app/actions/rules";
-import { DndContext, DragEndEvent, useDraggable, useDroppable, DragOverlay } from "@dnd-kit/core";
+import { getHiddenColumnsAction, setHiddenColumnsAction } from "@/app/actions/settings";
+import { DndContext, DragEndEvent, useDraggable, useDroppable, DragOverlay, useSensor, useSensors, PointerSensor } from "@dnd-kit/core";
+import { SortableContext, horizontalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const formatDate = (dateInput: any) => {
   if (!dateInput) return "";
@@ -131,37 +165,461 @@ const getPriorityColor = (priority: string) => {
   }
 };
 
-function KanbanColumn({ status, title, count, projectStatuses, children }: any) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: status,
-  });
+function TableDueDateCell({ project, setProjects }: any) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isPending, startTransition] = React.useTransition();
+  const router = useRouter();
 
-  const getStatusBorderColor = (statusId: string) => {
-    const statusObj = projectStatuses?.find((s: any) => s.id === statusId);
-    if (statusObj && statusObj.color) {
-      return { borderTopColor: statusObj.color };
-    }
-    return { borderTopColor: '#94a3b8' }; // default slate-400
+  const handleDateSelect = (date: Date | undefined) => {
+    if (!date) return;
+    
+    startTransition(async () => {
+      // Optimistic update
+      const previousDate = project.endDate;
+      const previousIsOngoing = project.isOngoing;
+      const newDateStr = date.toISOString();
+      
+      setProjects((prev: any) => prev.map((p: any) => 
+        p.id === project.id ? { ...p, endDate: newDateStr, isOngoing: false } : p
+      ));
+      
+      const res = await updateProjectDueDateAction(project.id, newDateStr, false);
+      if (res.error) {
+        toast.error(res.error);
+        // Revert optimistic update
+        setProjects((prev: any) => prev.map((p: any) => 
+          p.id === project.id ? { ...p, endDate: previousDate, isOngoing: previousIsOngoing } : p
+        ));
+        router.refresh();
+      } else {
+        toast.success("Due date updated");
+      }
+    });
+    setIsOpen(false);
+  };
+
+  const quickDates = [
+    { label: "Today", date: new Date() },
+    { label: "Tomorrow", date: addDays(new Date(), 1) },
+    { label: "Next week", date: addWeeks(new Date(), 1) },
+    { label: "Next weekend", date: addDays(new Date(), 6 - new Date().getDay() + 7) },
+    { label: "2 weeks", date: addWeeks(new Date(), 2) },
+    { label: "4 weeks", date: addWeeks(new Date(), 4) },
+    { label: "8 weeks", date: addWeeks(new Date(), 8) },
+  ];
+
+  return (
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center gap-1.5 w-full h-full bg-transparent hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300 font-medium px-4 py-3 text-[13px] tracking-wide transition-colors outline-none text-left">
+          {project.isOngoing ? (
+             <span className="text-emerald-600 font-medium flex items-center gap-1.5"><Clock size={12} /> Ongoing</span>
+          ) : project.endDate ? (
+             <span className={project.endDate && new Date(project.endDate) < new Date() ? 'text-red-500' : ''}>
+               {format(new Date(project.endDate), 'MMM d, yyyy')}
+             </span>
+          ) : (
+             <span className="text-slate-400 font-normal">Set date</span>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-auto p-0 flex flex-row bg-white dark:bg-[#1C1C1C] rounded-xl shadow-lg border border-slate-200 dark:border-white/10" onInteractOutside={() => setIsOpen(false)}>
+        <div className="flex flex-col border-r border-slate-100 dark:border-white/5 w-[140px] py-2">
+          {quickDates.map((qd, i) => (
+            <button
+              key={i}
+              onClick={(e) => { e.preventDefault(); handleDateSelect(qd.date); }}
+              className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left group"
+            >
+              <span className="text-slate-700 dark:text-slate-300">{qd.label}</span>
+              <span className="text-[10px] text-slate-400 group-hover:text-slate-500">{format(qd.date, 'EEE')}</span>
+            </button>
+          ))}
+          <div className="mt-2 pt-2 border-t border-slate-100 dark:border-white/5">
+             <button className="w-full flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-slate-700 dark:text-slate-300">
+               Set Recurring <ChevronRight size={14} className="text-slate-400" />
+             </button>
+          </div>
+        </div>
+        <div className="p-3">
+          <Calendar
+            mode="single"
+            selected={project.endDate ? new Date(project.endDate) : undefined}
+            onSelect={handleDateSelect}
+          />
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function TablePriorityCell({ project, setProjects }: any) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isPending, startTransition] = React.useTransition();
+  const router = useRouter();
+
+  const priorities = [
+    { value: "CRITICAL", label: "Urgent", color: "text-red-500", bg: "bg-red-50 dark:bg-red-950/20" },
+    { value: "HIGH", label: "High", color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-950/20" },
+    { value: "MEDIUM", label: "Normal", color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-950/20" },
+    { value: "LOW", label: "Low", color: "text-slate-400", bg: "bg-slate-50 dark:bg-slate-900/20" },
+  ];
+
+  const handlePrioritySelect = (newPriority: string) => {
+    if (project.priority === newPriority) return;
+    
+    startTransition(async () => {
+      // Optimistic update
+      const previousPriority = project.priority;
+      
+      setProjects((prev: any) => prev.map((p: any) => 
+        p.id === project.id ? { ...p, priority: newPriority } : p
+      ));
+      
+      const res = await updateProjectPriorityAction(project.id, newPriority);
+      if (res.error) {
+        toast.error(res.error);
+        // Revert optimistic update
+        setProjects((prev: any) => prev.map((p: any) => 
+          p.id === project.id ? { ...p, priority: previousPriority } : p
+        ));
+        router.refresh();
+      } else {
+        toast.success("Priority updated");
+      }
+    });
+    setIsOpen(false);
   };
 
   return (
-    <div ref={setNodeRef} className={`flex flex-col min-w-[340px] max-w-[340px] rounded-3xl border border-t-[4px] shadow-sm backdrop-blur-xl p-4 transition-all duration-300 ${isOver ? 'bg-muted/80 shadow-md scale-[1.01]' : 'bg-muted/30 hover:bg-muted/40'}`} style={getStatusBorderColor(status)}>
-      <div className="flex items-center justify-between mb-4 px-1">
-        <div className="flex items-center gap-2.5">
-          <h3 className="font-bold text-sm tracking-wide uppercase text-foreground/80">{title}</h3>
-          <Badge variant="secondary" className="text-[11px] font-bold h-6 px-2.5 bg-background rounded-full shadow-sm">
-            {count}
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center gap-1.5 w-full h-full bg-transparent hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300 font-medium px-4 py-3 text-[13px] tracking-wide transition-colors outline-none text-left">
+          <Badge variant="outline" className={`font-semibold bg-transparent border-slate-200 dark:border-white/10 ${getPriorityColor(project.priority)}`}>
+            <Flag size={12} className="mr-1.5" />
+            {project.priority}
           </Badge>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-[180px] p-1 bg-white dark:bg-[#1C1C1C] rounded-xl shadow-lg border border-slate-200 dark:border-white/10">
+        <div className="px-2 py-1.5 mb-1">
+          <span className="text-xs font-semibold text-slate-500 px-1">Priority</span>
         </div>
+        {priorities.map((pr) => (
+          <DropdownMenuItem 
+            key={pr.value}
+            onSelect={(e) => { e.preventDefault(); handlePrioritySelect(pr.value); }}
+            className="flex items-center gap-2 text-[13px] font-medium cursor-pointer py-2 px-2.5 rounded-lg mb-0.5 transition-colors hover:bg-slate-50 dark:hover:bg-white/5"
+          >
+            <Flag size={14} className={pr.color} />
+            <span className="text-slate-700 dark:text-slate-300">{pr.label}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function TableCustomFieldCell({ project, col, setProjects, projects }: any) {
+  const customFields = Array.isArray(project.customFields) ? project.customFields : [];
+  const fieldIndex = customFields.findIndex((f: any) => f.name === col.name);
+  const field = fieldIndex >= 0 ? customFields[fieldIndex] : null;
+  const value = field ? field.value : undefined;
+
+  let options = field?.options;
+  if (!options && Array.isArray(projects)) {
+    const otherProjectWithField = projects.find((p: any) => {
+      const pFields = Array.isArray(p.customFields) ? p.customFields : [];
+      return pFields.some((f: any) => f.name === col.name && Array.isArray(f.options) && f.options.length > 0);
+    });
+    if (otherProjectWithField) {
+      const f = otherProjectWithField.customFields.find((f: any) => f.name === col.name);
+      options = f?.options;
+    }
+  }
+
+  const updateValue = (val: any) => {
+    setProjects((prev: any) => prev.map((p: any) => {
+      if (p.id === project.id) {
+        const pFields = Array.isArray(p.customFields) ? [...p.customFields] : [];
+        const fIndex = pFields.findIndex((f: any) => f.name === col.name);
+        
+        if (fIndex >= 0) {
+          pFields[fIndex] = { ...pFields[fIndex], value: val };
+        } else {
+          pFields.push({ name: col.name, type: col.type, value: val, options: options });
+        }
+        
+        import('@/app/actions/projects').then(m => {
+           m.updateProjectCustomFieldsAction(p.id, pFields).catch(console.error);
+        });
+        
+        return {
+          ...p,
+          customFields: pFields
+        };
+      }
+      return p;
+    }));
+  };
+
+  const commonClasses = "w-full h-full border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 bg-transparent text-[13px] text-slate-700 dark:text-slate-300 rounded-none shadow-none outline-none appearance-none";
+  const typeStr = (col.type || "text").toLowerCase();
+
+  switch (typeStr) {
+    case 'text area':
+      return <textarea value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} py-2 resize-none custom-scrollbar min-h-[40px]`} />;
+    case 'checkbox':
+      return <div className="flex items-center justify-center h-full min-h-[40px]"><input type="checkbox" checked={!!value} onChange={e => updateValue(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" /></div>;
+    case 'dropdown':
+      return (
+        <select value={value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer min-h-[40px]`}>
+          <option value="" disabled>—</option>
+          {(options || []).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      );
+    case 'labels':
+      const currentValues = Array.isArray(value) ? value : [];
+      return (
+        <div className="flex items-center flex-wrap gap-1.5 h-full px-3 py-1 overflow-y-auto custom-scrollbar min-h-[40px]">
+          {currentValues.map((v: string) => (
+             <span key={v} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300">
+               {v}
+               <button type="button" onClick={() => updateValue(currentValues.filter(val => val !== v))} className="text-slate-400 hover:text-red-500"><X size={10} /></button>
+             </span>
+          ))}
+          <select 
+             value="" 
+             onChange={e => {
+                if (e.target.value && !currentValues.includes(e.target.value)) {
+                   updateValue([...currentValues, e.target.value]);
+                }
+             }}
+             className="bg-transparent text-[11px] text-slate-500 outline-none cursor-pointer"
+          >
+             <option value="">+ Add</option>
+             {(options || []).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
+        </div>
+      );
+    case 'date':
+      return <input type="date" value={value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer min-h-[40px]`} />;
+    case 'number':
+      return <input type="number" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
+    case 'email':
+      return <input type="email" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
+    case 'phone':
+      return <input type="tel" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
+    case 'website':
+    case 'url':
+      return <input type="url" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
+    default:
+      return <input type="text" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
+  }
+}
+
+function TableStatusCell({ project, projectStatuses, setProjects }: any) {
+  const [search, setSearch] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const [isPending, startTransition] = React.useTransition();
+  const router = useRouter();
+
+  const filteredStatuses = projectStatuses.filter((s: any) => 
+    s.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleUpdateStatus = (newStatusId: string) => {
+    if (project.statusId === newStatusId) return;
+
+    startTransition(async () => {
+      // Optimistic Update
+      const previousStatusId = project.statusId;
+      const newStatusObj = projectStatuses.find((s: any) => s.id === newStatusId);
+      
+      setProjects((prev: any) => prev.map((p: any) => 
+        p.id === project.id ? { ...p, statusId: newStatusId, status: newStatusObj } : p
+      ));
+
+      const res = await updateProjectStatusAction(project.id, newStatusId as any);
+      if (res.error) {
+        toast.error(res.error);
+        // Revert Optimistic Update
+        setProjects((prev: any) => prev.map((p: any) => 
+          p.id === project.id ? { ...p, statusId: previousStatusId, status: projectStatuses.find((s: any) => s.id === previousStatusId) } : p
+        ));
+        router.refresh();
+      } else {
+        toast.success(`Status updated to ${newStatusObj?.name}`);
+      }
+    });
+  };
+
+  return (
+    <DropdownMenu open={isOpen} onOpenChange={(open) => { setIsOpen(open); if(!open) setSearch(""); }}>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center gap-1.5 w-fit bg-slate-100 dark:bg-[#303030] hover:bg-slate-200 dark:hover:bg-[#404040] text-slate-600 dark:text-slate-300 font-semibold px-2.5 py-1 rounded-md text-[11px] tracking-wide transition-colors outline-none group/status">
+          <CircleDashed size={12} className="text-slate-400 group-hover/status:text-slate-500 transition-colors" />
+          {project.status?.name?.toUpperCase() || "NO STATUS"}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-[220px] p-1 bg-white dark:bg-[#1C1C1C] rounded-xl shadow-lg border border-slate-200 dark:border-white/10" onInteractOutside={() => setIsOpen(false)}>
+        <div className="px-2 py-1.5 mb-1 border-b border-slate-100 dark:border-white/5">
+          <Input 
+            autoFocus
+            placeholder="Search status..." 
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-7 text-xs bg-transparent border-none focus-visible:ring-0 px-1 placeholder:text-slate-400" 
+            onKeyDown={(e) => {
+               // Stop propagation to prevent any table row interactions
+               e.stopPropagation();
+            }}
+          />
+        </div>
+        <div className="max-h-[220px] overflow-y-auto custom-scrollbar p-1">
+          {filteredStatuses.length === 0 ? (
+            <div className="px-2 py-3 text-center text-xs text-slate-500">No status found</div>
+          ) : (
+            filteredStatuses.map((s: any) => (
+              <DropdownMenuItem 
+                key={s.id}
+                onSelect={(e) => {
+                  e.preventDefault(); // Don't close immediately if you want smooth animation or standard behavior, but here we DO want it to close immediately
+                  handleUpdateStatus(s.id);
+                  setIsOpen(false);
+                }}
+                className={`flex items-center justify-between text-[13px] font-medium cursor-pointer py-2 px-2.5 rounded-lg mb-0.5 transition-colors ${project.statusId === s.id ? 'bg-slate-50 dark:bg-white/5' : 'hover:bg-slate-50 dark:hover:bg-white/5'}`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <CircleDashed size={14} style={{ color: s.color || '#94a3b8' }} />
+                  {s.name}
+                </div>
+                {project.statusId === s.id && <Check size={14} className="text-slate-800 dark:text-slate-200" />}
+              </DropdownMenuItem>
+            ))
+          )}
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function KanbanColumn({ status, title, count, projectStatuses, children, onAddProject, currentUser, handleDeleteStage, handleRenameStage }: any) {
+  const { setNodeRef, attributes, listeners, transform, transition, isDragging, isOver } = useSortable({
+    id: status,
+    data: { type: "COLUMN", status }
+  });
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(title);
+
+  const getStatusColor = (statusId: string) => {
+    const statusObj = projectStatuses?.find((s: any) => s.id === statusId);
+    return statusObj?.color || '#94a3b8';
+  };
+
+  const statusColor = getStatusColor(status);
+
+  const getStatusIcon = (name: string) => {
+    const t = name.toLowerCase();
+    if (t.includes('todo') || t.includes('to do') || t.includes('pending')) return <CircleDashed size={14} />;
+    if (t.includes('progress') || t.includes('doing') || t.includes('active')) return <CircleDot size={14} />;
+    if (t.includes('done') || t.includes('complete') || t.includes('finish')) return <CheckCircle2 size={14} />;
+    return <Circle size={14} />;
+  };
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    backgroundColor: `${statusColor}15`
+  };
+
+  const submitRename = () => {
+    if (editName.trim() !== "" && editName.trim() !== title) {
+      handleRenameStage(status, editName.trim());
+    } else {
+      setEditName(title);
+    }
+    setIsEditing(false);
+  };
+
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style}
+      className={`flex flex-col min-w-[320px] max-w-[320px] rounded-2xl p-3.5 transition-all duration-300 ${isOver ? 'shadow-md scale-[1.01] opacity-90' : ''} ${isDragging ? 'opacity-50 z-50 shadow-2xl scale-105 rotate-1 cursor-grabbing' : ''}`}
+    >
+      <div className="flex items-center justify-between mb-4 px-1" {...attributes} {...listeners}>
+        <div className="flex items-center gap-2">
+          {isEditing ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-slate-300 shadow-sm" onPointerDown={(e) => e.stopPropagation()}>
+              {getStatusIcon(title)}
+              <input 
+                autoFocus
+                type="text" 
+                value={editName} 
+                onChange={(e) => setEditName(e.target.value)} 
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submitRename();
+                  if (e.key === 'Escape') { setEditName(title); setIsEditing(false); }
+                }}
+                className="font-bold text-[12px] tracking-wide uppercase bg-transparent outline-none w-28 text-slate-800"
+              />
+              <button onClick={submitRename} className="text-emerald-600 hover:text-emerald-700 ml-1">
+                <Check size={14} />
+              </button>
+            </div>
+          ) : (
+            <div 
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-white shadow-sm cursor-pointer hover:opacity-90" 
+              style={{ backgroundColor: statusColor }}
+              onPointerDown={(e) => {
+                if (currentUser?.role === 'OWNER') {
+                  e.stopPropagation();
+                  setIsEditing(true);
+                }
+              }}
+            >
+              {getStatusIcon(title)}
+              <h3 className="font-bold text-[12px] tracking-wide uppercase">{title}</h3>
+            </div>
+          )}
+          <span className="text-[13px] font-medium text-slate-500 dark:text-slate-400 ml-1">
+            {count}
+          </span>
+        </div>
+        
+        {currentUser?.role === 'OWNER' && (
+          <div className="flex items-center gap-1 text-slate-400" onPointerDown={(e) => e.stopPropagation()}>
+            <button 
+              onClick={() => handleDeleteStage(status)}
+              className="hover:text-red-500 p-1 rounded-md transition-colors"
+            >
+              <Trash2 size={14} />
+            </button>
+            <button className="hover:text-slate-700 dark:hover:text-slate-200 p-1 rounded-md transition-colors">
+              <MoreHorizontal size={14} />
+            </button>
+          </div>
+        )}
       </div>
-      <div className="flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2 flex-1">
+      
+      <button 
+        onClick={onAddProject}
+        className="flex items-center gap-2 px-2 py-1.5 mb-3 text-sm font-medium transition-colors hover:opacity-80 rounded-md hover:bg-black/5 dark:hover:bg-white/5"
+        style={{ color: statusColor }}
+      >
+        <Plus size={16} /> Add Project
+      </button>
+
+      <div className="flex flex-col gap-2.5 overflow-y-auto custom-scrollbar pr-1 flex-1 pb-2">
         {children}
       </div>
     </div>
   );
 }
 
-function KanbanCard({ project, currentUser, handleDelete }: any) {
+function KanbanCard({ project, currentUser, handleDelete, handleEdit }: any) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: project.id,
     data: project,
@@ -172,84 +630,61 @@ function KanbanCard({ project, currentUser, handleDelete }: any) {
     transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
   } : undefined;
 
-  const priorityHex = getPriorityColor(project.priority).includes("red") ? "#ef4444" : getPriorityColor(project.priority).includes("orange") ? "#f97316" : getPriorityColor(project.priority).includes("blue") ? "#3b82f6" : "#cbd5e1";
-
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`bg-background border border-border/50 rounded-2xl p-5 shadow-sm hover:shadow-xl hover:border-primary/40 hover:-translate-y-1 transition-all duration-300 group flex flex-col gap-4 cursor-grab active:cursor-grabbing relative overflow-hidden ${isDragging ? 'opacity-40 scale-95 z-50 shadow-2xl' : ''}`}
+      className={`bg-white dark:bg-[#252525] border border-black/5 dark:border-white/10 rounded-xl p-4 shadow-sm hover:border-black/10 dark:hover:border-white/20 transition-all duration-200 group flex flex-col gap-3 cursor-grab active:cursor-grabbing relative overflow-hidden ${isDragging ? 'opacity-50 scale-95 z-50 shadow-2xl rotate-2' : ''}`}
       {...attributes}
       {...listeners}
     >
-      {/* Decorative Gradient Background on hover */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-      
-      {/* Dynamic Priority Indicator */}
-      <div className="absolute top-0 left-0 w-1.5 h-full rounded-l-2xl transition-all duration-300 group-hover:w-2" style={{ backgroundColor: priorityHex }} />
-      
-      <div className="flex justify-between items-start gap-3 pl-2 relative z-10">
-        <Link href={`/workspace/projects/${project.id}`} className="font-bold text-[15px] leading-tight text-foreground/90 group-hover:text-primary transition-colors line-clamp-2" onPointerDown={(e) => e.stopPropagation()}>
+      <div className="flex justify-between items-start gap-3 relative z-10">
+        <Link href={`/workspace/projects/${project.id}`} className="font-semibold text-[14px] leading-snug text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 pr-4" onPointerDown={(e) => e.stopPropagation()}>
           {project.name}
-          {project.isRepeated && (
-            <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0 px-1.5 font-semibold inline-flex items-center gap-1 ml-1.5 align-middle">
-              <Repeat size={8} /> Recurring
-            </Badge>
-          )}
         </Link>
+
         {currentUser.role === "OWNER" && (
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 shrink-0" onPointerDown={(e) => e.stopPropagation()}>
-            <Link href={`/workspace/projects/${project.id}?edit=true`} className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded-lg cursor-pointer">
-              <Edit2 size={16} />
-            </Link>
-            <div onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(project.id); }} className="p-1.5 hover:bg-destructive/10 text-destructive/70 hover:text-destructive rounded-lg cursor-pointer">
-              <Trash2 size={16} />
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 shrink-0 absolute right-0 -top-1 bg-white/90 dark:bg-[#252525]/90 backdrop-blur-sm p-1 rounded-lg" onPointerDown={(e) => e.stopPropagation()}>
+            <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); handleEdit(project); }} className="p-1 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-md cursor-pointer">
+              <Edit2 size={14} />
+            </button>
+            <div onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(project.id); }} className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 hover:text-red-600 rounded-md cursor-pointer">
+              <Trash2 size={14} />
             </div>
           </div>
         )}
       </div>
       
-      {project.client && currentUser.role !== "MEMBER" && (
-        <span className="text-[12px] font-medium text-muted-foreground pl-2 truncate relative z-10 flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
-          {project.client.name}
-        </span>
-      )}
-
-      <div className="flex items-center gap-2 pl-2 relative z-10">
-        <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-sm" style={{ backgroundColor: `${priorityHex}20`, color: priorityHex }}>
-          {project.priority}
-        </span>
-        {project.totalAllocatedHours ? (
-          <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
-            <Clock size={11} /> {project.totalAllocatedHours} hrs
-          </span>
-        ) : null}
-      </div>
-      
-      <div className="flex justify-between items-end mt-auto pt-3 pl-2 border-t border-border/40 relative z-10">
-        <div className="flex -space-x-2 overflow-hidden py-1">
-          {project.projectManager && (
-            <Avatar className="h-7 w-7 border-2 border-background ring-2 ring-purple-500/20 z-10 shadow-sm transition-transform group-hover:scale-110 duration-300">
-              <AvatarFallback className="bg-gradient-to-br from-purple-100 to-purple-200 text-purple-700 text-[10px] font-bold">{project.projectManager.name.substring(0,2).toUpperCase()}</AvatarFallback>
-            </Avatar>
-          )}
-          {getProjectMembers(project).slice(0, 3).map((u: any) => (
-            <Avatar key={u.id} className="h-7 w-7 border-2 border-background shadow-sm transition-transform group-hover:scale-110 duration-300" title={u.name}>
-              <AvatarFallback className="bg-gradient-to-br from-primary/10 to-primary/20 text-primary text-[10px] font-bold">{u.name.substring(0,2).toUpperCase()}</AvatarFallback>
-            </Avatar>
-          ))}
-          {getProjectMembers(project).length > 3 && (
-            <div className="h-7 w-7 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground shadow-sm z-10">
-              +{getProjectMembers(project).length - 3}
+      <div className="flex flex-col gap-2.5 mt-1 relative z-10">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant="outline" className={`text-[10px] uppercase font-bold border-0 px-1.5 py-0.5 rounded-md ${getPriorityColor(project.priority)}`}>
+            {project.priority}
+          </Badge>
+          {(project.startDate || project.endDate) && (
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium bg-slate-50 dark:bg-white/5 px-1.5 py-0.5 rounded-md border border-slate-100 dark:border-white/10">
+              <CalendarIcon size={10} className="text-slate-400" />
+              <span>{project.startDate ? formatDate(project.startDate) : '--'} - {project.endDate ? formatDate(project.endDate) : '--'}</span>
             </div>
           )}
         </div>
         
-        <div className={`text-[11px] font-medium flex items-center gap-1.5 px-2.5 py-1 rounded-full shadow-sm ${project.isOngoing ? 'bg-emerald-500/10 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>
-          {project.isOngoing ? <Clock size={12} className="text-emerald-500 animate-pulse" /> : <Calendar size={12} />}
-          {formatDate(project.startDate)} - {project.isOngoing ? "Ongoing" : project.endDate ? formatDate(project.endDate) : "No Date"}
-        </div>
+        {project.tasks && project.tasks.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <div className="text-[12px] text-slate-600 dark:text-slate-300 flex items-center gap-2 bg-slate-50 dark:bg-[#202020] px-2 py-1.5 rounded-lg border border-slate-100 dark:border-white/5">
+              <CheckCircle2 size={12} className="text-slate-400 shrink-0" />
+              <span className="truncate">{project.tasks[0].title}</span>
+            </div>
+            {project.tasks.length > 1 && (
+              <Link 
+                href={`/workspace/tasks?projectId=${project.id}`} 
+                className="text-[11px] font-medium text-slate-400 hover:text-blue-500 transition-colors inline-block pl-1" 
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                + {project.tasks.length - 1} more tasks
+              </Link>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -269,6 +704,9 @@ export default function ProjectsClient({
   taskStatuses?: any[];
 }) {
   const [projects, setProjects] = useState(initialProjects);
+  useEffect(() => {
+    setProjects(initialProjects);
+  }, [initialProjects]);
   const [isPending, startTransition] = useTransition();
 
   // Search & Filters
@@ -278,9 +716,35 @@ export default function ProjectsClient({
   // Modal States
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isQuickClientOpen, setIsQuickClientOpen] = useState(false);
+  const [isCreateStatusOpen, setIsCreateStatusOpen] = useState(false);
+  
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editProjectId, setEditProjectId] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null);
+  const [isDeleteStageDialogOpen, setIsDeleteStageDialogOpen] = useState(false);
+  const [deleteStageId, setDeleteStageId] = useState<string | null>(null);
+  const [isDeleteTemplateOpen, setIsDeleteTemplateOpen] = useState(false);
+  const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
+  const [isFieldsDrawerOpen, setIsFieldsDrawerOpen] = useState(false);
+  const [fieldsTab, setFieldsTab] = useState("create_new");
+  const [selectedFieldType, setSelectedFieldType] = useState<string | null>(null);
+  const [newFieldOptions, setNewFieldOptions] = useState<string[]>([]);
+  const [newOptionInput, setNewOptionInput] = useState("");
+  const [newCustomFieldName, setNewCustomFieldName] = useState("");
+  const [customColumns, setCustomColumns] = useState<{id: string, name: string, type: string}[]>([]);
+  const [fieldsDrawerTarget, setFieldsDrawerTarget] = useState<"TABLE" | "FORM">("TABLE");
+  
+  // Status Creation States
+  const [newStatusName, setNewStatusName] = useState("");
+  const [newStatusColor, setNewStatusColor] = useState("#3b82f6");
+  const [isCreatingStatus, setIsCreatingStatus] = useState(false);
 
   const searchParams = useSearchParams();
   const router = useRouter();
+
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => setIsMounted(true), []);
 
   useEffect(() => {
     if (searchParams.get('new') === 'true') {
@@ -301,10 +765,38 @@ export default function ProjectsClient({
   };
   const [projectTasks, setProjectTasks] = useState<DraftTask[]>([]);
   const [customFields, setCustomFields] = useState<
-    { name: string; type: string; value: string }[]
+    { name: string; type: string; value: any; options?: string[] }[]
   >([]);
   const [description, setDescription] = useState("");
   const [viewMode, setViewMode] = useState<"TABLE" | "KANBAN" | "LIST">("TABLE");
+
+  const [hiddenColumns, setHiddenColumns] = useState<string[]>([]);
+  useEffect(() => {
+    console.log("Fetching hidden columns from DB...");
+    getHiddenColumnsAction().then(res => {
+      console.log("Fetched hidden columns:", res);
+      if (res.success && res.columns) {
+        setHiddenColumns(res.columns);
+      }
+    }).catch(console.error);
+  }, []);
+
+  const hideColumn = (colName: string) => {
+    if (hiddenColumns.includes(colName)) return;
+    const next = [...hiddenColumns, colName];
+    setHiddenColumns(next);
+    setCustomColumns(prev => prev.filter(c => c.name !== colName));
+    console.log("Saving hidden columns to DB:", next);
+    setHiddenColumnsAction(next).then(res => console.log("Save result:", res)).catch(console.error);
+  };
+
+  const unhideColumn = (colName: string) => {
+    if (!hiddenColumns.includes(colName)) return;
+    const next = hiddenColumns.filter(n => n !== colName);
+    setHiddenColumns(next);
+    console.log("Saving hidden columns to DB:", next);
+    setHiddenColumnsAction(next).then(res => console.log("Save result:", res)).catch(console.error);
+  };
 
   // Form Control States for Project Creation
   const [formName, setFormName] = useState("");
@@ -362,6 +854,16 @@ export default function ProjectsClient({
       fetchRules();
     }
   }, [isCreateOpen]);
+
+  // Auto-save custom fields in Edit Mode
+  useEffect(() => {
+    if (isEditMode && editProjectId && customFields) {
+      const timer = setTimeout(() => {
+        updateProjectCustomFieldsAction(editProjectId, customFields).catch(console.error);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [customFields, isEditMode, editProjectId]);
 
   const handleCreateRule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -480,25 +982,32 @@ export default function ProjectsClient({
     });
   };
 
-  const handleDeleteTemplate = async (templateId: string, e: React.MouseEvent) => {
+  const handleDeleteTemplate = (templateId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Are you sure you want to delete this template?")) return;
+    setDeleteTemplateId(templateId);
+    setIsDeleteTemplateOpen(true);
+  };
+
+  const confirmDeleteTemplate = async () => {
+    if (!deleteTemplateId) return;
     try {
-      const res = await deleteProjectTemplateAction(templateId);
+      const res = await deleteProjectTemplateAction(deleteTemplateId);
       if (res.error) {
         toast.error(res.error);
       } else {
         toast.success("Template deleted");
-        setTemplates(templates.filter((t) => t.id !== templateId));
-        // Remove from pinned list if deleted
+        setTemplates(templates.filter((t) => t.id !== deleteTemplateId));
         setPinnedTemplateIds((prev) => {
-          const next = prev.filter((id) => id !== templateId);
+          const next = prev.filter((id) => id !== deleteTemplateId);
           localStorage.setItem("omniwork_pinned_templates", JSON.stringify(next));
           return next;
         });
       }
     } catch (err) {
       toast.error("Failed to delete template");
+    } finally {
+      setIsDeleteTemplateOpen(false);
+      setDeleteTemplateId(null);
     }
   };
 
@@ -639,14 +1148,66 @@ export default function ProjectsClient({
   };
 
   // DND State
-  const [confirmStatusModal, setConfirmStatusModal] = useState<{
-    isOpen: boolean;
-    projectId: string | null;
-    projectName: string;
-    newStatus: string | null;
-    newStatusName?: string | null;
-  }>({ isOpen: false, projectId: null, projectName: "", newStatus: null, newStatusName: null });
   const [activeDragProject, setActiveDragProject] = useState<any>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    })
+  );
+
+  const openCreateModalForStatus = (statusId: string) => {
+    if (defaultTemplateId) {
+      const defaultTemplate = templates.find((t) => t.id === defaultTemplateId);
+      if (defaultTemplate) {
+        handleUseTemplate(defaultTemplate);
+        // Overwrite the template's status with the kanban column's status
+        setFormStatusId(statusId);
+        return;
+      }
+    }
+
+    setFormName("");
+    setDescription("");
+    setFormStartDate("");
+    setFormEndDate("");
+    setFormPriority("MEDIUM");
+    setFormStatusId(statusId);
+    setFormBudget("");
+    setFormAllocatedHours("");
+    setProjectTasks([]);
+    setCustomFields([]);
+    setAttachedRuleIds([]);
+    setIsEditMode(false);
+    setEditProjectId(null);
+    setIsCreateOpen(true);
+  };
+
+  const handleCreateStatus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStatusName.trim() || !newStatusColor) return;
+    setIsCreatingStatus(true);
+    try {
+      const res = await fetch("/api/project-statuses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newStatusName, color: newStatusColor })
+      });
+      if (res.ok) {
+        setIsCreateStatusOpen(false);
+        setNewStatusName("");
+        router.refresh();
+      } else {
+        alert("Failed to create status. Ensure the name is unique.");
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsCreatingStatus(false);
+    }
+  };
 
   const clients = users.filter(
     (u) => u.role === "CLIENT" && u.status === "ACTIVE",
@@ -654,6 +1215,51 @@ export default function ProjectsClient({
   const members = users.filter(
     (u) => u.role === "MEMBER" && u.status === "ACTIVE",
   );
+
+  // Extract unique custom fields
+  const existingCustomFields = React.useMemo(() => {
+    return Array.from(
+      new Set(
+        projects
+          .filter((p: any) => p.customFields && Array.isArray(p.customFields))
+          .flatMap((p: any) => p.customFields.map((f: any) => f.name).filter(Boolean))
+      )
+    ).sort();
+  }, [projects]);
+
+  // Sync table columns from all project fields
+  useEffect(() => {
+    if (projects.length > 0) {
+      setCustomColumns((prev) => {
+        const allFieldsMap = new Map<string, any>();
+        
+        // Preserve existing columns unless they are hidden
+        prev.forEach(col => {
+          if (!hiddenColumns.includes(col.name)) {
+            allFieldsMap.set(col.name, col);
+          }
+        });
+        
+        // Add new columns from projects if they are not hidden
+        projects.forEach((p: any) => {
+          if (Array.isArray(p.customFields)) {
+            p.customFields.forEach((f: any) => {
+              if (f.name && !allFieldsMap.has(f.name) && !hiddenColumns.includes(f.name)) {
+                allFieldsMap.set(f.name, { id: crypto.randomUUID(), name: f.name, type: f.type || "Text" });
+              }
+            });
+          }
+        });
+        
+        const nextCols = Array.from(allFieldsMap.values());
+        // Only update if changed to prevent infinite re-renders
+        if (nextCols.length !== prev.length || nextCols.some((c, i) => c.name !== prev[i]?.name)) {
+           return nextCols;
+        }
+        return prev;
+      });
+    }
+  }, [projects, hiddenColumns]);
 
   // Filtered Projects
   const filteredProjects = projects.filter((p) => {
@@ -679,56 +1285,165 @@ export default function ProjectsClient({
     }
   };
 
+  const openEditModal = (project: any) => {
+    setIsEditMode(true);
+    setEditProjectId(project.id);
+    
+    setFormName(project.name || "");
+    setFormClientId(project.clientId || "");
+    setFormPMId(project.projectManagerId || "");
+    setFormStatusId(project.statusId || "");
+    setFormPriority(project.priority || "MEDIUM");
+    setFormStartDate(project.startDate ? (typeof project.startDate === 'string' ? project.startDate.split('T')[0] : new Date(project.startDate).toISOString().split('T')[0]) : "");
+    setFormEndDate(project.endDate ? (typeof project.endDate === 'string' ? project.endDate.split('T')[0] : new Date(project.endDate).toISOString().split('T')[0]) : "");
+    setIsOngoing(project.isOngoing || false);
+    setFormBudget(project.projectBudget?.toString() || "");
+    setFormAllocatedHours(project.totalAllocatedHours?.toString() || "");
+    setDescription(project.description || "");
+    setFormNotes(project.notes || "");
+    
+    if (project.customFields && Array.isArray(project.customFields)) {
+      setCustomFields(project.customFields);
+    } else {
+      setCustomFields([]);
+    }
+    setIsRepeatEnabled(project.repeatSettings?.enabled || false);
+    if(project.repeatSettings) {
+      setRepeatFrequency(project.repeatSettings.frequency || "DAILY");
+      setRepeatTime(project.repeatSettings.time || "09:00");
+    }
+    
+    if (project.rules && Array.isArray(project.rules)) {
+      setAttachedRuleIds(project.rules.map((r: any) => r.ruleId));
+    } else {
+      setAttachedRuleIds([]);
+    }
+    
+    if (project.tasks && Array.isArray(project.tasks)) {
+      setProjectTasks(project.tasks.map((t: any) => ({
+        id: t.id || Math.random().toString(),
+        title: t.title || "",
+        description: t.description || "",
+        status: t.statusId || "",
+        priority: t.priority || "MEDIUM",
+        assigneeId: t.assignees?.[0]?.userId || "",
+      })));
+    } else {
+      setProjectTasks([]);
+    }
+    
+    setIsCreateOpen(true);
+  };
+
+  const handleRenameStage = async (statusId: string, newName: string) => {
+    try {
+      const res = await fetch(`/api/project-statuses/${statusId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName })
+      });
+      if (res.ok) {
+        toast.success("Stage renamed!");
+        router.refresh();
+      } else {
+        toast.error("Failed to rename stage.");
+      }
+    } catch (e) {
+      toast.error("Failed to rename stage.");
+    }
+  };
+
+  const handleDeleteStage = (statusId: string) => {
+    setDeleteStageId(statusId);
+    setIsDeleteStageDialogOpen(true);
+  };
+
+  const confirmDeleteStage = async () => {
+    if (!deleteStageId) return;
+    try {
+      const res = await fetch(`/api/project-statuses/${deleteStageId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        toast.success("Stage deleted!");
+        setIsDeleteStageDialogOpen(false);
+        setDeleteStageId(null);
+        router.refresh();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to delete stage.");
+      }
+    } catch (e) {
+      toast.error("Failed to delete stage.");
+    }
+  };
+
   const handleDragStart = (e: any) => {
     if (currentUser?.role === 'CLIENT') return;
     setActiveDragProject(e.active.data.current);
   };
 
   const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    const activeData = active.data.current as any;
+    
     setActiveDragProject(null);
     if (currentUser?.role === 'CLIENT') {
-      toast.error("Clients cannot change project statuses.");
+      toast.error("Clients cannot make changes.");
       return;
     }
-    const { active, over } = e;
     
     if (!over) return;
     
+    // Column Reordering Logic
+    if (activeData?.type === "COLUMN") {
+      if (active.id !== over.id) {
+        const oldIndex = projectStatuses.findIndex((s: any) => s.id === active.id);
+        const newIndex = projectStatuses.findIndex((s: any) => s.id === over.id);
+        
+        const newStatuses = arrayMove(projectStatuses, oldIndex, newIndex);
+        
+        startTransition(async () => {
+          try {
+            await Promise.all(newStatuses.map((s: any, index: number) => 
+              fetch(`/api/project-statuses/${s.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ order: index })
+              })
+            ));
+            router.refresh();
+          } catch(e) {
+            toast.error("Failed to reorder columns.");
+          }
+        });
+      }
+      return;
+    }
+
+    // Project Drag Logic
     const projectId = active.id as string;
     const project = projects.find(p => p.id === projectId);
     const newStatus = over.id as string;
 
     if (project && project.statusId !== newStatus) {
       const statusObj = projectStatuses?.find((s: any) => s.id === newStatus);
-      setConfirmStatusModal({
-        isOpen: true,
-        projectId,
-        projectName: project.name,
-        newStatus,
-        newStatusName: statusObj?.name || newStatus
+      const newStatusName = statusObj?.name || newStatus;
+      
+      startTransition(async () => {
+        // Optimistic update
+        setProjects(projects.map(p => p.id === projectId ? { ...p, statusId: newStatus } : p));
+        
+        const res = await updateProjectStatusAction(projectId, newStatus as any);
+        if (res.error) {
+          toast.error(res.error);
+          // Revert optimistic update
+          router.refresh();
+        } else {
+          toast.success(`Project moved to ${newStatusName}`);
+        }
       });
     }
-  };
-
-  const handleConfirmStatusChange = () => {
-    if (!confirmStatusModal.projectId || !confirmStatusModal.newStatus) return;
-    
-    const { projectId, newStatus, newStatusName } = confirmStatusModal;
-    
-    startTransition(async () => {
-      // Optimistic update
-      setProjects(projects.map(p => p.id === projectId ? { ...p, statusId: newStatus } : p));
-      setConfirmStatusModal({ isOpen: false, projectId: null, projectName: "", newStatus: null, newStatusName: null });
-      
-      const res = await updateProjectStatusAction(projectId, newStatus as any);
-      if (res.error) {
-        toast.error(res.error);
-        // Revert optimistic update
-        router.refresh();
-      } else {
-        toast.success(`Project moved to ${newStatusName}`);
-      }
-    });
   };
 
   const handleCreateProject = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -762,6 +1477,7 @@ export default function ProjectsClient({
       tasks: projectTasks
         .filter((t) => t.title.trim() !== "")
         .map((t) => ({
+          id: t.id,
           title: t.title,
           description: t.description,
           priority: t.priority as any,
@@ -772,12 +1488,19 @@ export default function ProjectsClient({
     };
 
     startTransition(async () => {
-      const res = await createProjectAction(data);
+      let res;
+      if (isEditMode && editProjectId) {
+        res = await updateProjectAction(editProjectId, data);
+      } else {
+        res = await createProjectAction(data);
+      }
       if (res.error) {
         toast.error(res.error);
       } else {
-        toast.success("Project created successfully");
+        toast.success(isEditMode ? "Project updated successfully" : "Project created successfully");
         setIsCreateOpen(false);
+        setIsEditMode(false);
+        setEditProjectId(null);
         setProjectTasks([]);
         setCustomFields([]);
         setFormName("");
@@ -821,14 +1544,21 @@ export default function ProjectsClient({
     });
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this project?")) return;
+  const handleDelete = (id: string) => {
+    setDeleteProjectId(id);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteProjectId) return;
     startTransition(async () => {
-      const res = await deleteProjectAction(id);
+      const res = await deleteProjectAction(deleteProjectId);
       if (res.error) toast.error(res.error);
       else {
         toast.success("Project deleted");
-        setProjects(projects.filter((p) => p.id !== id));
+        setProjects(projects.filter((p) => p.id !== deleteProjectId));
+        setIsDeleteDialogOpen(false);
+        setDeleteProjectId(null);
       }
     });
   };
@@ -985,16 +1715,44 @@ export default function ProjectsClient({
 
       {/* Projects Views */}
       {viewMode === "TABLE" && (
-      <div className="bg-background rounded-xl border shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-background border-y sm:border sm:rounded-xl shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted/30">
-              <TableHead className="w-[300px]">Project Details</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Priority</TableHead>
-              <TableHead>Timeline</TableHead>
-              <TableHead>Team</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+            <TableRow className="bg-white dark:bg-[#202020] border-b border-slate-200 dark:border-white/10 hover:bg-white dark:hover:bg-[#202020]">
+              <TableHead className="w-[48px] text-center px-4">
+                <input type="checkbox" className="rounded border-slate-300 w-3.5 h-3.5 cursor-pointer accent-blue-600" />
+              </TableHead>
+              <TableHead className="w-[350px] text-slate-500 font-medium text-[13px]">Name</TableHead>
+              <TableHead className="w-[180px] text-slate-500 font-medium text-[13px] border-l border-slate-100 dark:border-white/5">Status</TableHead>
+              <TableHead className="w-[150px] text-slate-500 font-medium text-[13px] border-l border-slate-100 dark:border-white/5">Due date</TableHead>
+              <TableHead className="w-[150px] text-slate-500 font-medium text-[13px] border-l border-slate-100 dark:border-white/5">Priority</TableHead>
+              {customColumns.map(col => (
+                <TableHead key={col.id} className="w-[180px] text-slate-500 font-medium text-[13px] border-l border-slate-100 dark:border-white/5">
+                  <div className="flex items-center justify-between group/col">
+                    <div className="flex items-center gap-2">
+                      {col.type === "Text" && <Type size={14} className="text-slate-400 shrink-0" />}
+                      {col.type === "Date" && <CalendarIcon size={14} className="text-slate-400 shrink-0" />}
+                      {col.type === "Number" && <Hash size={14} className="text-slate-400 shrink-0" />}
+                      {col.type === "Dropdown" && <ListIcon size={14} className="text-slate-400 shrink-0" />}
+                      {col.type === "Checkbox" && <CheckSquare size={14} className="text-slate-400 shrink-0" />}
+                      {col.type === "Website" && <Globe size={14} className="text-slate-400 shrink-0" />}
+                      {col.type === "Email" && <Mail size={14} className="text-slate-400 shrink-0" />}
+                      {col.type === "Phone" && <Phone size={14} className="text-slate-400 shrink-0" />}
+                      {(col.type === "Text area" || col.type === "Labels" || col.type === "AI Autofill") && <AlignLeft size={14} className="text-slate-400 shrink-0" />}
+                      <span className="truncate">{col.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover/col:opacity-100 transition-opacity shrink-0">
+                      <button className="text-slate-400 hover:text-slate-600"><Settings size={12} /></button>
+                      <button onClick={() => hideColumn(col.name)} className="text-slate-400 hover:text-red-500"><X size={12} /></button>
+                    </div>
+                  </div>
+                </TableHead>
+              ))}
+              <TableHead className="w-[60px] text-center border-l border-slate-100 dark:border-white/5">
+                <button onClick={() => { setFieldsDrawerTarget("TABLE"); setIsFieldsDrawerOpen(true); }} className="p-1 hover:bg-slate-100 dark:hover:bg-white/5 rounded text-slate-400 transition-colors">
+                  <Plus size={16} className="mx-auto" />
+                </button>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1011,111 +1769,47 @@ export default function ProjectsClient({
                 </TableCell>
               </TableRow>
             ) : (
-              filteredProjects.map((p: any) => (
+              filteredProjects.map((p: any, index: number) => (
                 <TableRow
                   key={p.id}
-                  className="group hover:bg-muted/40 transition-colors"
+                  className="group hover:bg-slate-50/50 dark:hover:bg-white/5 transition-colors border-b border-slate-100 dark:border-white/5 bg-white dark:bg-transparent"
                 >
-                  <TableCell>
-                    <div className="flex flex-col">
+                  <TableCell className="text-center font-medium text-slate-400 text-xs px-4">
+                    {index + 1}
+                  </TableCell>
+                  <TableCell className="border-l border-slate-100/50 dark:border-white/5">
+                    <div className="flex items-center gap-2">
+                      <CircleDashed size={14} className="text-slate-400 shrink-0" />
                       <Link
                         href={`/workspace/projects/${p.id}`}
-                        className="font-semibold text-foreground hover:text-primary transition-colors flex items-center gap-2"
+                        className="font-medium text-[13px] text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white transition-colors truncate"
                       >
                         {p.name}
-                        {p.isRepeated && (
-                          <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0 px-1.5 font-semibold flex items-center gap-1">
-                            <Repeat size={8} /> Recurring
-                          </Badge>
-                        )}
                       </Link>
-                      {p.client && currentUser.role !== "MEMBER" && (
-                        <span className="text-xs text-muted-foreground mt-1">
-                          Client: {p.client.name}
-                        </span>
-                      )}
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className="shadow-sm border-transparent text-white"
-                      style={{ backgroundColor: p.status?.color || '#cccccc' }}
-                    >
-                      {p.status?.name || "No Status"}
-                    </Badge>
+                  <TableCell className="border-l border-slate-100 dark:border-white/5">
+                    <TableStatusCell project={p} projectStatuses={projectStatuses} setProjects={setProjects} />
                   </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="secondary"
-                      className={`${getPriorityColor(p.priority)} border-transparent`}
-                    >
-                      {p.priority}
-                    </Badge>
+                  <TableCell className="border-l border-slate-100 dark:border-white/5 text-[13px] font-medium text-slate-700 dark:text-slate-300 p-0">
+                    <TableDueDateCell project={p} setProjects={setProjects} />
                   </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Calendar size={12} /> {formatDate(p.startDate)}
-                      </span>
-                      {p.isOngoing ? (
-                        <span className="flex items-center gap-1 text-emerald-600">
-                          <Clock size={12} /> Ongoing
-                        </span>
-                      ) : p.endDate ? (
-                        <span className="flex items-center gap-1">
-                          <ArrowRight size={12} /> {formatDate(p.endDate)}
-                        </span>
-                      ) : null}
-                    </div>
+                  <TableCell className="border-l border-slate-100 dark:border-white/5 p-0">
+                    <TablePriorityCell project={p} setProjects={setProjects} />
                   </TableCell>
-                  <TableCell>
-                    <div className="flex -space-x-2 overflow-hidden">
-                      {p.projectManager && (
-                        <div
-                          title={`PM: ${p.projectManager.name}`}
-                          className="relative z-10 border-2 border-background rounded-full ring-1 ring-purple-500"
-                        >
-                          <Avatar className="h-7 w-7">
-                            <AvatarFallback className="bg-purple-100 text-purple-700 text-[10px]">
-                              {p.projectManager.name.substring(0, 2)}
-                            </AvatarFallback>
-                          </Avatar>
-                        </div>
-                      )}
-                      {getProjectMembers(p).map((u: any) => (
-                        <div
-                          key={u.id}
-                          title={u.name}
-                          className="relative border-2 border-background rounded-full"
-                        >
-                          <Avatar className="h-7 w-7">
-                            <AvatarFallback className="bg-primary/10 text-primary text-[10px]">
-                              {u.name.substring(0, 2)}
-                            </AvatarFallback>
-                          </Avatar>
-                        </div>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      asChild
-                      className="opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <Link href={`/workspace/projects/${p.id}`}>
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
+                  {customColumns.map(col => (
+                    <TableCell key={col.id} className="border-l border-slate-100 dark:border-white/5 p-0 align-top">
+                      <TableCustomFieldCell project={p} col={col} setProjects={setProjects} projects={projects} />
+                    </TableCell>
+                  ))}
+                  <TableCell className="border-l border-slate-100 dark:border-white/5 text-center">
                     {currentUser.role === "OWNER" && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="opacity-0 group-hover:opacity-100 transition-opacity ml-1"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 mx-auto"
                           >
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
@@ -1125,6 +1819,9 @@ export default function ProjectsClient({
                             <Link href={`/workspace/projects/${p.id}`}>
                               View Project
                             </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEditModal(p)} className="cursor-pointer">
+                            Edit Project
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive cursor-pointer"
@@ -1145,29 +1842,51 @@ export default function ProjectsClient({
       )}
 
       {viewMode === "KANBAN" && (
-        <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar h-[calc(100vh-220px)] animate-in fade-in zoom-in-95 duration-200">
-            {projectStatuses.map((status) => {
-              const statusProjects = filteredProjects.filter(p => p.statusId === status.id);
-              return (
-                <KanbanColumn key={status.id} status={status.id} title={status.name} count={statusProjects.length} projectStatuses={projectStatuses}>
-                  {statusProjects.map(p => (
-                    <KanbanCard key={p.id} project={p} currentUser={currentUser} handleDelete={handleDelete} />
-                  ))}
-                  {statusProjects.length === 0 && (
-                    <div className="flex flex-col items-center justify-center h-24 border-2 border-dashed rounded-xl text-muted-foreground text-xs bg-background/50">
-                      No projects
-                    </div>
-                  )}
-                </KanbanColumn>
-              );
-            })}
+            <SortableContext items={projectStatuses.map((s: any) => s.id)} strategy={horizontalListSortingStrategy}>
+              {projectStatuses.map((status) => {
+                const statusProjects = filteredProjects.filter(p => p.statusId === status.id);
+                return (
+                  <KanbanColumn 
+                    key={status.id} 
+                    status={status.id} 
+                    title={status.name} 
+                    count={statusProjects.length} 
+                    projectStatuses={projectStatuses} 
+                    onAddProject={() => openCreateModalForStatus(status.id)}
+                    currentUser={currentUser}
+                    handleDeleteStage={handleDeleteStage}
+                    handleRenameStage={handleRenameStage}
+                  >
+                    {statusProjects.map((p: any) => (
+                      <KanbanCard key={p.id} project={p} currentUser={currentUser} handleDelete={handleDelete} handleEdit={openEditModal} />
+                    ))}
+                  </KanbanColumn>
+                );
+              })}
+            </SortableContext>
+            
+            {currentUser.role === 'OWNER' && (
+              <div className="shrink-0 flex items-start">
+                <button 
+                  onClick={() => setIsCreateStatusOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 mt-2 text-[14px] font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors bg-transparent border border-dashed border-transparent rounded-lg hover:bg-slate-50 dark:hover:bg-white/5"
+                >
+                  <Plus size={16} /> Add group
+                </button>
+              </div>
+            )}
           </div>
           <DragOverlay>
             {activeDragProject ? (
-              <div className="opacity-80 rotate-2 scale-105 transition-transform cursor-grabbing">
-                <KanbanCard project={activeDragProject} currentUser={currentUser} handleDelete={handleDelete} />
-              </div>
+              activeDragProject.type === "COLUMN" ? (
+                <div className="opacity-80 scale-105 transition-transform cursor-grabbing w-[320px] rounded-2xl border-2 border-dashed border-primary bg-background shadow-2xl h-[200px]" />
+              ) : (
+                <div className="opacity-80 rotate-2 scale-105 transition-transform cursor-grabbing">
+                  <KanbanCard project={activeDragProject} currentUser={currentUser} handleDelete={handleDelete} handleEdit={openEditModal} />
+                </div>
+              )
             ) : null}
           </DragOverlay>
         </DndContext>
@@ -1209,7 +1928,7 @@ export default function ProjectsClient({
                   <div className="flex flex-col gap-1 min-w-[120px]">
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Timeline</span>
                     <div className="flex flex-col gap-0.5 text-xs font-medium">
-                      <span className="flex items-center gap-1.5 text-foreground"><Calendar size={12} className="text-muted-foreground" /> {formatDate(p.startDate)}</span>
+                      <span className="flex items-center gap-1.5 text-foreground"><CalendarIcon size={12} className="text-muted-foreground" /> {formatDate(p.startDate)}</span>
                       {p.isOngoing ? (
                         <span className="flex items-center gap-1.5 text-emerald-600"><Clock size={12} /> Ongoing</span>
                       ) : p.endDate ? (
@@ -1251,6 +1970,7 @@ export default function ProjectsClient({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEditModal(p)} className="cursor-pointer">Edit Project</DropdownMenuItem>
                           <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={() => handleDelete(p.id)}>
                             <Trash2 className="mr-2 h-4 w-4" /> Delete Project
                           </DropdownMenuItem>
@@ -1265,17 +1985,30 @@ export default function ProjectsClient({
         </div>
       )}
 
-      {/* Create Project Modal */}
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+      {/* Create / Edit Project Modal */}
+      <Dialog open={isCreateOpen} onOpenChange={(isOpen) => {
+        setIsCreateOpen(isOpen);
+        if (!isOpen) {
+          setIsEditMode(false);
+          setEditProjectId(null);
+        }
+      }}>
         <DialogContent
           className="sm:max-w-[700px] h-[90vh] p-0 flex flex-col overflow-hidden"
           onInteractOutside={(e) => {
-            if (isQuickClientOpen) e.preventDefault();
+            if (isQuickClientOpen || isFieldsDrawerOpen) {
+              e.preventDefault();
+              return;
+            }
+            const target = e.target as Element;
+            if (target?.closest('#omniwork-fields-drawer') || target?.closest('#omniwork-fields-drawer-overlay') || target?.id === 'omniwork-fields-drawer-overlay') {
+              e.preventDefault();
+            }
           }}
         >
           <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shrink-0 shadow-sm flex flex-row justify-between items-center gap-4">
             <div className="space-y-1">
-              <DialogTitle>Create New Project</DialogTitle>
+              <DialogTitle>{isEditMode ? "Edit Project" : "Create New Project"}</DialogTitle>
               <DialogDescription>
                 Setup a new project workspace, assign a PM, and configure
                 timelines.
@@ -1481,19 +2214,26 @@ export default function ProjectsClient({
                     * Ongoing is disabled for repeating projects.
                   </div>
                 )}
-                {!isOngoing ? (
+                <div className="relative">
                   <Input
                     name="endDate"
                     type="date"
                     required={!isOngoing}
-                    value={formEndDate}
-                    onChange={(e) => setFormEndDate(e.target.value)}
+                    value={isOngoing ? "" : formEndDate}
+                    onChange={(e) => {
+                      setFormEndDate(e.target.value);
+                      if (e.target.value) {
+                        setIsOngoing(false);
+                      }
+                    }}
+                    className={isOngoing ? "text-transparent" : ""}
                   />
-                ) : (
-                  <div className="flex h-9 w-full items-center justify-center rounded-xl border bg-muted/50 text-xs text-muted-foreground italic">
-                    Project has no end date
-                  </div>
-                )}
+                  {isOngoing && (
+                    <div className="absolute inset-0 flex items-center px-3 pointer-events-none text-emerald-600 text-sm font-medium">
+                      Ongoing
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1620,99 +2360,141 @@ export default function ProjectsClient({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() =>
-                    setCustomFields([
-                      ...customFields,
-                      {
-                        name: "",
-                        type: "text",
-                        value: "",
-                      },
-                    ])
-                  }
-                  className="h-8 text-xs"
+                  onClick={() => {
+                    setFieldsDrawerTarget("FORM");
+                    setFieldsTab("create_new");
+                    setIsFieldsDrawerOpen(true);
+                  }}
+                  className="h-8 px-3 text-[13px] bg-white dark:bg-[#252525] border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-slate-700 dark:text-slate-300 shadow-sm rounded-lg"
                 >
-                  <Plus className="mr-1 h-3 w-3" /> Add Field
+                  <Plus className="mr-1.5 h-3.5 w-3.5 text-slate-400" /> Add Field
                 </Button>
               </div>
 
               {customFields.length > 0 && (
                 <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
-                  {customFields.map((field, index) => (
-                    <div
-                      key={index}
-                      className="p-3 border rounded-xl bg-muted/20 space-y-3 relative group"
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCustomFields(
-                            customFields.filter((_, i) => i !== index)
-                          )
-                        }
-                        className="absolute right-2 top-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                  {customFields.map((field, index) => {
+                    const getIconForType = (type: string) => {
+                      switch (type) {
+                        case 'number': return <Hash size={14} className="text-slate-400" />;
+                        case 'url':
+                        case 'website': return <Globe size={14} className="text-slate-400" />;
+                        case 'email': return <Mail size={14} className="text-slate-400" />;
+                        case 'phone': return <Phone size={14} className="text-slate-400" />;
+                        case 'dropdown': return <Tags size={14} className="text-slate-400" />;
+                        case 'checkboxes': return <CheckSquare size={14} className="text-slate-400" />;
+                        case 'date': return <CircleDashed size={14} className="text-slate-400" />;
+                        default: return <Type size={14} className="text-slate-400" />;
+                      }
+                    };
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-medium text-muted-foreground">Field Name</label>
+                    const renderFieldValueInput = () => {
+                      const updateValue = (val: any) => {
+                        const newFields = [...customFields];
+                        newFields[index].value = val;
+                        setCustomFields(newFields);
+                      };
+                      
+                      const commonClasses = "h-full w-full border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-4 bg-transparent text-[14px] text-slate-700 dark:text-slate-300 rounded-none shadow-none outline-none appearance-none";
+                      
+                      switch(field.type) {
+                        case 'text area':
+                          return <textarea value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} py-2.5 resize-none custom-scrollbar`} />;
+                        case 'checkbox':
+                          return <div className="flex items-center h-full px-4"><input type="checkbox" checked={!!field.value} onChange={e => updateValue(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" /></div>;
+                        case 'dropdown':
+                          return (
+                            <select value={field.value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer`}>
+                              <option value="" disabled>Select an option</option>
+                              {(field.options || []).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                            </select>
+                          );
+                        case 'labels':
+                          const currentValues = Array.isArray(field.value) ? field.value : [];
+                          return (
+                            <div className="flex items-center flex-wrap gap-1.5 h-full px-4 py-1 overflow-y-auto custom-scrollbar">
+                              {currentValues.map((v: string) => (
+                                 <span key={v} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[12px] font-medium bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300">
+                                   {v}
+                                   <button type="button" onClick={() => updateValue(currentValues.filter(val => val !== v))} className="text-slate-400 hover:text-red-500"><X size={10} /></button>
+                                 </span>
+                              ))}
+                              <select 
+                                 value="" 
+                                 onChange={e => {
+                                    if (e.target.value && !currentValues.includes(e.target.value)) {
+                                       updateValue([...currentValues, e.target.value]);
+                                    }
+                                 }}
+                                 className="bg-transparent text-[12px] text-slate-500 outline-none cursor-pointer"
+                              >
+                                 <option value="" disabled>+ Add label</option>
+                                 {(field.options || []).filter((o: string) => !currentValues.includes(o)).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                              </select>
+                            </div>
+                          );
+                        case 'number':
+                          return <Input type="number" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="0" className={commonClasses} />;
+                        case 'date':
+                          return <Input type="date" value={field.value || ''} onChange={e => updateValue(e.target.value)} className={commonClasses} />;
+                        case 'website':
+                        case 'url':
+                          return <Input type="url" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="https://..." className={commonClasses} />;
+                        case 'phone':
+                          return <Input type="tel" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="+1..." className={commonClasses} />;
+                        case 'email':
+                          return <Input type="email" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="email@example.com" className={commonClasses} />;
+                        default:
+                          return <Input type="text" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+                      }
+                    };
+
+                    return (
+                      <div
+                        key={index}
+                        className={`flex items-stretch w-full border border-slate-200 dark:border-white/10 rounded-md overflow-hidden group transition-all ${field.type === 'text area' ? 'h-[80px]' : field.type === 'labels' ? 'min-h-[42px]' : 'h-[42px]'}`}
+                      >
+                        {/* Left Side: Field info */}
+                        <div className="flex items-center gap-2 px-3 py-2 min-w-[150px] w-1/3 border-r border-slate-200 dark:border-white/10 bg-[#FAFAFA] dark:bg-[#1A1A1A] relative">
+                          {getIconForType(field.type)}
                           <Input
-                            placeholder="e.g. Skype ID, Website"
                             value={field.name}
                             onChange={(e) => {
                               const newFields = [...customFields];
                               newFields[index].name = e.target.value;
                               setCustomFields(newFields);
                             }}
-                            className="h-8 text-xs bg-background"
-                            required
+                            className="h-7 text-[14px] bg-transparent border-0 focus-visible:ring-1 focus-visible:ring-slate-300 px-1 font-medium text-slate-700 dark:text-slate-300 w-full shadow-none"
                           />
+                          
+                          <div className="absolute right-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#FAFAFA] dark:bg-[#1A1A1A] pl-1">
+                            <button type="button" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                              <EyeOff size={14} />
+                            </button>
+                            <button type="button" className="border border-slate-200 dark:border-white/10 rounded p-[3px] text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-all bg-white dark:bg-[#252525] shadow-sm">
+                              <Settings size={13} />
+                            </button>
+                          </div>
                         </div>
 
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-medium text-muted-foreground">Field Type</label>
-                          <select
-                            value={field.type}
-                            onChange={(e) => {
-                              const newFields = [...customFields];
-                              newFields[index].type = e.target.value;
-                              newFields[index].value = "";
-                              setCustomFields(newFields);
-                            }}
-                            className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
+                        {/* Right Side: Value */}
+                        <div className="flex-1 relative bg-white dark:bg-[#252525]">
+                          {renderFieldValueInput()}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCustomFields(
+                                customFields.filter((_, i) => i !== index)
+                              )
+                            }
+                            className="absolute right-2 top-2 border border-slate-200 dark:border-white/10 rounded p-[3px] text-slate-500 hover:text-destructive hover:bg-slate-50 dark:hover:bg-white/5 transition-all bg-white dark:bg-[#252525] opacity-0 group-hover:opacity-100 shadow-sm z-10"
                           >
-                            <option value="text">Text</option>
-                            <option value="number">Number</option>
-                            <option value="url">URL</option>
-                          </select>
+                            <X size={13} />
+                          </button>
                         </div>
                       </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-muted-foreground">Value</label>
-                        <Input
-                          type={field.type === "number" ? "number" : "text"}
-                          placeholder={
-                            field.type === "url"
-                              ? "https://example.com"
-                              : field.type === "number"
-                              ? "0"
-                              : "Enter value..."
-                          }
-                          value={field.value}
-                          onChange={(e) => {
-                            const newFields = [...customFields];
-                            newFields[index].value = e.target.value;
-                            setCustomFields(newFields);
-                          }}
-                          className="h-8 text-xs bg-background"
-                          required
-                        />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1862,12 +2644,12 @@ export default function ProjectsClient({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setIsCreateOpen(false)}
+                  onClick={() => { setIsCreateOpen(false); setIsEditMode(false); setEditProjectId(null); }}
                 >
                   Cancel
                 </Button>
                 <Button type="submit" disabled={isPending}>
-                  {isPending ? "Creating..." : "Create Project"}
+                  {isPending ? "Saving..." : (isEditMode ? "Save Changes" : "Create Project")}
                 </Button>
               </div>
             </DialogFooter>
@@ -2075,7 +2857,7 @@ export default function ProjectsClient({
                           </div>
 
                           <p className="text-[10px] text-muted-foreground font-semibold flex items-center">
-                            <Calendar className="h-3 w-3 mr-1" />
+                            <CalendarIcon className="h-3 w-3 mr-1" />
                             Created: {new Date(template.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                           </p>
                         </div>
@@ -2107,27 +2889,6 @@ export default function ProjectsClient({
               className="rounded-xl shadow-sm text-xs font-bold"
             >
               Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {/* Status Confirmation Modal */}
-      <Dialog open={confirmStatusModal.isOpen} onOpenChange={(isOpen) => !isOpen && setConfirmStatusModal({ isOpen: false, projectId: null, projectName: "", newStatus: null, newStatusName: null })}>
-        <DialogContent className="sm:max-w-md bg-background border-border">
-          <DialogHeader>
-            <DialogTitle className="text-xl">Change Project Status</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-muted-foreground">
-              Are you sure you want to move <strong>{confirmStatusModal.projectName}</strong> to <strong>{confirmStatusModal.newStatusName}</strong>?
-            </p>
-          </div>
-          <DialogFooter className="mt-6">
-            <Button variant="outline" onClick={() => setConfirmStatusModal({ isOpen: false, projectId: null, projectName: "", newStatus: null, newStatusName: null })} disabled={isPending}>
-              Cancel
-            </Button>
-            <Button onClick={handleConfirmStatusChange} disabled={isPending}>
-              {isPending ? "Moving..." : "Confirm Move"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2366,6 +3127,489 @@ export default function ProjectsClient({
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* CREATE STATUS DIALOG */}
+      <Dialog open={isCreateStatusOpen} onOpenChange={setIsCreateStatusOpen}>
+        <DialogContent className="sm:max-w-sm bg-background border-border">
+          <DialogHeader>
+            <DialogTitle>Add New Group</DialogTitle>
+            <DialogDescription>
+              Create a new status column for your workflow.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateStatus} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Status Name</label>
+              <Input 
+                value={newStatusName} 
+                onChange={(e) => setNewStatusName(e.target.value)} 
+                placeholder="e.g. In Review" 
+                required 
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Color</label>
+              <div className="flex gap-2">
+                {["#94a3b8", "#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7"].map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setNewStatusColor(color)}
+                    className={`w-8 h-8 rounded-full transition-transform ${newStatusColor === color ? 'scale-110 ring-2 ring-offset-2 ring-slate-400' : 'hover:scale-105'}`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+            </div>
+            <DialogFooter className="mt-6">
+              <Button type="button" variant="outline" onClick={() => setIsCreateStatusOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isCreatingStatus || !newStatusName.trim()}>
+                {isCreatingStatus ? "Creating..." : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Project Confirmation Modal */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md bg-background border-border">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-destructive flex items-center gap-2">
+              <Trash2 size={20} /> Delete Project
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete this project? This action cannot be undone and will remove all associated tasks, time entries, and messages.
+            </p>
+          </div>
+          <DialogFooter className="mt-6">
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isPending}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete} disabled={isPending}>
+              {isPending ? "Deleting..." : "Delete Project"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Stage Confirmation Modal */}
+      <Dialog open={isDeleteStageDialogOpen} onOpenChange={setIsDeleteStageDialogOpen}>
+        <DialogContent className="sm:max-w-md bg-background border-border">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-destructive flex items-center gap-2">
+              <Trash2 size={20} /> Delete Stage
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete this stage? Ensure there are no projects inside it first.
+            </p>
+          </div>
+          <DialogFooter className="mt-6">
+            <Button variant="outline" onClick={() => setIsDeleteStageDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteStage}>
+              Delete Stage
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Template Confirmation Modal */}
+      <Dialog open={isDeleteTemplateOpen} onOpenChange={setIsDeleteTemplateOpen}>
+        <DialogContent className="sm:max-w-md bg-background border-border">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-destructive flex items-center gap-2">
+              <Trash2 size={20} /> Delete Template
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete this template? This action cannot be undone.
+            </p>
+          </div>
+          <DialogFooter className="mt-6">
+            <Button variant="outline" onClick={() => setIsDeleteTemplateOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteTemplate}>
+              Delete Template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fields UI (Drawer or Modal) */}
+      <DialogPrimitive.Root open={isFieldsDrawerOpen} onOpenChange={setIsFieldsDrawerOpen}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay 
+            id="omniwork-fields-drawer-overlay"
+            className={`fixed inset-0 z-[9999] transition-opacity ${fieldsDrawerTarget === "FORM" ? "bg-black/50 backdrop-blur-sm" : "bg-black/10"}`} 
+          />
+          <DialogPrimitive.Content 
+            id="omniwork-fields-drawer"
+            onInteractOutside={(e) => {
+              e.preventDefault(); // Stop Radix from bubbling the outside click to the Project Modal
+              setIsFieldsDrawerOpen(false); // Only close the Add Field modal
+            }}
+            className={`fixed z-[9999] outline-none bg-white dark:bg-[#1C1C1C] flex flex-col ${
+              fieldsDrawerTarget === "FORM" 
+                ? "left-[50%] top-[50%] w-full max-w-md translate-x-[-50%] translate-y-[-50%] border border-slate-200 dark:border-white/10 shadow-xl sm:rounded-xl overflow-hidden max-h-[85vh] animate-in fade-in zoom-in-95 duration-200"
+                : "inset-y-0 right-0 w-full sm:w-[360px] shadow-2xl border-l border-slate-200 dark:border-white/10 transform transition-transform duration-300 animate-in slide-in-from-right-full"
+            }`}
+          >
+            {selectedFieldType ? (
+              <div className="flex flex-col h-full">
+                <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-white/5">
+                  <div className="flex items-center gap-2 text-slate-800 dark:text-slate-100 font-semibold">
+                    <span className="capitalize">{selectedFieldType}</span> <ChevronDown size={14} className="text-slate-400 cursor-pointer" />
+                  </div>
+                  <button onClick={() => { setSelectedFieldType(null); setNewCustomFieldName(""); }} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-full transition-colors">
+                    <X size={16} />
+                  </button>
+                </div>
+                
+                <div className="p-5 flex-1">
+                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
+                    Field name <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative mb-8">
+                    <Smile size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Input 
+                      autoFocus 
+                      placeholder="Enter name..." 
+                      value={newCustomFieldName} 
+                      onChange={(e) => setNewCustomFieldName(e.target.value)} 
+                      className="pl-10 h-10 bg-white dark:bg-[#252525] border-slate-300 dark:border-white/10 rounded-lg text-[14px]" 
+                    />
+                  </div>
+                  
+                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 block">Fill method</label>
+                  <div className="flex gap-2 p-1 bg-slate-100 dark:bg-white/5 rounded-lg mb-6">
+                    <button className="flex-1 py-1.5 bg-white dark:bg-[#303030] text-slate-800 dark:text-slate-200 text-[13px] font-medium rounded-md shadow-sm border border-slate-200 dark:border-white/10">Manual fill</button>
+                    <button className="flex-1 py-1.5 flex items-center justify-center gap-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 text-[13px] font-medium rounded-md transition-colors"><Sparkles size={14} className="text-purple-500" /> Fill with AI</button>
+                  </div>
+                  
+                  {(selectedFieldType === "Dropdown" || selectedFieldType === "Labels") && (
+                    <div className="mb-6 border border-slate-200 dark:border-white/10 rounded-lg p-4 bg-slate-50 dark:bg-[#151515]">
+                      <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 block">Options <span className="text-red-500">*</span></label>
+                      <div className="flex gap-2 mb-3">
+                        <Input 
+                          placeholder="Type an option and press Add..." 
+                          value={newOptionInput}
+                          onChange={(e) => setNewOptionInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && newOptionInput.trim()) {
+                              e.preventDefault();
+                              if (!newFieldOptions.includes(newOptionInput.trim())) {
+                                setNewFieldOptions([...newFieldOptions, newOptionInput.trim()]);
+                              }
+                              setNewOptionInput("");
+                            }
+                          }}
+                          className="h-9 text-[13px] bg-white dark:bg-[#252525]"
+                        />
+                        <Button 
+                          type="button"
+                          variant="secondary"
+                          className="h-9 px-3"
+                          onClick={() => {
+                            if (newOptionInput.trim() && !newFieldOptions.includes(newOptionInput.trim())) {
+                              setNewFieldOptions([...newFieldOptions, newOptionInput.trim()]);
+                              setNewOptionInput("");
+                            }
+                          }}
+                        >
+                          Add
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {newFieldOptions.map((opt) => (
+                          <span key={opt} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[13px] font-medium bg-white dark:bg-[#252525] border border-slate-200 dark:border-white/10">
+                            {opt}
+                            <button 
+                              type="button"
+                              onClick={() => setNewFieldOptions(newFieldOptions.filter(o => o !== opt))}
+                              className="text-slate-400 hover:text-red-500 ml-1 focus:outline-none"
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        ))}
+                        {newFieldOptions.length === 0 && (
+                          <span className="text-[13px] text-slate-400 italic">No options added yet.</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="border-t border-slate-100 dark:border-white/5 pt-5">
+                    <button className="w-full flex items-center justify-between text-[14px] font-semibold text-slate-800 dark:text-slate-200 hover:text-slate-600 dark:hover:text-slate-400 transition-colors">
+                      More settings and permissions <ChevronDown size={16} className="text-slate-400" />
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="p-4 border-t border-slate-100 dark:border-white/5 flex justify-end gap-3 bg-slate-50 dark:bg-[#151515]">
+                  <Button 
+                    type="button" 
+                    onPointerDown={(e) => e.stopPropagation()} 
+                    variant="outline" 
+                    className="h-9 px-4 rounded-lg font-medium" 
+                    onClick={() => { setSelectedFieldType(null); setNewCustomFieldName(""); }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    disabled={!newCustomFieldName.trim() || ((selectedFieldType === "Dropdown" || selectedFieldType === "Labels") && newFieldOptions.length === 0)} 
+                    onClick={() => {
+                      const newFieldType = (selectedFieldType || "text").toLowerCase();
+                      if (fieldsDrawerTarget === "FORM") {
+                        const newField: any = { name: newCustomFieldName, type: newFieldType, value: "" };
+                        if (newFieldType === "dropdown" || newFieldType === "labels") {
+                          newField.options = newFieldOptions;
+                          if (newFieldType === "labels") {
+                             newField.value = []; // Array for multi-select
+                          }
+                        }
+                        setCustomFields([...customFields, newField]);
+
+                      } else {
+                        // TABLE VIEW PROPAGATION
+                        const newField: any = { name: newCustomFieldName, type: newFieldType, value: "" };
+                        if (newFieldType === "dropdown" || newFieldType === "labels") {
+                          newField.options = newFieldOptions;
+                          if (newFieldType === "labels") {
+                             newField.value = []; // Array for multi-select
+                          }
+                        }
+
+
+
+                        // 2. Propagate to ALL existing projects locally
+                        const updatedProjects = projects.map((p: any) => {
+                          const existingConfigFields = Array.isArray(p.customFields) ? p.customFields : [];
+                          return {
+                            ...p,
+                            customFields: [...existingConfigFields, newField]
+                          };
+                        });
+                        setProjects(updatedProjects);
+
+                        // 3. Immediately save to DB for all projects
+                        updatedProjects.forEach((p: any) => {
+                           updateProjectCustomFieldsAction(p.id, p.customFields).catch(console.error);
+                        });
+
+                        // 4. Update customColumns so it appears in the table immediately
+                        setCustomColumns([...customColumns, { id: crypto.randomUUID(), name: newCustomFieldName, type: selectedFieldType || "Text" }]);
+                      }
+                      setSelectedFieldType(null);
+                      setNewCustomFieldName("");
+                      setNewFieldOptions([]);
+                      setNewOptionInput("");
+                      setIsFieldsDrawerOpen(false);
+                    }}
+                    className="h-9 px-5 rounded-lg font-medium bg-slate-400 hover:bg-slate-500 text-white disabled:opacity-50 transition-colors"
+                  >
+                    Create
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-white/5">
+              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Fields</h2>
+              <div className="flex items-center gap-2">
+                <button className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1">
+                  <Settings size={18} />
+                </button>
+                <button onClick={() => setIsFieldsDrawerOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-full transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {fieldsDrawerTarget === "TABLE" && (
+              <div className="p-4 border-b border-slate-100 dark:border-white/5 space-y-4">
+                <div className="relative">
+                  <Input placeholder="Search Task Fields" className="pl-3 py-5 text-sm rounded-lg border-slate-300 dark:border-white/10 bg-transparent focus-visible:ring-1" />
+                </div>
+                <div className="flex gap-6 text-sm font-medium">
+                  <button 
+                    onClick={() => setFieldsTab("create_new")}
+                    className={`relative pb-2 ${fieldsTab === "create_new" ? "text-slate-900 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}
+                  >
+                    Create new
+                    {fieldsTab === "create_new" && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-slate-900 dark:bg-white rounded-t" />}
+                  </button>
+                  <button 
+                    onClick={() => setFieldsTab("add_existing")}
+                    className={`relative pb-2 ${fieldsTab === "add_existing" ? "text-slate-900 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}
+                  >
+                    Add existing
+                    {fieldsTab === "add_existing" && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-slate-900 dark:bg-white rounded-t" />}
+                  </button>
+                </div>
+              </div>
+            )}
+            {fieldsDrawerTarget === "FORM" && (
+              <div className="p-4 border-b border-slate-100 dark:border-white/5">
+                <div className="relative">
+                  <Input placeholder="Search Task Fields" className="pl-3 py-5 text-sm rounded-lg border-slate-300 dark:border-white/10 bg-transparent focus-visible:ring-1" />
+                </div>
+              </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              {fieldsTab === "create_new" && (
+                <div className="py-2">
+                  <div className="px-4 py-2">
+                    <h3 className="text-[13px] font-medium text-slate-500 mb-2">Popular</h3>
+                    <div className="space-y-1">
+                      <button onClick={() => setSelectedFieldType("Dropdown")} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                        <ListIcon size={16} className="text-emerald-600" /> Dropdown
+                      </button>
+                      <button onClick={() => setSelectedFieldType("Text")} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                        <Type size={16} className="text-blue-500" /> Text
+                      </button>
+                      <button onClick={() => setSelectedFieldType("Date")} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                        <CalendarIcon size={16} className="text-emerald-600" /> Date
+                      </button>
+                      <button onClick={() => setSelectedFieldType("Text area")} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                        <AlignLeft size={16} className="text-blue-500" /> Text area <span className="text-slate-400 ml-1">(Long Text)</span>
+                      </button>
+                      <button onClick={() => setSelectedFieldType("Number")} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                        <Hash size={16} className="text-emerald-500" /> Number
+                      </button>
+                      <button onClick={() => setSelectedFieldType("Checkbox")} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                        <CheckSquare size={16} className="text-purple-500" /> Checkbox
+                      </button>
+                      <button onClick={() => setSelectedFieldType("Website")} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                        <Globe size={16} className="text-pink-500" /> Website
+                      </button>
+                      <button onClick={() => setSelectedFieldType("Phone")} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                        <Phone size={16} className="text-emerald-600" /> Phone
+                      </button>
+                      <button onClick={() => setSelectedFieldType("Email")} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                        <Mail size={16} className="text-blue-500" /> Email
+                      </button>
+                      <button onClick={() => setSelectedFieldType("Labels")} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                        <Tags size={16} className="text-emerald-600" /> Labels <span className="text-slate-400 ml-1">(Multi-select)</span>
+                      </button>
+                      <button onClick={() => setSelectedFieldType("AI Autofill")} className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                        <Sparkles size={16} className="text-purple-500" /> AI Autofill
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="h-px bg-slate-100 dark:bg-white/5 my-2" />
+
+                  <div className="px-4 py-2">
+                    <h3 className="text-[13px] font-medium text-slate-500 mb-2">All</h3>
+                    <div className="space-y-1">
+                      <button className="w-full flex items-center gap-3 px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors">
+                        <PlusSquare size={16} className="text-blue-500" /> Button
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {fieldsTab === "add_existing" && (
+                <div className="py-2">
+                  <div className="px-4 py-2">
+                    {existingCustomFields.length > 0 ? (
+                      <div className="space-y-1">
+                        {existingCustomFields.map((fieldName) => (
+                          <button 
+                            key={fieldName} 
+                            type="button"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={() => {
+                              // Find type and options from other projects if they exist
+                              let matchedType = "Text";
+                              let matchedOptions = undefined;
+                              const otherProj = projects.find((p: any) => {
+                                const pFields = Array.isArray(p.customFields) ? p.customFields : [];
+                                return pFields.some((f: any) => f.name === fieldName);
+                              });
+                              if (otherProj) {
+                                const f = otherProj.customFields.find((f: any) => f.name === fieldName);
+                                matchedType = f?.type || "Text";
+                                matchedOptions = f?.options;
+                              }
+
+                              const newField = { name: fieldName, type: matchedType, value: "", options: matchedOptions };
+
+                              if (fieldsDrawerTarget === "FORM") {
+                                if (customFields.some((f: any) => f.name === fieldName)) {
+                                  setIsFieldsDrawerOpen(false);
+                                  return;
+                                }
+                                setCustomFields([...customFields, newField]);
+
+                              } else {
+                                // 2. Unhide column if it was hidden
+                                unhideColumn(fieldName);
+
+                                // 3. Propagate to ALL existing projects locally ONLY if they don't already have it
+                                const updatedProjects = projects.map((p: any) => {
+                                  const existingConfigFields = Array.isArray(p.customFields) ? p.customFields : [];
+                                  if (existingConfigFields.some((f: any) => f.name === fieldName)) {
+                                    return p;
+                                  }
+                                  return {
+                                    ...p,
+                                    customFields: [...existingConfigFields, newField]
+                                  };
+                                });
+                                setProjects(updatedProjects);
+
+                                // 3. Immediately save to DB for all projects
+                                updatedProjects.forEach((p: any) => {
+                                   updateProjectCustomFieldsAction(p.id, p.customFields).catch(console.error);
+                                });
+
+                                // 4. Update customColumns so it appears in the table immediately if not present
+                                if (!customColumns.some(c => c.name === fieldName)) {
+                                  setCustomColumns([...customColumns, { id: crypto.randomUUID(), name: fieldName, type: matchedType }]);
+                                }
+                              }
+                              setIsFieldsDrawerOpen(false);
+                            }}
+                            className="w-full flex items-center justify-between px-3 py-2 text-[14px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md transition-colors group"
+                          >
+                            <div className="flex items-center gap-3">
+                              <Tags size={16} className="text-slate-400" />
+                              <span className="truncate">{fieldName}</span>
+                            </div>
+                            <Plus size={14} className="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center text-sm text-slate-500 py-6">
+                        No existing custom fields found.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+                </div>
+              </>
+            )}
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
+
     </div>
   );
 }

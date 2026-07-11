@@ -21,15 +21,20 @@ import {
   Moon,
   Sun,
   ChevronDown,
+  ChevronUp,
+  ChevronsLeft,
+  ChevronsRight,
   User,
   Shield,
   Briefcase,
   Trash2,
   Plus,
   Cpu,
-  Workflow
+  Workflow,
+  Info,
+  Mail
 } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { logoutAction, switchOrganizationAction, deleteOrganizationAction } from '@/app/actions/auth';
@@ -62,9 +67,31 @@ export default function WorkspaceLayoutClient({
   const [deleteOrg, setDeleteOrg] = useState<any>(null);
   const [isDeletingOrg, setIsDeletingOrg] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMainMenuOpen, setIsMainMenuOpen] = useState(true);
+  const [isOtherMenuOpen, setIsOtherMenuOpen] = useState(true);
+
   const pathname = usePathname();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
+
+  const getPageTitle = (path: string) => {
+    if (path === '/workspace') return 'Dashboard';
+    if (path.startsWith('/workspace/projects')) return 'Projects';
+    if (path.startsWith('/workspace/teamops')) return 'TeamOps Hub';
+    if (path.startsWith('/workspace/tasks')) return 'Tasks';
+    if (path.startsWith('/workspace/time')) return 'Time';
+    if (path.startsWith('/workspace/timesheet')) return 'Timesheet';
+    if (path.startsWith('/workspace/users')) return 'Users';
+    if (path.startsWith('/workspace/clients')) return 'Clients';
+    if (path.startsWith('/workspace/rules')) return 'Rules';
+    if (path.startsWith('/workspace/analytics')) return 'Analytics';
+    if (path.startsWith('/workspace/integrations')) return 'Integration';
+    if (path.startsWith('/workspace/reports')) return 'Reports';
+    if (path.startsWith('/workspace/settings')) return 'Settings';
+    if (path.startsWith('/workspace/profile')) return 'My Profile';
+    return 'Workspace';
+  };
 
   usePresence();
   const { lastEvent } = useRealtime([]);
@@ -82,10 +109,6 @@ export default function WorkspaceLayoutClient({
             }
           });
         }
-      }
-      if (lastEvent.event === 'notification_created') {
-        // Notification toast might be handled here or in NotificationBell, but sonner toast is good.
-        // The payload for notification_created currently just says type: 'mention' etc. We can wait or just rely on message_sent for messages.
       }
     }
   }, [lastEvent, router, user.userId]);
@@ -128,7 +151,6 @@ export default function WorkspaceLayoutClient({
       if (data.success) {
         setIsCreateChildModalOpen(false);
         setNewChildOrgName("");
-        // Automatically switch to the newly created org
         await handleOrgSwitch(data.organization.id);
       } else {
         alert(data.error || 'Failed to create child organization');
@@ -161,7 +183,7 @@ export default function WorkspaceLayoutClient({
   const effectiveRole = user.role === 'MEMBER' && user.isPM ? 'PM' : user.role;
 
   const allNavItems = [
-    { name: 'Overview', href: '/workspace', icon: LayoutDashboard, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
+    { name: 'Dashboard', href: '/workspace', icon: LayoutDashboard, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'Projects', href: '/workspace/projects', icon: FolderKanban, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'TeamOps Hub', href: '/workspace/teamops', icon: Workflow, exact: false, roles: ['OWNER', 'PM', 'MEMBER'] },
     { name: 'Tasks', href: '/workspace/tasks', icon: CheckSquare, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
@@ -169,82 +191,249 @@ export default function WorkspaceLayoutClient({
     { name: 'Timesheet', href: '/workspace/timesheet', icon: FileText, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'Users', href: '/workspace/users', icon: UsersIcon, exact: false, roles: ['OWNER'] },
     { name: 'Clients', href: '/workspace/clients', icon: Briefcase, exact: false, roles: ['OWNER'] },
-    { name: 'Reports', href: '/workspace/reports', icon: BarChart3, exact: false, roles: ['OWNER', 'PM'] },
     { name: 'Rules', href: '/workspace/rules', icon: Cpu, exact: false, roles: ['OWNER'] },
+    { name: 'Reports', href: '/workspace/reports', icon: BarChart3, exact: false, roles: ['OWNER', 'PM'] },
     { name: 'Settings', href: '/workspace/settings', icon: Settings, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
   ];
 
-  const navItems = allNavItems.filter(item => item.roles.includes(effectiveRole));
+  const activeNavItems = allNavItems.filter(item => item.roles.includes(effectiveRole));
+
+  const mainMenuNavNames = ['Dashboard', 'Projects', 'TeamOps Hub', 'Tasks', 'Time', 'Timesheet', 'Users', 'Clients', 'Rules'];
+  const otherNavNames = ['Reports', 'Settings'];
+
+  const mainMenuNavItems = activeNavItems.filter(item => mainMenuNavNames.includes(item.name));
+  const otherNavItems = activeNavItems.filter(item => otherNavNames.includes(item.name));
+
+  const NavItemRender = ({ item }: { item: any }) => {
+    const isActive = item.exact ? pathname === item.href : (pathname === item.href || pathname.startsWith(item.href + '/'));
+    
+    return (
+      <Link
+        href={item.href}
+        onClick={() => setIsMobileMenuOpen(false)}
+        className={`flex items-center px-3 py-2.5 rounded-xl transition-colors group ${
+          isSidebarCollapsed ? 'justify-center' : 'justify-between'
+        } ${
+          isActive 
+            ? 'bg-[#f97316] text-white shadow-sm' 
+            : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white'
+        }`}
+      >
+        <div className="flex items-center gap-3 overflow-hidden">
+          <item.icon size={18} className={`shrink-0 transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'}`} />
+          <AnimatePresence initial={false}>
+            {!isSidebarCollapsed && (
+              <motion.span 
+                initial={{ opacity: 0, width: 0, marginLeft: -12 }}
+                animate={{ opacity: 1, width: 'auto', marginLeft: 0 }}
+                exit={{ opacity: 0, width: 0, marginLeft: -12 }}
+                transition={{ duration: 0.2 }}
+                className="font-medium text-sm whitespace-nowrap"
+              >
+                {item.name}
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </div>
+      </Link>
+    );
+  };
 
   const SidebarContent = () => (
-    <div className="flex h-full w-[80px] flex-col items-center py-2 bg-white dark:bg-transparent md:bg-transparent shadow-xl md:shadow-none transition-colors">
-      {/* Theme Toggle */}
-      <div className="flex flex-col items-center gap-2 p-1.5 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm mb-4 md:mb-6 transition-colors border border-black/5 dark:border-white/10">
-        <button 
-          onClick={() => setTheme('light')}
-          className={`p-2 rounded-full transition-colors ${theme === 'light' ? 'bg-slate-100 text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
-        >
-          <Sun size={18} />
-        </button>
-        <button 
-          onClick={() => setTheme('dark')}
-          className={`p-2 rounded-full transition-colors ${theme === 'dark' ? 'bg-black text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'}`}
-        >
-          <Moon size={18} />
-        </button>
+    <div className="flex flex-col h-full bg-white dark:bg-[#181818] relative w-full overflow-hidden">
+      
+      {/* Company Header */}
+      <div className="p-4 shrink-0">
+        <div className={`flex items-center bg-white dark:bg-[#1f1f1f] border border-black/5 dark:border-white/10 rounded-2xl p-2 shadow-sm transition-colors hover:shadow-md ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 flex-1 min-w-0 outline-none text-left overflow-hidden">
+                <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <span className="text-lg font-black leading-none">{user.organizationName ? user.organizationName.substring(0, 1).toUpperCase() : 'O'}</span>
+                </div>
+                <AnimatePresence initial={false}>
+                  {!isSidebarCollapsed && (
+                    <motion.div 
+                      initial={{ opacity: 0, width: 0 }}
+                      animate={{ opacity: 1, width: 'auto' }}
+                      exit={{ opacity: 0, width: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="flex flex-col min-w-0 pr-2 overflow-hidden whitespace-nowrap"
+                    >
+                      <span className="text-sm font-bold text-slate-900 dark:text-white truncate">{user.organizationName || 'Select Org'}</span>
+                      <span className="text-[10px] text-slate-500 truncate">Workspace</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-2 ml-4">
+              <div className="px-2 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Your Organizations</div>
+              {userOrganizations.map(org => (
+                <div key={org.id} className="relative group flex items-center mb-1 last:mb-0">
+                  <DropdownMenuItem 
+                    onClick={() => handleOrgSwitch(org.id)}
+                    className={`flex-1 cursor-pointer rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-white/5 ${user.organizationId === org.id ? 'bg-orange-50 dark:bg-orange-900/20' : ''}`}
+                  >
+                    <div className="flex flex-col pr-8">
+                      <span className={`font-semibold ${user.organizationId === org.id ? 'text-[#f97316]' : 'text-slate-700 dark:text-slate-200'}`}>{org.name}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">{org.role}{org.isChild ? ' (Child)' : ' (Base)'}</span>
+                    </div>
+                  </DropdownMenuItem>
+                  {org.role === 'OWNER' && (
+                    <button 
+                      className="absolute right-2 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDeleteOrg(org);
+                      }}
+                      title="Delete Organization"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {user.role === 'OWNER' && (
+                <>
+                  <DropdownMenuSeparator className="bg-black/5 dark:bg-white/10 my-1" />
+                  <DropdownMenuItem 
+                    className="cursor-pointer rounded-lg px-3 py-2 text-[#f97316] font-semibold hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-center gap-2"
+                    onClick={() => setIsCreateChildModalOpen(true)}
+                  >
+                    <Plus size={16} /> Create
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
-      {/* Grouped Nav & Settings Pills */}
-      <div className="flex flex-col items-center gap-4">
-        {/* Navigation */}
-        <nav className="flex flex-col items-center gap-2 bg-white dark:bg-[#1f1f1f] px-1.5 py-3 rounded-[32px] shadow-sm w-max transition-colors border border-black/5 dark:border-white/10">
-          {navItems.map((item) => {
-            const isActive = item.exact ? pathname === item.href : (pathname === item.href || pathname.startsWith(item.href + '/'));
-            return (
-              <Tooltip key={item.name} delayDuration={0}>
-                <TooltipTrigger asChild>
-                  <Link
-                    href={item.href}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className={`group relative flex h-10 w-10 items-center justify-center rounded-full transition-all ${
-                      isActive 
-                        ? (theme === 'dark' ? 'bg-white text-black shadow-md' : 'bg-black text-white shadow-md')
-                        : 'text-slate-400 hover:text-black dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10'
-                    }`}
-                  >
-                    <item.icon size={18} className="relative z-10 shrink-0" />
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="dark:bg-black dark:text-white dark:border-white/20">{item.name}</TooltipContent>
-              </Tooltip>
-            );
-          })}
-        </nav>
+      {/* Navigation */}
+      <div className="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar space-y-6">
+        
+        {/* Main Menu */}
+        <div>
+          <AnimatePresence initial={false}>
+            {!isSidebarCollapsed && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                animate={{ opacity: 1, height: 'auto', marginBottom: 8 }}
+                exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                transition={{ duration: 0.2 }}
+                className="flex items-center justify-between text-sm font-bold text-slate-800 dark:text-slate-200 px-1 cursor-pointer select-none overflow-hidden whitespace-nowrap"
+                onClick={() => setIsMainMenuOpen(!isMainMenuOpen)}
+              >
+                <span>Main Menu</span>
+                <button className="p-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">
+                  <ChevronUp size={12} className={`transition-transform duration-200 ${!isMainMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <AnimatePresence initial={false}>
+            {(isMainMenuOpen || isSidebarCollapsed) && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="flex flex-col gap-1 overflow-hidden"
+              >
+                {mainMenuNavItems.map(item => <NavItemRender key={item.name} item={item} />)}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
-        {/* Settings / Logout */}
-        <div className="flex flex-col items-center gap-2 bg-white dark:bg-[#1f1f1f] px-1.5 py-3 rounded-[28px] shadow-sm transition-colors border border-black/5 dark:border-white/10">
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <Link 
-                href="/workspace/profile"
-                className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 hover:text-black dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+        {/* Other */}
+        <div>
+          <AnimatePresence initial={false}>
+            {!isSidebarCollapsed && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0, marginBottom: 0, paddingTop: 0, borderTopWidth: 0 }}
+                animate={{ opacity: 1, height: 'auto', marginBottom: 8, paddingTop: 24, borderTopWidth: 1 }}
+                exit={{ opacity: 0, height: 0, marginBottom: 0, paddingTop: 0, borderTopWidth: 0 }}
+                transition={{ duration: 0.2 }}
+                className="flex items-center justify-between text-sm font-bold text-slate-800 dark:text-slate-200 px-1 cursor-pointer select-none border-slate-100 dark:border-slate-800 overflow-hidden whitespace-nowrap"
+                onClick={() => setIsOtherMenuOpen(!isOtherMenuOpen)}
               >
-                <User size={18} />
-              </Link>
-            </TooltipTrigger>
-            <TooltipContent side="right" className="dark:bg-black dark:text-white dark:border-white/20">My Profile</TooltipContent>
-          </Tooltip>
-          <Tooltip delayDuration={0}>
-            <TooltipTrigger asChild>
-              <button 
-                onClick={handleLogout}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                <span>Other</span>
+                <button className="p-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">
+                  <ChevronUp size={12} className={`transition-transform duration-200 ${!isOtherMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <AnimatePresence initial={false}>
+            {(isOtherMenuOpen || isSidebarCollapsed) && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className={`flex flex-col gap-1 overflow-hidden ${isSidebarCollapsed ? 'mt-6 pt-6 border-t border-slate-100 dark:border-slate-800' : ''}`}
               >
-                <LogOut size={18} />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right" className="dark:bg-black dark:text-white dark:border-white/20">Logout</TooltipContent>
-          </Tooltip>
+                {otherNavItems.map(item => <NavItemRender key={item.name} item={item} />)}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+      </div>
+
+      {/* Footer Profile */}
+      <div className="p-4 shrink-0 border-t border-slate-100 dark:border-slate-800/50">
+        <div className={`flex items-center bg-white dark:bg-[#1f1f1f] border border-black/5 dark:border-white/10 rounded-2xl p-2 shadow-sm transition-colors hover:shadow-md ${isSidebarCollapsed ? 'justify-center' : 'justify-between'}`}>
+          <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+            <Avatar className="h-10 w-10 shrink-0 border border-black/5">
+              <AvatarImage src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user.name}`} />
+              <AvatarFallback className="bg-[#f0bd5e]/20 text-[#ffad0d] text-xs font-bold">
+                {user.name.substring(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <AnimatePresence initial={false}>
+              {!isSidebarCollapsed && (
+                <motion.div 
+                  initial={{ opacity: 0, width: 0 }}
+                  animate={{ opacity: 1, width: 'auto' }}
+                  exit={{ opacity: 0, width: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="flex flex-col min-w-0 pr-2 overflow-hidden whitespace-nowrap"
+                >
+                  <span className="text-sm font-bold text-slate-900 dark:text-white truncate leading-tight">{user.name}</span>
+                  <span className="text-[10px] text-slate-500 truncate leading-tight">{user.email || 'No email'}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          
+          <AnimatePresence initial={false}>
+            {!isSidebarCollapsed && (
+              <motion.div 
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: 'auto' }}
+                exit={{ opacity: 0, width: 0 }}
+                transition={{ duration: 0.2 }}
+                className="flex flex-col gap-1 shrink-0 overflow-hidden"
+              >
+                <button 
+                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                  className="p-1.5 rounded-lg transition-colors text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 w-full flex justify-center"
+                  title="Toggle Theme"
+                >
+                  {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+                </button>
+                <button 
+                  onClick={handleLogout}
+                  className="p-1.5 rounded-lg transition-colors text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 w-full flex justify-center"
+                  title="Logout"
+                >
+                  <LogOut size={16} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>
@@ -252,194 +441,131 @@ export default function WorkspaceLayoutClient({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex flex-col h-screen w-full bg-[#f4f4f2] dark:bg-[#0f0f0f] overflow-hidden p-3 md:p-5 gap-3 md:gap-4 transition-colors">
+      <div className="flex h-screen w-full bg-slate-50 dark:bg-[#0f0f0f] overflow-hidden">
         
-        {/* Full-width Top Navbar */}
-        <header className="flex shrink-0 items-center justify-between w-full py-2 mb-1">
-          <div className="flex items-center gap-3 flex-1">
-            <button
-              className="md:hidden text-slate-500 hover:text-black dark:hover:text-white p-2 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5 dark:border-white/10"
-              onClick={() => setIsMobileMenuOpen(true)}
-            >
-              <Menu size={20} />
-            </button>
+        {/* Desktop Sidebar */}
+        <motion.aside 
+          initial={false}
+          animate={{ width: isSidebarCollapsed ? 80 : 280 }}
+          transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+          className="hidden md:flex flex-col z-20 shrink-0 h-full border-r border-black/5 dark:border-white/10 relative bg-white dark:bg-[#181818]"
+        >
+          <SidebarContent />
+          
+          {/* Collapse Button */}
+          <button 
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} 
+            className="absolute top-1/2 -translate-y-1/2 -right-3.5 z-50 flex items-center justify-center h-7 w-7 bg-white dark:bg-[#1f1f1f] border border-black/10 dark:border-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full shadow-sm hidden md:flex transition-transform hover:scale-110"
+          >
+            {isSidebarCollapsed ? <ChevronsRight size={14} /> : <ChevronsLeft size={14} />}
+          </button>
+        </motion.aside>
 
-            <div className="hidden lg:flex items-center gap-2.5 bg-white dark:bg-[#1f1f1f] pr-5 pl-1.5 py-1.5 rounded-full shadow-sm shrink-0 transition-colors border border-black/5 dark:border-white/10">
-              <div className="flex items-center justify-center h-9 w-9 bg-[#ff4d29] rounded-full text-white font-extrabold shadow-sm">
-                <span className="text-lg leading-none">C</span>
-              </div>
-              <span className="text-base font-bold text-slate-900 dark:text-white tracking-tight">Collabix</span>
-            </div>
-
-            <div className="hidden lg:flex items-center gap-2 bg-white dark:bg-[#1f1f1f] px-2 py-1.5 rounded-full shadow-sm transition-colors border border-black/5 dark:border-white/10">
-              {navItems.filter(item => item.name !== 'Reports' && item.name !== 'Settings').map((item) => {
-                const isActive = item.exact ? pathname === item.href : (pathname === item.href || pathname.startsWith(item.href + '/'));
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={`relative px-5 py-2.5 rounded-full text-sm font-semibold transition-all ${
-                      isActive 
-                        ? 'text-black dark:text-white bg-slate-100 dark:bg-white/10' 
-                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-                    }`}
-                  >
-                    {isActive && (
-                      <motion.div
-                        layoutId="active-top-nav"
-                        className="absolute inset-0 rounded-full bg-slate-100 dark:bg-white/10"
-                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                      />
-                    )}
-                    <span className="relative z-10">{item.name}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 md:gap-4">
-            <div className="hidden sm:flex items-center">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-2 h-12 px-5 bg-white dark:bg-[#1f1f1f] border border-black/5 dark:border-white/10 shadow-sm hover:bg-slate-50 dark:hover:bg-white/5 transition-all rounded-full text-sm font-bold text-slate-700 dark:text-slate-200">
-                    <div className="w-5 h-5 rounded bg-purple-100 dark:bg-purple-900/30 text-[#8b5cf6] flex items-center justify-center mr-1 shrink-0">
-                      <span className="text-[10px] font-black leading-none">{user.organizationName ? user.organizationName.substring(0, 1).toUpperCase() : 'O'}</span>
-                    </div>
-                    <span className="truncate max-w-[120px]">{user.organizationName || 'Select Org'}</span>
-                    <ChevronDown size={14} className="text-slate-400 ml-1 shrink-0" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-2">
-                  <div className="px-2 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Your Organizations</div>
-                  {userOrganizations.map(org => (
-                    <div key={org.id} className="relative group flex items-center mb-1 last:mb-0">
-                      <DropdownMenuItem 
-                        onClick={() => handleOrgSwitch(org.id)}
-                        className={`flex-1 cursor-pointer rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-white/5 ${user.organizationId === org.id ? 'bg-purple-50 dark:bg-purple-900/20' : ''}`}
-                      >
-                        <div className="flex flex-col pr-8">
-                          <span className={`font-semibold ${user.organizationId === org.id ? 'text-[#8b5cf6]' : 'text-slate-700 dark:text-slate-200'}`}>{org.name}</span>
-                          <span className="text-[10px] text-slate-400 font-medium">{org.role}{org.isChild ? ' (Child)' : ' (Base)'}</span>
-                        </div>
-                      </DropdownMenuItem>
-                      {org.role === 'OWNER' && (
-                        <button 
-                          className="absolute right-2 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setDeleteOrg(org);
-                          }}
-                          title="Delete Organization"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  {user.role === 'OWNER' && (
-                    <>
-                      <DropdownMenuSeparator className="bg-black/5 dark:bg-white/10 my-1" />
-                      <DropdownMenuItem 
-                        className="cursor-pointer rounded-lg px-3 py-2 text-[#8b5cf6] font-semibold hover:bg-purple-50 dark:hover:bg-purple-900/20 flex items-center gap-2"
-                        onClick={() => setIsCreateChildModalOpen(true)}
-                      >
-                        <Plus size={16} /> Create
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
-            <div className="flex items-center justify-center h-12 w-12 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5 dark:border-white/10 transition-colors">
-              <NotificationBell userId={user.id} />
-            </div>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 bg-white dark:bg-[#1f1f1f] pl-2 pr-4 py-1.5 rounded-full shadow-sm border border-black/5 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer outline-none">
-                  <Avatar className="h-9 w-9 shrink-0 border border-black/5 dark:border-white/10">
-                    <AvatarFallback className="bg-[#f0bd5e]/20 text-[#ffad0d] text-xs font-bold">
-                      {user.name.substring(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="hidden sm:flex flex-col text-left">
-                    <span className="text-sm font-bold text-slate-900 dark:text-white leading-none">{user.name.split(' ')[0]}</span>
-                  </div>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-2">
-                <DropdownMenuItem asChild className="cursor-pointer rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-white/5 mb-1">
-                  <Link href="/workspace/profile" className="flex items-center text-slate-700 dark:text-slate-200 font-semibold">
-                    <User size={16} className="mr-2 text-slate-400" />
-                    Profile
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="cursor-pointer rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-white/5 mb-1">
-                  <Link href="/workspace/settings" className="flex items-center text-slate-700 dark:text-slate-200 font-semibold">
-                    <Shield size={16} className="mr-2 text-slate-400" />
-                    Security
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-black/5 dark:bg-white/10 my-1" />
-                <DropdownMenuItem 
-                  onClick={handleLogout}
-                  className="cursor-pointer rounded-lg px-3 py-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 font-semibold"
-                >
-                  <div className="flex items-center">
-                    <LogOut size={16} className="mr-2" />
-                    Logout
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </header>
-
-        {/* Lower Row: Sidebar + Main Content */}
-        <div className="flex flex-1 min-h-0 gap-2 md:gap-4">
-          <aside className="hidden md:flex flex-col z-20 shrink-0">
-            <SidebarContent />
-          </aside>
-
-          <AnimatePresence>
-            {isMobileMenuOpen && (
-              <>
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
+        {/* Mobile Sidebar */}
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
+              />
+              <motion.aside
+                initial={{ x: '-100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '-100%' }}
+                transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
+                className="fixed inset-y-0 left-0 z-50 w-[280px] md:hidden shadow-2xl"
+              >
+                <SidebarContent />
+                <button
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
-                />
-                <motion.aside
-                  initial={{ x: '-100%' }}
-                  animate={{ x: 0 }}
-                  exit={{ x: '-100%' }}
-                  transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
-                  className="fixed inset-y-0 left-0 z-50 w-24 md:hidden"
+                  className="absolute right-[-40px] top-4 text-white bg-black/50 hover:bg-black/80 rounded-full p-2 transition-colors"
                 >
-                  <SidebarContent />
-                  <button
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="absolute right-[-40px] top-4 text-white bg-black/50 rounded-full p-2"
-                  >
-                    <X size={20} />
-                  </button>
-                </motion.aside>
-              </>
-            )}
-          </AnimatePresence>
+                  <X size={20} />
+                </button>
+              </motion.aside>
+            </>
+          )}
+        </AnimatePresence>
 
-          <div className="flex flex-1 flex-col min-w-0 bg-[#fbfaf7] dark:bg-[#181818] rounded-[32px] shadow-sm overflow-hidden border border-black/5 dark:border-white/10 transition-colors">
-            <main className="flex-1 overflow-y-auto px-6 md:px-10 py-8 custom-scrollbar">
-              {children}
-            </main>
-          </div>
+        {/* Main Content Column */}
+        <div className="flex flex-1 flex-col min-w-0">
+          
+          {/* Global Header */}
+          <header className="flex items-center justify-between px-6 md:px-10 py-4 shrink-0 relative z-20 bg-white dark:bg-[#181818] border-b border-black/5 dark:border-white/10">
+             {/* Left Section */}
+             <div className="flex flex-col">
+                <div className="flex items-center gap-3">
+                   <button
+                     className="md:hidden flex items-center justify-center h-8 w-8 text-slate-500 hover:text-black dark:hover:text-white bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5"
+                     onClick={() => setIsMobileMenuOpen(true)}
+                   >
+                     <Menu size={16} />
+                   </button>
+                   <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-white leading-tight">{getPageTitle(pathname)}</h1>
+                </div>
+                <span className="text-xs font-medium text-slate-500 mt-0.5 md:ml-0 ml-11">{user.organizationName || 'OmniWork'} Project - {new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })}</span>
+             </div>
+             
+             {/* Middle Section: Search */}
+             <div className="hidden lg:flex flex-1 max-w-md mx-8 relative">
+               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
+                 <Search size={16} className="text-slate-400" />
+               </div>
+               <Input 
+                 placeholder="Search" 
+                 className="w-full pl-10 pr-12 h-10 bg-white dark:bg-[#1f1f1f] border-black/5 dark:border-white/10 rounded-full shadow-sm focus-visible:ring-[#f97316] relative z-0"
+               />
+               <div className="absolute inset-y-0 right-1.5 flex items-center z-10">
+                 <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 text-[10px] font-bold px-1.5 py-1 rounded-md">
+                   <Command size={10} /> <span>F</span>
+                 </div>
+               </div>
+             </div>
+
+             {/* Right Section */}
+             <div className="flex items-center gap-2 md:gap-3 shrink-0">
+                {/* Avatars */}
+                <div className="hidden sm:flex -space-x-2 mr-2">
+                   <Avatar className="h-10 w-10 border-2 border-slate-50 dark:border-[#0f0f0f] shadow-sm">
+                     <AvatarImage src="https://api.dicebear.com/7.x/notionists/svg?seed=Mithun" />
+                   </Avatar>
+                   <Avatar className="h-10 w-10 border-2 border-slate-50 dark:border-[#0f0f0f] shadow-sm">
+                     <AvatarImage src="https://api.dicebear.com/7.x/notionists/svg?seed=Sarah" />
+                   </Avatar>
+                   <Avatar className="h-10 w-10 border-2 border-slate-50 dark:border-[#0f0f0f] shadow-sm">
+                     <AvatarImage src="https://api.dicebear.com/7.x/notionists/svg?seed=John" />
+                   </Avatar>
+                </div>
+                
+                {/* Add Button */}
+                <button className="flex items-center justify-center h-10 w-10 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-500 transition-colors">
+                  <Plus size={18} />
+                </button>
+                
+                {/* Message Button */}
+                <button className="flex items-center justify-center h-10 w-10 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-500 transition-colors">
+                  <Mail size={18} />
+                </button>
+
+                {/* Notification Bell */}
+                <div className="flex items-center justify-center h-10 w-10 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5 dark:border-white/10 transition-colors">
+                  <NotificationBell userId={user.id} />
+                </div>
+             </div>
+          </header>
+
+          {/* Main Content Area */}
+          <main className="flex-1 overflow-y-auto px-4 md:px-8 py-6 custom-scrollbar relative z-10">
+            {children}
+          </main>
         </div>
+
       </div>
+
       {/* Create Child Organization Modal */}
       {isCreateChildModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -473,7 +599,7 @@ export default function WorkspaceLayoutClient({
                 <button
                   type="submit"
                   disabled={isCreatingChildOrg || !newChildOrgName.trim()}
-                  className="px-6 py-2 text-sm font-semibold rounded-full bg-[#8b5cf6] text-white hover:bg-[#7c3aed] transition-colors shadow-sm disabled:opacity-50"
+                  className="px-6 py-2 text-sm font-semibold rounded-full bg-[#f97316] text-white hover:bg-[#ea580c] transition-colors shadow-sm disabled:opacity-50"
                 >
                   {isCreatingChildOrg ? 'Creating...' : 'Create'}
                 </button>

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { createNotification } from './notifications';
 import {  Prisma } from '@prisma/client';
+import { revalidatePath } from 'next/cache';
 import { hashPassword } from '@/lib/auth'; // Ensure this is imported
 
 import nodemailer from 'nodemailer';
@@ -403,6 +404,7 @@ export async function updateProjectAction(
     assigneeIds: string[];
     customFields?: any;
     ruleIds?: string[];
+    tasks?: any[];
   }
 ) {
   try {
@@ -437,6 +439,7 @@ export async function updateProjectAction(
       assigneeIds,
       customFields,
       ruleIds,
+      tasks,
     } = data;
 
     if (totalAllocatedHours === undefined || totalAllocatedHours === null || totalAllocatedHours < 0) {
@@ -576,6 +579,7 @@ export async function getProjectsAction() {
         projectManager: {
           select: { id: true, name: true, email: true },
         },
+        rules: true,
         assignees: {
           include: {
             user: {
@@ -663,3 +667,68 @@ export async function deleteProjectTemplateAction(templateId: string) {
 }
 
 // Tasks Actions moved to actions/tasks.ts
+
+export async function updateProjectDueDateAction(projectId: string, endDate: string | null, isOngoing?: boolean) {
+  try {
+    const session = await getSession();
+    if (!session?.userId) {
+      return { error: "Unauthorized" };
+    }
+
+    const data: any = { endDate: endDate ? new Date(endDate) : null };
+    if (isOngoing !== undefined) {
+      data.isOngoing = isOngoing;
+    }
+
+    const updated = await prisma.project.update({
+      where: { id: projectId },
+      data,
+    });
+
+    revalidatePath("/workspace/projects");
+    return { success: true, project: updated };
+  } catch (error: any) {
+    console.error("Failed to update project due date:", error);
+    return { error: "Failed to update project due date" };
+  }
+}
+
+export async function updateProjectCustomFieldsAction(projectId: string, customFields: any) {
+  try {
+    const session = await getSession();
+    if (!session?.userId) {
+      return { error: "Unauthorized" };
+    }
+
+    const updated = await prisma.project.update({
+      where: { id: projectId },
+      data: { customFields },
+    });
+
+    revalidatePath("/workspace/projects");
+    return { success: true, project: updated };
+  } catch (error: any) {
+    console.error("Failed to update project custom fields:", error);
+    return { error: "Failed to update project custom fields" };
+  }
+}
+
+export async function updateProjectPriorityAction(projectId: string, priority: string) {
+  try {
+    const session = await getSession();
+    if (!session?.userId) {
+      return { error: "Unauthorized" };
+    }
+
+    const updated = await prisma.project.update({
+      where: { id: projectId },
+      data: { priority: priority as any },
+    });
+
+    revalidatePath("/workspace/projects");
+    return { success: true, project: updated };
+  } catch (error: any) {
+    console.error("Failed to update project priority:", error);
+    return { error: "Failed to update project priority" };
+  }
+}

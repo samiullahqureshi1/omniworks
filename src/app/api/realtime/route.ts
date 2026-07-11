@@ -33,6 +33,15 @@ export async function GET(req: NextRequest) {
     start(controller) {
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: 'connected' })}\n\n`));
 
+      // Send a heartbeat comment every 30 seconds to keep the connection alive
+      const heartbeatInterval = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(`:\n\n`));
+        } catch (e) {
+          clearInterval(heartbeatInterval);
+        }
+      }, 30000);
+
       const listener = (event: string, payload: any) => {
         const dataStr = JSON.stringify({ event, payload });
         controller.enqueue(encoder.encode(`data: ${dataStr}\n\n`));
@@ -65,6 +74,7 @@ export async function GET(req: NextRequest) {
       });
 
       req.signal.addEventListener('abort', () => {
+        clearInterval(heartbeatInterval);
         boundListeners.forEach(bl => appEventEmitter.off(bl.name, bl.fn));
         try {
           controller.close();
