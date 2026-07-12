@@ -58,7 +58,7 @@ export async function addUserAction(formData: FormData) {
 
     const role = roleString as 'OWNER' | 'MEMBER' | 'CLIENT';
 
-    // Check if email already exists
+    // Check if email already exists in this org
     const existingUser = await prisma.user.findFirst({
       where: { email, organizationId: session.organizationId },
     });
@@ -70,17 +70,77 @@ export async function addUserAction(formData: FormData) {
     // Generate random password
     const rawPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4).toUpperCase();
     const passwordHash = await hashPassword(rawPassword);
-    
-    await prisma.user.create({
-      data: {
-        name,
-        email,
-        passwordHash,
-        role,
-        status: 'ACTIVE',
-        organizationId: session.organizationId,
-      },
-    });
+
+    // -------------------------------------------------------
+    // For CLIENT role: auto-create a personal org with OWNER
+    // role first (so it becomes the default on login), then
+    // add them to the current (shared) org as CLIENT.
+    // -------------------------------------------------------
+    if (role === 'CLIENT') {
+      // 1. Create personal organization
+      const personalOrgName = name.trim().split(' ')[0] + "'s Workspace";
+      const personalSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now().toString().slice(-4);
+
+      const personalOrg = await prisma.organization.create({
+        data: { name: personalOrgName, slug: personalSlug },
+      });
+
+      // Default project/task stages for the personal org
+      const defaultStages = [
+        { name: 'To Do', color: '#64748b', order: 0 },
+        { name: 'In Progress', color: '#eab308', order: 1 },
+        { name: 'In Review', color: '#a855f7', order: 2 },
+        { name: 'Completed', color: '#22c55e', order: 3 },
+      ];
+      await prisma.projectStatus.createMany({
+        data: defaultStages.map(s => ({ ...s, organizationId: personalOrg.id })),
+      });
+      await prisma.taskStatus.createMany({
+        data: defaultStages.map(s => ({ ...s, organizationId: personalOrg.id })),
+      });
+
+      // 2. Create User record with OWNER in personal org (created first → default login org)
+      const ownerUser = await prisma.user.create({
+        data: {
+          name,
+          email,
+          passwordHash,
+          role: 'OWNER',
+          status: 'ACTIVE',
+          organizationId: personalOrg.id,
+        },
+      });
+
+      // Link personal org owner
+      await prisma.organization.update({
+        where: { id: personalOrg.id },
+        data: { ownerUserId: ownerUser.id },
+      });
+
+      // 3. Create User record with CLIENT in the current (shared) org
+      await prisma.user.create({
+        data: {
+          name,
+          email,
+          passwordHash,
+          role: 'CLIENT',
+          status: 'ACTIVE',
+          organizationId: session.organizationId,
+        },
+      });
+    } else {
+      // Non-CLIENT: add directly to current org
+      await prisma.user.create({
+        data: {
+          name,
+          email,
+          passwordHash,
+          role,
+          status: 'ACTIVE',
+          organizationId: session.organizationId,
+        },
+      });
+    }
 
     // Send email with credentials
     if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {

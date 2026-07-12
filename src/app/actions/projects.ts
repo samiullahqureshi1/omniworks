@@ -418,9 +418,17 @@ export async function updateProjectAction(
 
     if (!project) return { error: 'Project not found.' };
 
-    // Only Owner can edit project settings (PMs can manage tasks only)
-    if (session.role !== 'OWNER') {
-      return { error: 'Unauthorized: Only owners can update project settings.' };
+    // Check permissions: OWNER has full access, CLIENT can edit their assigned projects, MEMBER can edit their managed projects
+    if (session.role === 'CLIENT') {
+      if (project.clientId !== session.userId) {
+        return { error: 'Unauthorized: Access denied.' };
+      }
+    } else if (session.role === 'MEMBER') {
+      if (project.projectManagerId !== session.userId) {
+        return { error: 'Unauthorized: Access denied.' };
+      }
+    } else if (session.role !== 'OWNER') {
+      return { error: 'Unauthorized.' };
     }
 
     const {
@@ -514,6 +522,13 @@ export async function updateProjectStatusAction(projectId: string, statusId: str
     });
 
     if (!project) return { error: 'Project not found.' };
+
+    if (session.role === 'CLIENT' && project.clientId !== session.userId) {
+      return { error: 'Unauthorized: Access denied.' };
+    }
+    if (session.role === 'MEMBER' && project.projectManagerId !== session.userId) {
+      return { error: 'Unauthorized: Access denied.' };
+    }
 
     // Update status
     const updated = await prisma.project.update({
@@ -675,6 +690,18 @@ export async function updateProjectDueDateAction(projectId: string, endDate: str
       return { error: "Unauthorized" };
     }
 
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, organizationId: session.organizationId }
+    });
+    if (!project) return { error: "Project not found or access denied." };
+
+    if (session.role === 'CLIENT' && project.clientId !== session.userId) {
+      return { error: 'Unauthorized: Access denied.' };
+    }
+    if (session.role === 'MEMBER' && project.projectManagerId !== session.userId) {
+      return { error: 'Unauthorized: Access denied.' };
+    }
+
     const data: any = { endDate: endDate ? new Date(endDate) : null };
     if (isOngoing !== undefined) {
       data.isOngoing = isOngoing;
@@ -700,6 +727,18 @@ export async function updateProjectCustomFieldsAction(projectId: string, customF
       return { error: "Unauthorized" };
     }
 
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, organizationId: session.organizationId }
+    });
+    if (!project) return { error: "Project not found or access denied." };
+
+    if (session.role === 'CLIENT' && project.clientId !== session.userId) {
+      return { error: 'Unauthorized: Access denied.' };
+    }
+    if (session.role === 'MEMBER' && project.projectManagerId !== session.userId) {
+      return { error: 'Unauthorized: Access denied.' };
+    }
+
     const updated = await prisma.project.update({
       where: { id: projectId },
       data: { customFields },
@@ -718,6 +757,18 @@ export async function updateProjectPriorityAction(projectId: string, priority: s
     const session = await getSession();
     if (!session?.userId) {
       return { error: "Unauthorized" };
+    }
+
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, organizationId: session.organizationId }
+    });
+    if (!project) return { error: "Project not found or access denied." };
+
+    if (session.role === 'CLIENT' && project.clientId !== session.userId) {
+      return { error: 'Unauthorized: Access denied.' };
+    }
+    if (session.role === 'MEMBER' && project.projectManagerId !== session.userId) {
+      return { error: 'Unauthorized: Access denied.' };
     }
 
     const updated = await prisma.project.update({

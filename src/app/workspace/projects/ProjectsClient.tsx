@@ -165,10 +165,12 @@ const getPriorityColor = (priority: string) => {
   }
 };
 
-function TableDueDateCell({ project, setProjects }: any) {
+function TableDueDateCell({ project, setProjects, currentUser }: any) {
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, startTransition] = React.useTransition();
   const router = useRouter();
+
+  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'CLIENT' && project.clientId === currentUser?.userId) || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
 
   const handleDateSelect = (date: Date | undefined) => {
     if (!date) return;
@@ -207,6 +209,22 @@ function TableDueDateCell({ project, setProjects }: any) {
     { label: "4 weeks", date: addWeeks(new Date(), 4) },
     { label: "8 weeks", date: addWeeks(new Date(), 8) },
   ];
+
+  if (!isEditable) {
+    return (
+      <div className="flex items-center gap-1.5 w-full h-full bg-transparent text-slate-700 dark:text-slate-300 font-medium px-4 py-3 text-[13px] tracking-wide text-left select-none">
+        {project.isOngoing ? (
+           <span className="text-emerald-600 font-medium flex items-center gap-1.5"><Clock size={12} /> Ongoing</span>
+        ) : project.endDate ? (
+           <span className={project.endDate && new Date(project.endDate) < new Date() ? 'text-red-500' : ''}>
+             {format(new Date(project.endDate), 'MMM d, yyyy')}
+           </span>
+        ) : (
+           <span className="text-slate-400 font-normal">—</span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -253,10 +271,12 @@ function TableDueDateCell({ project, setProjects }: any) {
   );
 }
 
-function TablePriorityCell({ project, setProjects }: any) {
+function TablePriorityCell({ project, setProjects, currentUser }: any) {
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, startTransition] = React.useTransition();
   const router = useRouter();
+
+  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'CLIENT' && project.clientId === currentUser?.userId) || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
 
   const priorities = [
     { value: "CRITICAL", label: "Urgent", color: "text-red-500", bg: "bg-red-50 dark:bg-red-950/20" },
@@ -291,6 +311,17 @@ function TablePriorityCell({ project, setProjects }: any) {
     setIsOpen(false);
   };
 
+  if (!isEditable) {
+    return (
+      <div className="flex items-center gap-1.5 w-full h-full bg-transparent text-slate-700 dark:text-slate-300 font-medium px-4 py-3 text-[13px] tracking-wide text-left select-none">
+        <Badge variant="outline" className={`font-semibold bg-transparent border-slate-200 dark:border-white/10 ${getPriorityColor(project.priority)}`}>
+          <Flag size={12} className="mr-1.5" />
+          {project.priority}
+        </Badge>
+      </div>
+    );
+  }
+
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
@@ -320,11 +351,14 @@ function TablePriorityCell({ project, setProjects }: any) {
   );
 }
 
-function TableCustomFieldCell({ project, col, setProjects, projects }: any) {
+function TableCustomFieldCell({ project, col, setProjects, projects, currentUser }: any) {
+  const [isPending, startTransition] = React.useTransition();
   const customFields = Array.isArray(project.customFields) ? project.customFields : [];
   const fieldIndex = customFields.findIndex((f: any) => f.name === col.name);
   const field = fieldIndex >= 0 ? customFields[fieldIndex] : null;
   const value = field ? field.value : undefined;
+
+  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'CLIENT' && project.clientId === currentUser?.userId) || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
 
   let options = field?.options;
   if (!options && Array.isArray(projects)) {
@@ -368,12 +402,12 @@ function TableCustomFieldCell({ project, col, setProjects, projects }: any) {
 
   switch (typeStr) {
     case 'text area':
-      return <textarea value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} py-2 resize-none custom-scrollbar min-h-[40px]`} />;
+      return <textarea disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} py-2 resize-none custom-scrollbar min-h-[40px]`} />;
     case 'checkbox':
-      return <div className="flex items-center justify-center h-full min-h-[40px]"><input type="checkbox" checked={!!value} onChange={e => updateValue(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" /></div>;
+      return <div className="flex items-center justify-center h-full min-h-[40px]"><input type="checkbox" disabled={!isEditable} checked={!!value} onChange={e => updateValue(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" /></div>;
     case 'dropdown':
       return (
-        <select value={value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer min-h-[40px]`}>
+        <select disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer min-h-[40px]`}>
           <option value="" disabled>—</option>
           {(options || []).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
         </select>
@@ -385,44 +419,129 @@ function TableCustomFieldCell({ project, col, setProjects, projects }: any) {
           {currentValues.map((v: string) => (
              <span key={v} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300">
                {v}
-               <button type="button" onClick={() => updateValue(currentValues.filter(val => val !== v))} className="text-slate-400 hover:text-red-500"><X size={10} /></button>
+               {isEditable && (
+                 <button type="button" onClick={() => updateValue(currentValues.filter(val => val !== v))} className="text-slate-400 hover:text-red-500"><X size={10} /></button>
+               )}
              </span>
           ))}
-          <select 
-             value="" 
-             onChange={e => {
-                if (e.target.value && !currentValues.includes(e.target.value)) {
-                   updateValue([...currentValues, e.target.value]);
-                }
-             }}
-             className="bg-transparent text-[11px] text-slate-500 outline-none cursor-pointer"
-          >
-             <option value="">+ Add</option>
-             {(options || []).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
-          </select>
+          {isEditable && (
+            <select 
+               value="" 
+               onChange={e => {
+                  if (e.target.value && !currentValues.includes(e.target.value)) {
+                     updateValue([...currentValues, e.target.value]);
+                  }
+               }}
+               className="bg-transparent text-[11px] text-slate-500 outline-none cursor-pointer"
+            >
+               <option value="">+ Add</option>
+               {(options || []).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+          )}
         </div>
       );
     case 'date':
-      return <input type="date" value={value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer min-h-[40px]`} />;
+      return <input type="date" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer min-h-[40px]`} />;
     case 'number':
-      return <input type="number" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
+      return <input type="number" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
     case 'email':
-      return <input type="email" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
+      return <input type="email" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
     case 'phone':
-      return <input type="tel" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
+      return <input type="tel" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
     case 'website':
     case 'url':
-      return <input type="url" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
+      return <input type="url" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
     default:
-      return <input type="text" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
+      return <input type="text" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
   }
 }
 
-function TableStatusCell({ project, projectStatuses, setProjects }: any) {
+function TableNameCell({ project, setProjects, currentUser }: any) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState(project.name);
+  const [isPending, startTransition] = React.useTransition();
+  const router = useRouter();
+
+  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'CLIENT' && project.clientId === currentUser?.userId) || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
+
+  const handleSave = () => {
+    if (!name.trim() || name === project.name) {
+      setIsEditing(false);
+      return;
+    }
+    
+    startTransition(async () => {
+      const prevName = project.name;
+      setProjects((prev: any) => prev.map((p: any) => 
+        p.id === project.id ? { ...p, name: name } : p
+      ));
+      
+      const res = await updateProjectAction(project.id, { 
+        name,
+        startDate: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        endDate: project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : undefined,
+        isOngoing: project.isOngoing || false,
+        priority: project.priority,
+        totalAllocatedHours: project.totalAllocatedHours || 0,
+        assigneeIds: project.assignees ? project.assignees.map((a: any) => a.userId) : [],
+      });
+      if (res.error) {
+        toast.error(res.error);
+        setProjects((prev: any) => prev.map((p: any) => 
+          p.id === project.id ? { ...p, name: prevName } : p
+        ));
+      } else {
+        toast.success("Project name updated");
+        router.refresh();
+      }
+    });
+    setIsEditing(false);
+  };
+
+  if (isEditing && isEditable) {
+    return (
+      <Input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") handleSave();
+          if (e.key === "Escape") { setName(project.name); setIsEditing(false); }
+        }}
+        className="h-8 py-1 px-2 border border-slate-200 rounded-lg text-[13px] font-medium w-full"
+        autoFocus
+      />
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 group/name w-full">
+      <CircleDashed size={14} className="text-slate-400 shrink-0" />
+      <Link
+        href={`/workspace/projects/${project.id}`}
+        className="font-medium text-[13px] text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white transition-colors truncate flex-1"
+      >
+        {project.name}
+      </Link>
+      {isEditable && (
+        <button 
+          onClick={() => setIsEditing(true)} 
+          className="opacity-0 group-hover/name:opacity-100 transition-opacity p-0.5 hover:bg-slate-100 dark:hover:bg-white/10 rounded shrink-0 cursor-pointer"
+        >
+          <Edit2 size={12} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function TableStatusCell({ project, projectStatuses, setProjects, currentUser }: any) {
   const [search, setSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, startTransition] = React.useTransition();
   const router = useRouter();
+
+  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'CLIENT' && project.clientId === currentUser?.userId) || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
 
   const filteredStatuses = projectStatuses.filter((s: any) => 
     s.name.toLowerCase().includes(search.toLowerCase())
@@ -453,6 +572,15 @@ function TableStatusCell({ project, projectStatuses, setProjects }: any) {
       }
     });
   };
+
+  if (!isEditable) {
+    return (
+      <div className="flex items-center gap-1.5 w-fit bg-slate-100 dark:bg-[#303030] text-slate-600 dark:text-slate-300 font-semibold px-2.5 py-1 rounded-md text-[11px] tracking-wide select-none">
+        <CircleDashed size={12} className="text-slate-400" />
+        {project.status?.name?.toUpperCase() || "NO STATUS"}
+      </div>
+    );
+  }
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={(open) => { setIsOpen(open); if(!open) setSearch(""); }}>
@@ -809,6 +937,7 @@ export default function ProjectsClient({
   const [formBudget, setFormBudget] = useState("");
   const [formAllocatedHours, setFormAllocatedHours] = useState("");
   const [formNotes, setFormNotes] = useState("");
+  const [formAssigneeIds, setFormAssigneeIds] = useState<string[]>([]);
 
   const [isRepeatEnabled, setIsRepeatEnabled] = useState(false);
   const [repeatFrequency, setRepeatFrequency] = useState<"DAILY" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY">("DAILY");
@@ -1121,6 +1250,7 @@ export default function ProjectsClient({
     setProjectTasks([]);
     setCustomFields([]);
     setAttachedRuleIds([]);
+    setFormAssigneeIds([]);
     setIsCreateOpen(true);
   };
 
@@ -1180,6 +1310,7 @@ export default function ProjectsClient({
     setProjectTasks([]);
     setCustomFields([]);
     setAttachedRuleIds([]);
+    setFormAssigneeIds([]);
     setIsEditMode(false);
     setEditProjectId(null);
     setIsCreateOpen(true);
@@ -1317,6 +1448,12 @@ export default function ProjectsClient({
       setAttachedRuleIds(project.rules.map((r: any) => r.ruleId));
     } else {
       setAttachedRuleIds([]);
+    }
+    
+    if (project.assignees && Array.isArray(project.assignees)) {
+      setFormAssigneeIds(project.assignees.map((a: any) => a.userId));
+    } else {
+      setFormAssigneeIds([]);
     }
     
     if (project.tasks && Array.isArray(project.tasks)) {
@@ -1467,7 +1604,7 @@ export default function ProjectsClient({
       projectBudget: formBudget ? Number(formBudget) : undefined,
       totalAllocatedHours: formAllocatedHours ? Number(formAllocatedHours) : undefined,
       notes: formNotes,
-      assigneeIds: [],
+      assigneeIds: formAssigneeIds,
       customFields,
       repeatSettings: {
         enabled: isRepeatEnabled,
@@ -1518,6 +1655,7 @@ export default function ProjectsClient({
         setRepeatFrequency("DAILY");
         setRepeatTime("09:00");
         setAttachedRuleIds([]);
+        setFormAssigneeIds([]);
         router.refresh();
       }
     });
@@ -1778,28 +1916,20 @@ export default function ProjectsClient({
                     {index + 1}
                   </TableCell>
                   <TableCell className="border-l border-slate-100/50 dark:border-white/5">
-                    <div className="flex items-center gap-2">
-                      <CircleDashed size={14} className="text-slate-400 shrink-0" />
-                      <Link
-                        href={`/workspace/projects/${p.id}`}
-                        className="font-medium text-[13px] text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white transition-colors truncate"
-                      >
-                        {p.name}
-                      </Link>
-                    </div>
+                    <TableNameCell project={p} setProjects={setProjects} currentUser={currentUser} />
                   </TableCell>
                   <TableCell className="border-l border-slate-100 dark:border-white/5">
-                    <TableStatusCell project={p} projectStatuses={projectStatuses} setProjects={setProjects} />
+                    <TableStatusCell project={p} projectStatuses={projectStatuses} setProjects={setProjects} currentUser={currentUser} />
                   </TableCell>
                   <TableCell className="border-l border-slate-100 dark:border-white/5 text-[13px] font-medium text-slate-700 dark:text-slate-300 p-0">
-                    <TableDueDateCell project={p} setProjects={setProjects} />
+                    <TableDueDateCell project={p} setProjects={setProjects} currentUser={currentUser} />
                   </TableCell>
                   <TableCell className="border-l border-slate-100 dark:border-white/5 p-0">
-                    <TablePriorityCell project={p} setProjects={setProjects} />
+                    <TablePriorityCell project={p} setProjects={setProjects} currentUser={currentUser} />
                   </TableCell>
                   {customColumns.map(col => (
                     <TableCell key={col.id} className="border-l border-slate-100 dark:border-white/5 p-0 align-top">
-                      <TableCustomFieldCell project={p} col={col} setProjects={setProjects} projects={projects} />
+                      <TableCustomFieldCell project={p} col={col} setProjects={setProjects} projects={projects} currentUser={currentUser} />
                     </TableCell>
                   ))}
                   <TableCell className="border-l border-slate-100 dark:border-white/5 text-center">
@@ -2141,6 +2271,73 @@ export default function ProjectsClient({
                   ))}
                 </select>
               </div>
+              
+              <div className="space-y-2 col-span-2">
+                <label className="text-sm font-medium">Assigned Users (Multi-select)</label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" className="w-full justify-between h-9 rounded-xl border text-slate-700 dark:text-slate-300 px-3 text-sm font-medium flex items-center">
+                      <span>{formAssigneeIds.length > 0 ? `${formAssigneeIds.length} user(s) selected` : "Select assignees..."}</span>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground ml-2 shrink-0" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-[300px] max-h-[300px] overflow-y-auto bg-white dark:bg-[#1C1C1C] rounded-xl shadow-lg border border-slate-200 dark:border-white/10 p-2 z-50 custom-scrollbar" onInteractOutside={(e) => e.stopPropagation()}>
+                    {members.length === 0 ? (
+                      <div className="p-2 text-center text-xs text-slate-500">No active team members</div>
+                    ) : (
+                      members.map((m) => {
+                        const isAssigned = formAssigneeIds.includes(m.id);
+                        return (
+                          <DropdownMenuItem
+                            key={m.id}
+                            onSelect={(e) => e.preventDefault()}
+                            onClick={() => {
+                              if (isAssigned) {
+                                setFormAssigneeIds(prev => prev.filter(id => id !== m.id));
+                              } else {
+                                setFormAssigneeIds(prev => [...prev, m.id]);
+                              }
+                            }}
+                            className="cursor-pointer rounded-lg px-2.5 py-2 text-xs flex items-center gap-2 hover:bg-muted focus:bg-muted"
+                          >
+                            <input 
+                              type="checkbox" 
+                              checked={isAssigned} 
+                              onChange={() => {}} 
+                              className="rounded border-slate-300 w-3.5 h-3.5 cursor-pointer accent-blue-600 shrink-0" 
+                            />
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-slate-700 dark:text-slate-300">{m.name}</span>
+                              <span className="text-[10px] text-slate-400">{m.email}</span>
+                            </div>
+                          </DropdownMenuItem>
+                        );
+                      })
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {formAssigneeIds.length > 0 && (
+                  <div className="flex items-center flex-wrap gap-1.5 mt-2 p-2 bg-slate-50/50 dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/10">
+                    {formAssigneeIds.map(userId => {
+                      const userObj = members.find(m => m.id === userId);
+                      if (!userObj) return null;
+                      return (
+                        <Badge key={userId} variant="secondary" className="bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300 text-[11px] font-medium px-2 py-0.5 rounded-lg flex items-center gap-1">
+                          {userObj.name}
+                          <button
+                            type="button"
+                            onClick={() => setFormAssigneeIds(prev => prev.filter(id => id !== userId))}
+                            className="text-slate-400 hover:text-red-500 transition-colors"
+                          >
+                            <X size={12} />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Configuration */}
@@ -2189,15 +2386,20 @@ export default function ProjectsClient({
                   onChange={(e) => setFormStartDate(e.target.value)}
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 flex flex-col justify-between">
                 <div className="flex justify-between items-center">
-                  <label className="text-sm font-medium">End Date</label>
+                  <label className="text-sm font-medium">Due Date</label>
                   <div className="flex items-center gap-1.5">
                     <input
                       type="checkbox"
                       id="ongoing"
                       checked={isOngoing}
-                      onChange={(e) => setIsOngoing(e.target.checked)}
+                      onChange={(e) => {
+                        setIsOngoing(e.target.checked);
+                        if (e.target.checked) {
+                          setFormEndDate("");
+                        }
+                      }}
                       disabled={isRepeatEnabled}
                       className="rounded border-gray-300 text-primary focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
                     />
@@ -2214,26 +2416,103 @@ export default function ProjectsClient({
                     * Ongoing is disabled for repeating projects.
                   </div>
                 )}
-                <div className="relative">
-                  <Input
-                    name="endDate"
-                    type="date"
-                    required={!isOngoing}
-                    value={isOngoing ? "" : formEndDate}
-                    onChange={(e) => {
-                      setFormEndDate(e.target.value);
-                      if (e.target.value) {
-                        setIsOngoing(false);
-                      }
-                    }}
-                    className={isOngoing ? "text-transparent" : ""}
-                  />
-                  {isOngoing && (
-                    <div className="absolute inset-0 flex items-center px-3 pointer-events-none text-emerald-600 text-sm font-medium">
-                      Ongoing
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" className="w-full justify-between h-9 rounded-xl border text-slate-700 dark:text-slate-300 px-3 text-sm font-medium flex items-center">
+                      {isOngoing ? (
+                        <span className="text-emerald-600 font-medium flex items-center gap-1.5"><Clock size={12} /> Ongoing</span>
+                      ) : formEndDate ? (
+                        <span>{format(new Date(formEndDate + "T12:00:00"), 'MMM d, yyyy')}</span>
+                      ) : (
+                        <span className="text-slate-400 font-normal">Set due date</span>
+                      )}
+                      <CalendarIcon className="h-4 w-4 text-muted-foreground ml-2 shrink-0" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-auto p-0 flex flex-row bg-white dark:bg-[#1C1C1C] rounded-xl shadow-lg border border-slate-200 dark:border-white/10 z-[9999]" onInteractOutside={(e) => e.stopPropagation()}>
+                    <div className="flex flex-col border-r border-slate-100 dark:border-white/5 w-[140px] py-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          const today = new Date();
+                          setFormEndDate(today.toISOString().split('T')[0]);
+                          setIsOngoing(false);
+                        }}
+                        className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left group"
+                      >
+                        <span className="text-slate-700 dark:text-slate-300 font-medium">Today</span>
+                        <span className="text-[10px] text-slate-400 group-hover:text-slate-500">{format(new Date(), 'EEE')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          const tomorrow = addDays(new Date(), 1);
+                          setFormEndDate(tomorrow.toISOString().split('T')[0]);
+                          setIsOngoing(false);
+                        }}
+                        className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left group"
+                      >
+                        <span className="text-slate-700 dark:text-slate-300 font-medium">Tomorrow</span>
+                        <span className="text-[10px] text-slate-400 group-hover:text-slate-500">{format(addDays(new Date(), 1), 'EEE')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          const nextWeek = addWeeks(new Date(), 1);
+                          setFormEndDate(nextWeek.toISOString().split('T')[0]);
+                          setIsOngoing(false);
+                        }}
+                        className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left group"
+                      >
+                        <span className="text-slate-700 dark:text-slate-300 font-medium">Next week</span>
+                        <span className="text-[10px] text-slate-400 group-hover:text-slate-500">{format(addWeeks(new Date(), 1), 'EEE')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          const twoWeeks = addWeeks(new Date(), 2);
+                          setFormEndDate(twoWeeks.toISOString().split('T')[0]);
+                          setIsOngoing(false);
+                        }}
+                        className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left"
+                      >
+                        <span className="text-slate-700 dark:text-slate-300 font-medium">2 weeks</span>
+                      </button>
+                      
+                      {!isRepeatEnabled && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setIsOngoing(true);
+                            setFormEndDate("");
+                          }}
+                          className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left text-emerald-600 dark:text-emerald-400"
+                        >
+                          <span className="font-medium">Ongoing</span>
+                          <Clock size={12} className="text-emerald-500" />
+                        </button>
+                      )}
                     </div>
-                  )}
-                </div>
+                    <div className="p-3">
+                      <Calendar
+                        mode="single"
+                        selected={formEndDate ? new Date(formEndDate + "T12:00:00") : undefined}
+                        onSelect={(date) => {
+                          if (date) {
+                            setFormEndDate(date.toISOString().split('T')[0]);
+                            setIsOngoing(false);
+                          }
+                        }}
+                      />
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 

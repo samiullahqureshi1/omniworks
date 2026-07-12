@@ -272,32 +272,36 @@ export default function WorkspaceLayoutClient({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-2 ml-4">
               <div className="px-2 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Your Organizations</div>
-              {userOrganizations.map(org => (
-                <div key={org.id} className="relative group flex items-center mb-1 last:mb-0">
-                  <DropdownMenuItem 
-                    onClick={() => handleOrgSwitch(org.id)}
-                    className={`flex-1 cursor-pointer rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-white/5 ${user.organizationId === org.id ? 'bg-orange-50 dark:bg-orange-900/20' : ''}`}
-                  >
-                    <div className="flex flex-col pr-8">
-                      <span className={`font-semibold ${user.organizationId === org.id ? 'text-[#f97316]' : 'text-slate-700 dark:text-slate-200'}`}>{org.name}</span>
-                      <span className="text-[10px] text-slate-400 font-medium">{org.role}{org.isChild ? ' (Child)' : ' (Base)'}</span>
-                    </div>
-                  </DropdownMenuItem>
-                  {org.role === 'OWNER' && (
-                    <button 
-                      className="absolute right-2 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDeleteOrg(org);
-                      }}
-                      title="Delete Organization"
+              {userOrganizations.map(org => {
+                const isOwnOrg = org.role === 'OWNER';
+                const labelSuffix = isOwnOrg ? ' (Full Access)' : ' (Limited Access)';
+                return (
+                  <div key={org.id} className="relative group flex items-center mb-1 last:mb-0">
+                    <DropdownMenuItem 
+                      onClick={() => handleOrgSwitch(org.id)}
+                      className={`flex-1 cursor-pointer rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-white/5 ${user.organizationId === org.id ? 'bg-[#f97316]/5' : ''}`}
                     >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-              ))}
+                      <div className="flex flex-col pr-8">
+                        <span className={`font-semibold text-xs ${user.organizationId === org.id ? 'text-[#f97316]' : 'text-slate-700 dark:text-slate-200'}`}>{org.name}</span>
+                        <span className="text-[9px] text-slate-400 font-medium">{isOwnOrg ? 'Own Org' : 'Shared Org'}{labelSuffix}</span>
+                      </div>
+                    </DropdownMenuItem>
+                    {org.role === 'OWNER' && (
+                      <button 
+                        className="absolute right-2 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setDeleteOrg(org);
+                        }}
+                        title="Delete Organization"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
               {user.role === 'OWNER' && (
                 <>
                   <DropdownMenuSeparator className="bg-black/5 dark:bg-white/10 my-1" />
