@@ -92,11 +92,7 @@ export function ProjectStatusesTab() {
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto w-full">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Project Statuses</h1>
-        <p className="text-slate-500">Manage the statuses available for projects in your organization.</p>
-      </div>
+    <div className="space-y-6 w-full">
 
       <Card className="border-none shadow-sm bg-white dark:bg-[#1f1f1f] rounded-[24px] overflow-hidden mb-8">
         <CardHeader className="bg-[#f8f9fc] dark:bg-[#181818] border-b border-slate-100 dark:border-slate-800/60 pb-6 pt-6 px-6">
