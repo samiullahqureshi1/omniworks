@@ -529,36 +529,59 @@ export default function WorkspaceLayoutClient({
                </div>
              </div>
 
-             {/* Right Section */}
-             <div className="flex items-center gap-2 md:gap-3 shrink-0">
-                {/* Avatars */}
-                <div className="hidden sm:flex -space-x-2 mr-2">
-                   <Avatar className="h-10 w-10 border-2 border-slate-50 dark:border-[#0f0f0f] shadow-sm">
-                     <AvatarImage src="https://api.dicebear.com/7.x/notionists/svg?seed=Mithun" />
-                   </Avatar>
-                   <Avatar className="h-10 w-10 border-2 border-slate-50 dark:border-[#0f0f0f] shadow-sm">
-                     <AvatarImage src="https://api.dicebear.com/7.x/notionists/svg?seed=Sarah" />
-                   </Avatar>
-                   <Avatar className="h-10 w-10 border-2 border-slate-50 dark:border-[#0f0f0f] shadow-sm">
-                     <AvatarImage src="https://api.dicebear.com/7.x/notionists/svg?seed=John" />
-                   </Avatar>
-                </div>
-                
-                {/* Add Button */}
-                <button className="flex items-center justify-center h-10 w-10 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-500 transition-colors">
-                  <Plus size={18} />
-                </button>
-                
-                {/* Message Button */}
-                <button className="flex items-center justify-center h-10 w-10 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-500 transition-colors">
-                  <Mail size={18} />
-                </button>
+              {/* Right Section */}
+              <div className="flex items-center gap-3 shrink-0">
+                 {/* 1. Notification Bell */}
+                 <div className="flex items-center justify-center h-10 w-10 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5 dark:border-white/10 transition-colors mr-1">
+                   <NotificationBell userId={user.id} />
+                 </div>
 
-                {/* Notification Bell */}
-                <div className="flex items-center justify-center h-10 w-10 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5 dark:border-white/10 transition-colors">
-                  <NotificationBell userId={user.id} />
-                </div>
-             </div>
+                 {/* 2. Deploy Agent Button with Text */}
+                 <Link href="/workspace/rules">
+                   <button className="flex items-center gap-2 px-3.5 h-10 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:text-slate-200 transition-all font-bold text-xs">
+                     <Cpu size={15} className="text-primary" />
+                     <span>Deploy Agent</span>
+                   </button>
+                 </Link>
+
+                 {/* 3. Profile Dropdown Button showing Image and Name */}
+                 <DropdownMenu>
+                   <DropdownMenuTrigger asChild>
+                     <button className="flex items-center gap-2.5 pl-1.5 pr-3 h-10 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:text-slate-200 transition-all outline-none">
+                       <Avatar className="h-7 w-7 border border-black/5 dark:border-white/10">
+                         <AvatarImage src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user.name}`} />
+                         <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold uppercase">
+                           {user.name.substring(0, 2).toUpperCase()}
+                         </AvatarFallback>
+                       </Avatar>
+                       <span className="text-xs font-bold truncate max-w-[100px]">{user.name}</span>
+                       <ChevronDown size={12} className="text-slate-400" />
+                     </button>
+                   </DropdownMenuTrigger>
+                   <DropdownMenuContent align="end" className="w-48 bg-white dark:bg-[#1f1f1f] rounded-2xl shadow-xl border border-black/5 dark:border-white/10 p-1.5 mt-2">
+                     <Link href="/workspace/profile">
+                       <DropdownMenuItem className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors outline-none">
+                         <User size={14} className="text-slate-400" />
+                         <span>Profile</span>
+                       </DropdownMenuItem>
+                     </Link>
+                     <Link href="/workspace/settings">
+                       <DropdownMenuItem className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors outline-none">
+                         <Shield size={14} className="text-slate-400" />
+                         <span>Security</span>
+                       </DropdownMenuItem>
+                     </Link>
+                     <DropdownMenuSeparator className="bg-black/5 dark:bg-white/10 my-1" />
+                     <DropdownMenuItem 
+                       onClick={handleLogout}
+                       className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer transition-colors outline-none"
+                     >
+                       <LogOut size={14} />
+                       <span>Logout</span>
+                     </DropdownMenuItem>
+                   </DropdownMenuContent>
+                 </DropdownMenu>
+              </div>
           </header>
 
           {/* Main Content Area */}

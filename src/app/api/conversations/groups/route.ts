@@ -40,7 +40,18 @@ export async function GET(request: Request) {
       orderBy: { updatedAt: 'desc' }
     });
 
-    return NextResponse.json({ groups });
+    const resolvedGroups = groups.map(g => {
+      if (g.isDirect) {
+        const otherMember = g.members.find(m => m.userId !== session.userId);
+        return {
+          ...g,
+          name: otherMember?.user?.name || g.name || 'Direct Chat'
+        };
+      }
+      return g;
+    });
+
+    return NextResponse.json({ groups: resolvedGroups });
   } catch (error: any) {
     console.error('Fetch groups error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -52,9 +63,9 @@ export async function POST(request: Request) {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { name, description, userIds = [] } = await request.json();
+    const { name, description, userIds = [], isDirect = false, status = 'ACTIVE' } = await request.json();
 
-    if (!name?.trim()) {
+    if (!isDirect && !name?.trim()) {
       return NextResponse.json({ error: 'Group name is required' }, { status: 400 });
     }
 
@@ -62,12 +73,16 @@ export async function POST(request: Request) {
     const membersSet = new Set<string>(userIds);
     membersSet.add(session.userId);
 
+    const groupName = isDirect ? 'Direct Chat' : name.trim();
+
     const group = await prisma.chatGroup.create({
       data: {
-        name: name.trim(),
+        name: groupName,
         description: description?.trim() || null,
         organizationId: session.organizationId,
         ownerId: session.userId,
+        isDirect,
+        status,
         members: {
           create: Array.from(membersSet).map((userId: string) => ({
             userId
@@ -88,7 +103,16 @@ export async function POST(request: Request) {
       }
     });
 
-    return NextResponse.json({ group });
+    let returnedGroup = group;
+    if (group.isDirect) {
+      const otherMember = group.members.find(m => m.userId !== session.userId);
+      returnedGroup = {
+        ...group,
+        name: otherMember?.user?.name || group.name || 'Direct Chat'
+      } as any;
+    }
+
+    return NextResponse.json({ group: returnedGroup });
   } catch (error: any) {
     console.error('Create group error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

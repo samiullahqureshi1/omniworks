@@ -24,7 +24,9 @@ import {
   Reply,
   Info,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Pencil,
+  ArrowRight
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -90,6 +92,21 @@ export default function ConversationsClient({
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [isSending, setIsSending] = useState(false);
 
+  // Edit/Delete/Forward message state
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [isForwardDialogOpen, setIsForwardDialogOpen] = useState(false);
+  const [messageToForward, setMessageToForward] = useState<any>(null);
+  const [forwardSearchQuery, setForwardSearchQuery] = useState('');
+  const [isDeleteMsgOpen, setIsDeleteMsgOpen] = useState(false);
+  const [msgIdToDelete, setMsgIdToDelete] = useState<string | null>(null);
+  const [isDeclineInviteOpen, setIsDeclineInviteOpen] = useState(false);
+
+  // Direct chat Modal State
+  const [isDirectModalOpen, setIsDirectModalOpen] = useState(false);
+  const [directUserSearchQuery, setDirectUserSearchQuery] = useState('');
+  const [isCreatingDirect, setIsCreatingDirect] = useState(false);
+
   // File Upload State
   const [uploading, setUploading] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ url: string; name: string; size: number } | null>(null);
@@ -124,6 +141,12 @@ export default function ConversationsClient({
     u.id !== currentUser.id &&
     (u.name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
      u.email.toLowerCase().includes(userSearchQuery.toLowerCase()))
+  );
+
+  const filteredDirectUsers = users.filter(u =>
+    u.id !== currentUser.id &&
+    (u.name.toLowerCase().includes(directUserSearchQuery.toLowerCase()) ||
+     u.email.toLowerCase().includes(directUserSearchQuery.toLowerCase()))
   );
 
   // Fetch groups on mount or tab change
@@ -206,6 +229,8 @@ export default function ConversationsClient({
             return g;
           }));
         }
+      } else if (['message_edited', 'message_deleted'].includes(lastEvent.event)) {
+        fetchGroupMessages(selectedGroupId);
       } else if (lastEvent.event === 'message_read' && lastEvent.payload.groupId === selectedGroupId) {
         const { userId, messageIds } = lastEvent.payload;
         setMessages(prev => prev.map(m => {
@@ -346,6 +371,182 @@ export default function ConversationsClient({
     }
   };
 
+  // Edit Message Handler
+  const handleEditMessage = async (messageId: string) => {
+    if (!editContent.trim() || !selectedGroupId) return;
+    try {
+      const res = await fetch(`/api/conversations/groups/${selectedGroupId}/messages/${messageId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: editContent.trim() })
+      });
+      if (res.ok) {
+        setEditingMessageId(null);
+        setEditContent('');
+        fetchGroupMessages(selectedGroupId);
+      } else {
+        toast.error('Failed to edit message');
+      }
+    } catch (err) {
+      toast.error('An error occurred');
+      console.error(err);
+    }
+  };
+
+  // Delete Message Trigger
+  const handleDeleteMessage = (messageId: string) => {
+    setMsgIdToDelete(messageId);
+    setIsDeleteMsgOpen(true);
+  };
+
+  // Confirmed Delete Message execution
+  const confirmDeleteMessage = async () => {
+    if (!selectedGroupId || !msgIdToDelete) return;
+    try {
+      const res = await fetch(`/api/conversations/groups/${selectedGroupId}/messages/${msgIdToDelete}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        fetchGroupMessages(selectedGroupId);
+        toast.success('Message deleted');
+      } else {
+        toast.error('Failed to delete message');
+      }
+    } catch (err) {
+      toast.error('An error occurred');
+      console.error(err);
+    } finally {
+      setIsDeleteMsgOpen(false);
+      setMsgIdToDelete(null);
+    }
+  };
+
+  // Forward Message Handler
+  const handleForwardMessage = async (targetId: string, targetType: 'group' | 'project') => {
+    if (!messageToForward) return;
+
+    try {
+      let res;
+      if (targetType === 'group') {
+        res = await fetch(`/api/conversations/groups/${targetId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: messageToForward.content,
+            fileUrl: messageToForward.fileUrl || null,
+            fileName: messageToForward.fileName || null,
+            fileSize: messageToForward.fileSize || null
+          })
+        });
+      } else {
+        res = await fetch(`/api/projects/${targetId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: messageToForward.content,
+            visibility: 'PUBLIC'
+          })
+        });
+      }
+
+      if (res.ok) {
+        toast.success('Message forwarded successfully');
+        setIsForwardDialogOpen(false);
+        setMessageToForward(null);
+        if (targetType === 'group' && targetId === selectedGroupId) {
+          fetchGroupMessages(selectedGroupId);
+        }
+      } else {
+        toast.error('Failed to forward message');
+      }
+    } catch (err) {
+      toast.error('An error occurred');
+      console.error(err);
+    }
+  };
+
+  // Accept Connection Request
+  const handleAcceptInvitation = async () => {
+    if (!selectedGroupId) return;
+    try {
+      const res = await fetch(`/api/conversations/groups/${selectedGroupId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'ACTIVE' })
+      });
+
+      if (res.ok) {
+        toast.success('Connection request accepted');
+        setGroups(prev => prev.map(g => g.id === selectedGroupId ? { ...g, status: 'ACTIVE' } : g));
+      } else {
+        toast.error('Failed to accept connection request');
+      }
+    } catch (err) {
+      toast.error('An error occurred');
+      console.error(err);
+    }
+  };
+
+  // Decline Connection Request Trigger
+  const handleDeclineInvitation = () => {
+    setIsDeclineInviteOpen(true);
+  };
+
+  // Confirmed Decline Connection execution
+  const confirmDeclineInvitation = async () => {
+    if (!selectedGroupId) return;
+    try {
+      const res = await fetch(`/api/conversations/groups/${selectedGroupId}`, {
+        method: 'DELETE'
+      });
+
+      if (res.ok) {
+        toast.success('Invitation declined');
+        setGroups(prev => prev.filter(g => g.id !== selectedGroupId));
+        setSelectedGroupId(null);
+      } else {
+        toast.error('Failed to decline invitation');
+      }
+    } catch (err) {
+      toast.error('An error occurred');
+      console.error(err);
+    } finally {
+      setIsDeclineInviteOpen(false);
+    }
+  };
+
+  // Start Direct Chat Request
+  const handleStartDirectChat = async (targetUser: any) => {
+    setIsCreatingDirect(true);
+    try {
+      const res = await fetch('/api/conversations/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          isDirect: true,
+          status: 'PENDING',
+          userIds: [targetUser.id]
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(`Connection request sent to ${targetUser.name}`);
+        setIsDirectModalOpen(false);
+        setGroups(prev => [data.group, ...prev]);
+        setSelectedGroupId(data.group.id);
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Failed to start direct chat');
+      }
+    } catch (err) {
+      toast.error('An error occurred');
+      console.error(err);
+    } finally {
+      setIsCreatingDirect(false);
+    }
+  };
+
   // Open Settings Modal
   const openSettingsModal = () => {
     const group = groups.find(g => g.id === selectedGroupId);
@@ -454,6 +655,12 @@ export default function ConversationsClient({
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ` at ${formatTime(dateString)}`;
   };
 
+  const otherMember = activeGroup?.isDirect
+    ? activeGroup.members?.find((m: any) => m.userId !== currentUser.id)?.user
+    : null;
+  const activeChatName = otherMember ? otherMember.name : activeGroup?.name;
+  const isPendingInvitation = activeGroup?.isDirect && activeGroup?.status === 'PENDING';
+
   return (
     <div className="flex h-[calc(100vh-140px)] border border-slate-100 dark:border-slate-800 rounded-3xl overflow-hidden bg-white dark:bg-[#181818] shadow-sm relative">
       
@@ -465,7 +672,7 @@ export default function ConversationsClient({
             onClick={() => setActiveTab('projects')}
             className={`flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
               activeTab === 'projects'
-                ? 'bg-orange-500 text-white shadow-sm'
+                ? 'bg-primary text-white shadow-sm'
                 : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/40 hover:text-slate-800 dark:hover:text-white'
             }`}
           >
@@ -476,7 +683,7 @@ export default function ConversationsClient({
             onClick={() => setActiveTab('teams')}
             className={`flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
               activeTab === 'teams'
-                ? 'bg-orange-500 text-white shadow-sm'
+                ? 'bg-primary text-white shadow-sm'
                 : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/40 hover:text-slate-800 dark:hover:text-white'
             }`}
           >
@@ -494,7 +701,7 @@ export default function ConversationsClient({
                 placeholder="Search projects..."
                 value={projectSearch}
                 onChange={e => setProjectSearch(e.target.value)}
-                className="pl-9 bg-white dark:bg-[#1f1f1f] border-slate-100 dark:border-slate-800 h-9 rounded-xl text-xs focus-visible:ring-orange-500"
+                className="pl-9 bg-white dark:bg-[#1f1f1f] border-slate-100 dark:border-slate-800 h-9 rounded-xl text-xs focus-visible:ring-primary"
               />
             </div>
           ) : (
@@ -505,17 +712,27 @@ export default function ConversationsClient({
                   placeholder="Search chat groups..."
                   value={groupSearch}
                   onChange={e => setGroupSearch(e.target.value)}
-                  className="pl-9 bg-white dark:bg-[#1f1f1f] border-slate-100 dark:border-slate-800 h-9 rounded-xl text-xs focus-visible:ring-orange-500"
+                  className="pl-9 bg-white dark:bg-[#1f1f1f] border-slate-100 dark:border-slate-800 h-9 rounded-xl text-xs focus-visible:ring-primary"
                 />
               </div>
-              <Button
-                size="sm"
-                onClick={() => setIsCreateModalOpen(true)}
-                className="bg-orange-500 hover:bg-orange-600 text-white h-9 w-9 rounded-xl p-0 shrink-0 flex items-center justify-center transition-all shadow-sm"
-                title="Create Group"
-              >
-                <Plus size={18} />
-              </Button>
+              <div className="flex items-center gap-1 shrink-0">
+                <Button
+                  size="sm"
+                  onClick={() => setIsCreateModalOpen(true)}
+                  className="bg-primary hover:bg-primary/95 text-white h-9 w-9 rounded-xl p-0 flex items-center justify-center transition-all shadow-sm"
+                  title="Create Group"
+                >
+                  <UsersIcon size={16} />
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => setIsDirectModalOpen(true)}
+                  className="bg-primary hover:bg-primary/95 text-white h-9 w-9 rounded-xl p-0 flex items-center justify-center transition-all shadow-sm"
+                  title="Start Direct Chat"
+                >
+                  <Plus size={18} />
+                </Button>
+              </div>
             </div>
           )}
         </div>
@@ -585,23 +802,42 @@ export default function ConversationsClient({
                   (m: any) => !m.readReceipts?.some((r: any) => r.userId === currentUser.id)
                 ).length || 0;
 
+                const otherMember = group.isDirect
+                  ? group.members?.find((m: any) => m.userId !== currentUser.id)?.user
+                  : null;
+                const displayName = otherMember ? otherMember.name : group.name;
+
                 return (
                   <button
                     key={group.id}
                     onClick={() => setSelectedGroupId(group.id)}
                     className={`w-full text-left p-3 rounded-2xl flex items-center justify-between transition-all duration-200 ${
                       isSelected
-                        ? 'bg-white dark:bg-[#202020] border-l-4 border-orange-500 shadow-sm'
+                        ? 'bg-white dark:bg-[#202020] border-l-4 border-primary shadow-sm'
                         : 'hover:bg-slate-100/50 dark:hover:bg-slate-800/20 text-slate-700 dark:text-slate-300'
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center shrink-0 font-black shadow-sm text-sm">
-                        {group.name.substring(0, 2).toUpperCase()}
-                      </div>
+                      {group.isDirect && otherMember ? (
+                        <Avatar className="w-10 h-10 shrink-0 border border-slate-100 dark:border-white/10 shadow-sm rounded-xl">
+                          <AvatarImage src={`https://api.dicebear.com/7.x/notionists/svg?seed=${otherMember.name}`} />
+                          <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold uppercase rounded-xl">
+                            {otherMember.name.substring(0, 2)}
+                          </AvatarFallback>
+                        </Avatar>
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center shrink-0 font-black shadow-sm text-sm">
+                          {group.name.substring(0, 2).toUpperCase()}
+                        </div>
+                      )}
                       <div className="min-w-0 flex-1">
                         <div className="font-bold text-sm text-slate-900 dark:text-white truncate flex items-center gap-1.5">
-                          {group.name}
+                          {displayName}
+                          {group.isDirect && group.status === 'PENDING' && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 shrink-0">
+                              Pending
+                            </span>
+                          )}
                         </div>
                         {lastMsg ? (
                           <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
@@ -613,7 +849,7 @@ export default function ConversationsClient({
                       </div>
                     </div>
                     {unreadCount > 0 && (
-                      <span className="ml-2 bg-orange-500 text-white text-[10px] font-bold h-5 px-1.5 rounded-full flex items-center justify-center shrink-0 min-w-[20px]">
+                      <span className="ml-2 bg-primary text-white text-[10px] font-bold h-5 px-1.5 rounded-full flex items-center justify-center shrink-0 min-w-[20px]">
                         {unreadCount}
                       </span>
                     )}
@@ -657,13 +893,13 @@ export default function ConversationsClient({
                 {/* Group Header */}
                 <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-[#181818] flex items-center justify-between shrink-0 shadow-sm z-10">
                   <div className="min-w-0">
-                    <h2 className="font-extrabold text-slate-900 dark:text-white truncate text-base">{activeGroup.name}</h2>
-                    {activeGroup.description && (
+                    <h2 className="font-extrabold text-slate-900 dark:text-white truncate text-base">{activeChatName}</h2>
+                    {!activeGroup.isDirect && activeGroup.description && (
                       <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-lg mt-0.5">{activeGroup.description}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {isOwner && (
+                    {isOwner && !activeGroup.isDirect && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -677,11 +913,42 @@ export default function ConversationsClient({
                   </div>
                 </div>
 
+                {/* Direct Connection Request Prominent Banner */}
+                {activeGroup.isDirect && activeGroup.status === 'PENDING' && activeGroup.ownerId !== currentUser.id && (
+                  <div className="bg-amber-500/10 dark:bg-amber-500/5 border-b border-amber-500/20 px-6 py-3 flex items-center justify-between shrink-0 z-10 animate-fade-in">
+                    <p className="text-sm font-medium text-amber-800 dark:text-amber-400">
+                      {activeGroup.owner?.name || 'Someone'} has invited you to connect.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleAcceptInvitation}
+                        className="bg-primary hover:bg-primary/95 text-white font-semibold text-xs px-4 h-8 rounded-lg"
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={handleDeclineInvitation}
+                        className="font-semibold text-xs px-4 h-8 rounded-lg"
+                      >
+                        Decline
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Messages Body */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-                  {messagesLoading ? (
+                  {isPendingInvitation && activeGroup.ownerId === currentUser.id ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                      <Loader2 className="h-10 w-10 text-primary animate-spin mb-3" />
+                      <p className="text-sm font-semibold">Waiting for acceptance request to be approved...</p>
+                    </div>
+                  ) : messagesLoading ? (
                     <div className="h-full flex items-center justify-center">
-                      <Loader2 className="h-8 w-8 text-orange-500 animate-spin" />
+                      <Loader2 className="h-8 w-8 text-primary animate-spin" />
                     </div>
                   ) : messages.length > 0 ? (
                     messages.map((msg) => {
@@ -697,7 +964,7 @@ export default function ConversationsClient({
                           {/* Avatar */}
                           <Avatar className="h-9 w-9 shrink-0 border border-slate-100 dark:border-white/10 shadow-sm">
                             <AvatarImage src={`https://api.dicebear.com/7.x/notionists/svg?seed=${msg.sender?.name || 'user'}`} />
-                            <AvatarFallback className="bg-orange-500/10 text-orange-500 text-xs font-bold uppercase">
+                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold uppercase">
                               {(msg.sender?.name || '??').substring(0, 2)}
                             </AvatarFallback>
                           </Avatar>
@@ -720,23 +987,48 @@ export default function ConversationsClient({
                             {/* Content Bubble */}
                             <div className={`rounded-2xl px-4.5 py-3 text-sm shadow-sm relative ${
                               isCurrentUser
-                                ? 'bg-orange-500 text-white rounded-tr-none'
+                                ? 'bg-primary text-white rounded-tr-none'
                                 : 'bg-white dark:bg-[#202020] text-slate-800 dark:text-slate-200 rounded-tl-none border border-slate-100 dark:border-white/5'
                             }`}>
-                              {/* Content text */}
-                              {msg.content && <p className="whitespace-pre-wrap break-words leading-relaxed">{msg.content}</p>}
+                              {/* Content text / Edit box */}
+                              {editingMessageId === msg.id ? (
+                                <div className="flex flex-col gap-2 min-w-[200px]">
+                                  <textarea 
+                                    value={editContent}
+                                    onChange={(e) => setEditContent(e.target.value)}
+                                    className="w-full text-sm bg-transparent border-b border-primary-foreground/30 focus:border-primary-foreground focus:outline-none resize-none p-1 placeholder:text-primary-foreground/50 text-white custom-scrollbar"
+                                    rows={2}
+                                    autoFocus
+                                  />
+                                  <div className="flex justify-end gap-1">
+                                    <Button size="icon" variant="ghost" className="h-6 w-6 hover:bg-primary-foreground/20 text-white" onClick={() => setEditingMessageId(null)}>
+                                      <X size={12} />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="h-6 w-6 hover:bg-primary-foreground/20 text-white" onClick={() => handleEditMessage(msg.id)}>
+                                      <Check size={12} />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  {msg.content && <p className="whitespace-pre-wrap break-words leading-relaxed">{msg.content}</p>}
+                                  {msg.isEdited && (
+                                    <span className="text-[9px] opacity-60 absolute bottom-1 right-3">(edited)</span>
+                                  )}
+                                </>
+                              )}
 
                               {/* Attachment File Card */}
                               {msg.fileUrl && (
                                 <div className={`flex items-center gap-3 p-3 mt-2 rounded-xl border max-w-sm ${
                                   isCurrentUser
-                                    ? 'bg-orange-600/30 border-orange-400/20 text-white'
+                                    ? 'bg-primary-foreground/10 border-primary-foreground/20 text-white'
                                     : 'bg-slate-50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 text-slate-800 dark:text-slate-200'
                                 }`}>
                                   {getFileIcon(msg.fileName || 'file')}
                                   <div className="min-w-0 flex-1">
                                     <div className="font-bold text-xs truncate">{msg.fileName || 'Attached File'}</div>
-                                    <div className={`text-[10px] mt-0.5 ${isCurrentUser ? 'text-orange-200' : 'text-slate-400'}`}>
+                                    <div className={`text-[10px] mt-0.5 ${isCurrentUser ? 'text-primary-foreground/70' : 'text-slate-400'}`}>
                                       {formatFileSize(msg.fileSize || 0)}
                                     </div>
                                   </div>
@@ -753,18 +1045,44 @@ export default function ConversationsClient({
                                   </a>
                                 </div>
                               )}
+                              </div>
 
-                              {/* Small hover reply trigger */}
-                              <button
-                                onClick={() => setReplyingTo(msg)}
-                                className={`absolute bottom-2 -right-8 opacity-0 group-hover:opacity-100 p-1 bg-white dark:bg-[#2a2a2a] border border-slate-100 dark:border-slate-800 rounded-lg text-slate-400 hover:text-orange-500 shadow-sm transition-all hover:scale-105 ${
-                                  isCurrentUser ? 'left-auto -left-8 right-auto' : ''
-                                }`}
-                                title="Reply to message"
-                              >
-                                <Reply size={13} />
-                              </button>
-                            </div>
+                              {/* Hover actions menu below the bubble card */}
+                              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 mt-1.5 z-10">
+                                <button
+                                  onClick={() => setReplyingTo(msg)}
+                                  className="p-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-400 hover:text-primary shadow-sm transition-all hover:scale-105"
+                                  title="Reply"
+                                >
+                                  <Reply size={12} />
+                                </button>
+                                <button
+                                  onClick={() => { setMessageToForward(msg); setIsForwardDialogOpen(true); }}
+                                  className="p-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-400 hover:text-primary shadow-sm transition-all hover:scale-105"
+                                  title="Forward"
+                                >
+                                  <ArrowRight size={12} />
+                                </button>
+                                {isCurrentUser && (
+                                  <>
+                                    <button
+                                      onClick={() => { setEditingMessageId(msg.id); setEditContent(msg.content); }}
+                                      className="p-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-400 hover:text-primary shadow-sm transition-all hover:scale-105"
+                                      title="Edit"
+                                    >
+                                      <Pencil size={12} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteMessage(msg.id)}
+                                      className="p-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-400 hover:text-red-500 shadow-sm transition-all hover:scale-105"
+                                      title="Delete"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+
 
                             {/* Read receipt text details */}
                             <div className="flex items-center gap-1.5 mt-0.5">
@@ -772,7 +1090,7 @@ export default function ConversationsClient({
                                 <div className="text-[10px] text-slate-400 flex items-center gap-1" title={readCount > 0 ? `Read by: ${readNames}` : 'Sent'}>
                                   {readCount > 0 ? (
                                     <>
-                                      <CheckCheck className="text-orange-500" size={13} />
+                                      <CheckCheck className="text-primary" size={13} />
                                       <span>Read by {readCount} {readCount === 1 ? 'member' : 'members'}</span>
                                     </>
                                   ) : (
@@ -805,7 +1123,7 @@ export default function ConversationsClient({
                     {replyingTo && (
                       <div className="flex items-center justify-between bg-slate-50 dark:bg-[#1f1f1f] rounded-2xl px-4 py-2 text-xs border border-slate-100 dark:border-slate-800">
                         <div className="flex items-center gap-2 min-w-0">
-                          <Reply size={14} className="text-orange-500 shrink-0" />
+                          <Reply size={14} className="text-primary shrink-0" />
                           <span className="text-slate-400 font-medium">Replying to</span>
                           <span className="font-bold text-slate-700 dark:text-slate-300">@{replyingTo.sender?.name || 'User'}:</span>
                           <span className="text-slate-500 dark:text-slate-400 truncate max-w-md italic">"{replyingTo.content || replyingTo.fileName}"</span>
@@ -822,18 +1140,18 @@ export default function ConversationsClient({
 
                     {/* Attachment preview */}
                     {attachedFile && (
-                      <div className="flex items-center justify-between bg-orange-50 dark:bg-orange-950/20 border border-orange-200/40 rounded-2xl px-4 py-2.5 text-xs text-orange-800 dark:text-orange-400">
+                      <div className="flex items-center justify-between bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/40 rounded-2xl px-4 py-2.5 text-xs text-indigo-800 dark:text-indigo-400">
                         <div className="flex items-center gap-2 min-w-0">
                           {getFileIcon(attachedFile.name)}
                           <div className="min-w-0">
                             <span className="font-bold truncate max-w-sm block">{attachedFile.name}</span>
-                            <span className="text-[10px] text-orange-600/80 dark:text-orange-400/80 mt-0.5 block">{formatFileSize(attachedFile.size)}</span>
+                            <span className="text-[10px] text-indigo-600/80 dark:text-indigo-400/80 mt-0.5 block">{formatFileSize(attachedFile.size)}</span>
                           </div>
                         </div>
                         <button
                           type="button"
                           onClick={() => setAttachedFile(null)}
-                          className="text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-200 p-1 rounded-full hover:bg-orange-100 dark:hover:bg-orange-900/30"
+                          className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 p-1 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-900/30"
                         >
                           <X size={15} />
                         </button>
@@ -851,13 +1169,13 @@ export default function ConversationsClient({
                       <Button
                         type="button"
                         variant="ghost"
-                        disabled={uploading}
+                        disabled={uploading || isPendingInvitation}
                         onClick={triggerFileUpload}
-                        className="h-11 w-11 rounded-2xl p-0 shrink-0 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-orange-500"
+                        className="h-11 w-11 rounded-2xl p-0 shrink-0 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-primary"
                         title="Attach standard file"
                       >
                         {uploading ? (
-                          <Loader2 className="h-5 w-5 animate-spin text-orange-500" />
+                          <Loader2 className="h-5 w-5 animate-spin text-primary" />
                         ) : (
                           <Paperclip size={20} />
                         )}
@@ -865,17 +1183,18 @@ export default function ConversationsClient({
 
                       <div className="flex-1 relative">
                         <Input
-                          placeholder="Type a message..."
+                          placeholder={isPendingInvitation ? "Waiting for acceptance request to be approved..." : "Type a message..."}
                           value={messageContent}
                           onChange={e => setMessageContent(e.target.value)}
-                          className="w-full bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800/80 focus-visible:ring-orange-500 pr-12 h-11 rounded-2xl text-sm"
+                          disabled={isPendingInvitation}
+                          className="w-full bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800/80 focus-visible:ring-primary pr-12 h-11 rounded-2xl text-sm"
                         />
                       </div>
 
                       <Button
                         type="submit"
-                        disabled={isSending || (!messageContent.trim() && !attachedFile)}
-                        className="bg-orange-500 hover:bg-orange-600 text-white h-11 px-5 rounded-2xl flex items-center justify-center gap-1.5 shadow-sm transition-all shrink-0"
+                        disabled={isSending || isPendingInvitation || (!messageContent.trim() && !attachedFile)}
+                        className="bg-primary hover:bg-primary/95 text-white h-11 px-5 rounded-2xl flex items-center justify-center gap-1.5 shadow-sm transition-all shrink-0"
                       >
                         {isSending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -910,11 +1229,11 @@ export default function ConversationsClient({
                           <div className="min-w-0">
                             <div className="font-bold text-xs truncate text-slate-900 dark:text-white flex items-center gap-1">
                               {member.user?.name || 'User'}
-                              {member.userId === currentUser.id && <span className="text-[9px] text-orange-500 font-medium">(you)</span>}
+                              {member.userId === currentUser.id && <span className="text-[9px] text-primary font-medium">(you)</span>}
                             </div>
                             <div className="text-[10px] text-slate-400 capitalize flex items-center gap-1 mt-0.5">
                               {isUserOwner ? (
-                                <span className="bg-orange-500/10 text-orange-600 px-1 rounded font-bold">Owner</span>
+                                <span className="bg-primary/10 text-primary px-1 rounded font-bold">Owner</span>
                               ) : (
                                 <span>Member</span>
                               )}
@@ -972,7 +1291,7 @@ export default function ConversationsClient({
                   onChange={e => setNewGroupName(e.target.value)}
                   required
                   autoFocus
-                  className="bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 rounded-2xl h-10 text-sm focus-visible:ring-orange-500"
+                  className="bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 rounded-2xl h-10 text-sm focus-visible:ring-primary"
                 />
               </div>
 
@@ -982,7 +1301,7 @@ export default function ConversationsClient({
                   placeholder="e.g. Syncing assets and designs for the project"
                   value={newGroupDesc}
                   onChange={e => setNewGroupDesc(e.target.value)}
-                  className="bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 rounded-2xl h-10 text-sm focus-visible:ring-orange-500"
+                  className="bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 rounded-2xl h-10 text-sm focus-visible:ring-primary"
                 />
               </div>
 
@@ -994,7 +1313,7 @@ export default function ConversationsClient({
                     placeholder="Search users to add..."
                     value={userSearchQuery}
                     onChange={e => setUserSearchQuery(e.target.value)}
-                    className="pl-9 bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 h-9 text-xs rounded-xl focus-visible:ring-orange-500"
+                    className="pl-9 bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 h-9 text-xs rounded-xl focus-visible:ring-primary"
                   />
                 </div>
 
@@ -1009,7 +1328,7 @@ export default function ConversationsClient({
                           onClick={() => toggleMemberSelection(user.id)}
                           className={`w-full flex items-center justify-between p-2 rounded-xl transition-all ${
                             isSelected
-                              ? 'bg-orange-500/10 border-orange-500/20 text-orange-600 dark:text-orange-400'
+                              ? 'bg-primary/10 border-primary/20 text-primary'
                               : 'hover:bg-slate-100/50 dark:hover:bg-slate-800/30 text-slate-700 dark:text-slate-300'
                           }`}
                         >
@@ -1027,7 +1346,7 @@ export default function ConversationsClient({
                           </div>
                           <div className={`h-4.5 w-4.5 rounded-md border flex items-center justify-center shrink-0 ${
                             isSelected
-                              ? 'bg-orange-500 border-orange-500 text-white'
+                              ? 'bg-primary border-primary text-white'
                               : 'border-slate-300 dark:border-slate-700'
                           }`}>
                             {isSelected && <Check size={12} strokeWidth={3} />}
@@ -1053,7 +1372,7 @@ export default function ConversationsClient({
                 <Button
                   type="submit"
                   disabled={isCreatingGroup || !newGroupName.trim()}
-                  className="px-6 py-2 h-10 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-bold transition-all shadow-sm disabled:opacity-50"
+                  className="px-6 py-2 h-10 rounded-2xl bg-primary hover:bg-primary/95 text-white font-bold transition-all shadow-sm disabled:opacity-50"
                 >
                   {isCreatingGroup ? 'Creating...' : 'Create Group'}
                 </Button>
@@ -1090,7 +1409,7 @@ export default function ConversationsClient({
                     placeholder="Filter users..."
                     value={userSearchQuery}
                     onChange={e => setUserSearchQuery(e.target.value)}
-                    className="pl-9 bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 h-9 text-xs rounded-xl focus-visible:ring-orange-500"
+                    className="pl-9 bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 h-9 text-xs rounded-xl focus-visible:ring-primary"
                   />
                 </div>
 
@@ -1109,7 +1428,7 @@ export default function ConversationsClient({
                           }}
                           className={`w-full flex items-center justify-between p-2 rounded-xl transition-all ${
                             isSelected
-                              ? 'bg-orange-500/10 border-orange-500/20 text-orange-600 dark:text-orange-400'
+                              ? 'bg-primary/10 border-primary/20 text-primary'
                               : 'hover:bg-slate-100/50 dark:hover:bg-slate-800/30 text-slate-700 dark:text-slate-300'
                           }`}
                         >
@@ -1127,7 +1446,7 @@ export default function ConversationsClient({
                           </div>
                           <div className={`h-4.5 w-4.5 rounded-md border flex items-center justify-center shrink-0 ${
                             isSelected
-                              ? 'bg-orange-500 border-orange-500 text-white'
+                              ? 'bg-primary border-primary text-white'
                               : 'border-slate-300 dark:border-slate-700'
                           }`}>
                             {isSelected && <Check size={12} strokeWidth={3} />}
@@ -1174,11 +1493,257 @@ export default function ConversationsClient({
                   type="button"
                   onClick={handleUpdateMembers}
                   disabled={isUpdatingMembers || isDeletingGroup}
-                  className="px-6 py-2 h-10 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-bold transition-all shadow-sm"
+                  className="px-6 py-2 h-10 rounded-2xl bg-primary hover:bg-primary/95 text-white font-bold transition-all shadow-sm"
                 >
                   {isUpdatingMembers ? 'Saving...' : 'Save Changes'}
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DIRECT CHAT MODAL */}
+      {isDirectModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#1f1f1f] rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">Start Direct Chat</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Send a connection invitation to start a 1-on-1 private chat.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDirectModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg p-1"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 custom-scrollbar">
+              <div className="space-y-2 flex flex-col flex-1 min-h-[220px]">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Select User</label>
+                <div className="relative shrink-0 mb-2">
+                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                  <Input
+                    placeholder="Search users by name or email..."
+                    value={directUserSearchQuery}
+                    onChange={e => setDirectUserSearchQuery(e.target.value)}
+                    className="pl-9 bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 h-9 text-xs rounded-xl focus-visible:ring-primary"
+                  />
+                </div>
+
+                <div className="flex-1 overflow-y-auto border border-slate-100 dark:border-slate-800 rounded-2xl p-2 bg-slate-50/30 dark:bg-[#151515] space-y-1.5 max-h-[250px] custom-scrollbar">
+                  {filteredDirectUsers.length > 0 ? (
+                    filteredDirectUsers.map(user => {
+                      return (
+                        <div
+                          key={user.id}
+                          className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-slate-100/50 dark:hover:bg-slate-800/30 text-slate-700 dark:text-slate-300 border border-transparent"
+                        >
+                          <div className="flex items-center gap-2.5 text-left min-w-0">
+                            <Avatar className="h-7 w-7">
+                              <AvatarImage src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user.name}`} />
+                              <AvatarFallback className="bg-slate-200 text-slate-700 text-[10px] font-bold">
+                                {user.name.substring(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs truncate">{user.name}</div>
+                              <div className="text-[9px] text-slate-400 truncate">{user.email}</div>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            disabled={isCreatingDirect}
+                            onClick={() => handleStartDirectChat(user)}
+                            className="bg-primary hover:bg-primary/95 text-white h-7 text-[11px] px-3 rounded-lg"
+                          >
+                            Invite
+                          </Button>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-8 text-xs text-slate-400">No users found.</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 flex justify-end gap-2.5 shrink-0">
+                <Button
+                  type="button"
+                  onClick={() => setIsDirectModalOpen(false)}
+                  className="px-5 py-2 h-10 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 bg-transparent"
+                  disabled={isCreatingDirect}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FORWARD MESSAGE DIALOG */}
+      {isForwardDialogOpen && messageToForward && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#1f1f1f] rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">Forward Message</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Select a project or team chat to forward this message.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setIsForwardDialogOpen(false); setMessageToForward(null); }}
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg p-1"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder="Search projects or chat groups..."
+                  value={forwardSearchQuery}
+                  onChange={e => setForwardSearchQuery(e.target.value)}
+                  className="pl-9 bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 h-9 rounded-xl text-xs focus-visible:ring-primary"
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+              {/* Groups Section */}
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Teams Chat Groups</h3>
+                <div className="space-y-1">
+                  {groups
+                    .filter(g => g.name.toLowerCase().includes(forwardSearchQuery.toLowerCase()))
+                    .map(group => (
+                      <div key={group.id} className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                            {group.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{group.name}</span>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => handleForwardMessage(group.id, 'group')}
+                          className="bg-primary hover:bg-primary/95 text-white h-7 text-[11px] px-3 rounded-lg"
+                        >
+                          Forward
+                        </Button>
+                      </div>
+                    ))}
+                  {groups.filter(g => g.name.toLowerCase().includes(forwardSearchQuery.toLowerCase())).length === 0 && (
+                    <p className="text-xs text-slate-400 italic p-2">No matching chat groups</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Projects Section */}
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Projects</h3>
+                <div className="space-y-1">
+                  {projects
+                    .filter(p => p.name.toLowerCase().includes(forwardSearchQuery.toLowerCase()))
+                    .map(project => (
+                      <div key={project.id} className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center font-bold text-xs shrink-0">
+                            <FolderKanban size={14} />
+                          </div>
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{project.name}</span>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => handleForwardMessage(project.id, 'project')}
+                          className="bg-primary hover:bg-primary/95 text-white h-7 text-[11px] px-3 rounded-lg"
+                        >
+                          Forward
+                        </Button>
+                      </div>
+                    ))}
+                  {projects.filter(p => p.name.toLowerCase().includes(forwardSearchQuery.toLowerCase())).length === 0 && (
+                    <p className="text-xs text-slate-400 italic p-2">No matching projects</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE MESSAGE CONFIRMATION MODAL */}
+      {isDeleteMsgOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#1f1f1f] rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 w-full max-w-sm overflow-hidden p-6 flex flex-col items-center text-center gap-4">
+            <div className="p-3.5 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 rounded-full">
+              <AlertCircle size={32} />
+            </div>
+            
+            <div className="space-y-1">
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Delete Message</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Are you sure you want to delete this message? This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 w-full mt-2">
+              <Button
+                type="button"
+                onClick={() => { setIsDeleteMsgOpen(false); setMsgIdToDelete(null); }}
+                className="flex-1 py-2 h-10 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 bg-transparent font-semibold text-xs border border-slate-100 dark:border-slate-800"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={confirmDeleteMessage}
+                className="flex-1 py-2 h-10 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs transition-all shadow-sm"
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DECLINE INVITATION CONFIRMATION MODAL */}
+      {isDeclineInviteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white dark:bg-[#1f1f1f] rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 w-full max-w-sm overflow-hidden p-6 flex flex-col items-center text-center gap-4">
+            <div className="p-3.5 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 rounded-full">
+              <AlertCircle size={32} />
+            </div>
+            
+            <div className="space-y-1">
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Decline Invitation</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Are you sure you want to decline this invitation? The connection chat request will be deleted.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 w-full mt-2">
+              <Button
+                type="button"
+                onClick={() => setIsDeclineInviteOpen(false)}
+                className="flex-1 py-2 h-10 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 bg-transparent font-semibold text-xs border border-slate-100 dark:border-slate-800"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={confirmDeclineInvitation}
+                className="flex-1 py-2 h-10 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs transition-all shadow-sm"
+              >
+                Decline
+              </Button>
             </div>
           </div>
         </div>
