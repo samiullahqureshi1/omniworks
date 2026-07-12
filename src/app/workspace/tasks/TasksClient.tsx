@@ -18,7 +18,7 @@ import {
 import { List as ListIcon2 } from 'lucide-react';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Edit, Trash2, Repeat } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, Repeat, TrendingUp, Hourglass } from 'lucide-react';
 import { deleteTaskAction, updateTaskAction, getTaskTemplatesAction, deleteTaskTemplateAction, createTaskStatusAction, updateTaskStatusAction, deleteTaskStatusAction } from '@/app/actions/tasks';
 import { getTaskHiddenColumnsAction, setTaskHiddenColumnsAction } from '@/app/actions/settings';
 import { toast } from 'sonner';
@@ -784,80 +784,154 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4 flex flex-col gap-1">
-            <span className="text-sm font-medium text-muted-foreground">Allocated Hours</span>
-            <span className="text-2xl font-bold">{totalAllocated.toFixed(1)}h</span>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex flex-col gap-1">
-            <span className="text-sm font-medium text-muted-foreground">Tracked Hours</span>
-            <span className="text-2xl font-bold">{totalTracked.toFixed(1)}h</span>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex flex-col gap-1">
-            <span className="text-sm font-medium text-muted-foreground">Remaining Hours</span>
-            <span className="text-2xl font-bold">{remainingHours.toFixed(1)}h</span>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="relative overflow-hidden bg-gradient-to-br from-indigo-50/40 via-white to-white dark:from-indigo-950/10 dark:via-background dark:to-background border border-slate-100 dark:border-white/5 rounded-2xl p-5 shadow-sm transition-all duration-300 hover:shadow-md">
+          <div className="flex justify-between items-start">
+            <div className="space-y-1.5">
+              <span className="text-xs font-bold text-indigo-500 uppercase tracking-wider">Allocated Hours</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-extrabold tracking-tight text-slate-800 dark:text-slate-100">{totalAllocated.toFixed(1)}</span>
+                <span className="text-sm font-semibold text-slate-500">h</span>
+              </div>
+            </div>
+            <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-xl">
+              <Clock size={20} />
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="font-medium text-indigo-600 dark:text-indigo-400">{filteredTasks.length}</span> active tasks matching filter
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden bg-gradient-to-br from-emerald-50/40 via-white to-white dark:from-emerald-950/10 dark:via-background dark:to-background border border-slate-100 dark:border-white/5 rounded-2xl p-5 shadow-sm transition-all duration-300 hover:shadow-md">
+          <div className="flex justify-between items-start">
+            <div className="space-y-1.5">
+              <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider">Tracked Hours</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-extrabold tracking-tight text-slate-800 dark:text-slate-100">{totalTracked.toFixed(1)}</span>
+                <span className="text-sm font-semibold text-slate-500">h</span>
+              </div>
+            </div>
+            <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-xl">
+              <TrendingUp size={20} />
+            </div>
+          </div>
+          <div className="mt-4 space-y-2">
+            <div className="flex justify-between text-xs font-medium">
+              <span className="text-muted-foreground">Progress</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{totalAllocated > 0 ? ((totalTracked / totalAllocated) * 100).toFixed(0) : 0}%</span>
+            </div>
+            <div className="w-full h-1.5 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-emerald-500 rounded-full transition-all duration-500" 
+                style={{ width: `${Math.min(100, totalAllocated > 0 ? (totalTracked / totalAllocated) * 100 : 0)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden bg-gradient-to-br from-amber-50/40 via-white to-white dark:from-amber-950/10 dark:via-background dark:to-background border border-slate-100 dark:border-white/5 rounded-2xl p-5 shadow-sm transition-all duration-300 hover:shadow-md">
+          <div className="flex justify-between items-start">
+            <div className="space-y-1.5">
+              <span className="text-xs font-bold text-amber-500 uppercase tracking-wider">Remaining Hours</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-extrabold tracking-tight text-slate-800 dark:text-slate-100">{remainingHours.toFixed(1)}</span>
+                <span className="text-sm font-semibold text-slate-500">h</span>
+              </div>
+            </div>
+            <div className="p-2.5 bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 rounded-xl">
+              <Hourglass size={20} />
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+            {totalAllocated > 0 && totalTracked > totalAllocated ? (
+              <span className="font-semibold text-red-500">Over allocated limit!</span>
+            ) : (
+              <>
+                <span className="font-medium text-amber-600 dark:text-amber-400">{totalAllocated > 0 ? ((remainingHours / totalAllocated) * 100).toFixed(0) : 100}%</span> of allocation left
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 items-center bg-card p-4 rounded-lg border shadow-sm">
+      <div className="flex flex-col xl:flex-row gap-4 items-stretch xl:items-center bg-white/60 dark:bg-[#151515]/60 backdrop-blur-md p-4 rounded-2xl border border-slate-100 dark:border-white/5 shadow-sm">
         <div className="relative flex-1 w-full">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
             placeholder="Search tasks..."
-            className="pl-8 w-full bg-background"
+            className="pl-9.5 w-full bg-slate-50/50 dark:bg-white/5 border-slate-200 dark:border-white/10 rounded-xl focus-visible:ring-2 focus-visible:ring-violet-500/20 focus-visible:border-violet-500 transition-all duration-200"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
 
-        <select
-          value={selectedProjectId}
-          onChange={(e) => setSelectedProjectId(e.target.value)}
-          className="flex h-10 w-full md:w-[180px] rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-        >
-          <option value="all">All Tasks</option>
-          {projects.map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+          <div className="relative flex items-center">
+            <span className="absolute left-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider pointer-events-none">Project</span>
+            <select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              className="flex h-10 w-full sm:w-[170px] rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/5 pl-[64px] pr-8 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all duration-200 cursor-pointer appearance-none text-slate-700 dark:text-slate-200"
+            >
+              <option value="all">All Tasks</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="absolute right-3 text-slate-400 pointer-events-none" />
+          </div>
 
-        <select
-          value={selectedStatusId}
-          onChange={(e) => setSelectedStatusId(e.target.value)}
-          className="flex h-10 w-full md:w-[180px] rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          <option value="all">All Statuses</option>
-          {taskStatuses.map(s => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
+          <div className="relative flex items-center">
+            <span className="absolute left-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider pointer-events-none">Status</span>
+            <select
+              value={selectedStatusId}
+              onChange={(e) => setSelectedStatusId(e.target.value)}
+              className="flex h-10 w-full sm:w-[170px] rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/5 pl-[60px] pr-8 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all duration-200 cursor-pointer appearance-none text-slate-700 dark:text-slate-200"
+            >
+              <option value="all">All Statuses</option>
+              {taskStatuses.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="absolute right-3 text-slate-400 pointer-events-none" />
+          </div>
 
-        {currentUser.role !== 'MEMBER' && (
-          <select
-            value={selectedAssigneeId}
-            onChange={(e) => setSelectedAssigneeId(e.target.value)}
-            className="flex h-10 w-full md:w-[180px] rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="all">All Assignees</option>
-            {availableUsers.map(u => (
-              <option key={u.id} value={u.id}>{u.name}</option>
-            ))}
-          </select>
-        )}
+          {currentUser.role !== 'MEMBER' && (
+            <div className="relative flex items-center">
+              <span className="absolute left-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider pointer-events-none">Assignee</span>
+              <select
+                value={selectedAssigneeId}
+                onChange={(e) => setSelectedAssigneeId(e.target.value)}
+                className="flex h-10 w-full sm:w-[180px] rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/5 pl-[72px] pr-8 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all duration-200 cursor-pointer appearance-none text-slate-700 dark:text-slate-200"
+              >
+                <option value="all">All Assignees</option>
+                {availableUsers.map(u => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={14} className="absolute right-3 text-slate-400 pointer-events-none" />
+            </div>
+          )}
 
-        <div className="flex items-center gap-1 bg-muted p-1 rounded-xl">
-          <Button variant={viewMode === 'table' ? 'secondary' : 'ghost'} size="sm" className="px-2" onClick={() => handleSetViewMode('table')}>
-            <List className="w-4 h-4" />
-          </Button>
-          <Button variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} size="sm" className="px-2" onClick={() => handleSetViewMode('kanban')}>
-            <Columns className="w-4 h-4" />
-          </Button>
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-xl border border-slate-200/50 dark:border-white/5 self-stretch sm:self-auto justify-center">
+            <Button 
+              variant={viewMode === 'table' ? 'secondary' : 'ghost'} 
+              size="sm" 
+              className={`h-8 px-3 rounded-lg text-xs font-medium transition-all ${viewMode === 'table' ? 'bg-white dark:bg-[#252525] shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`} 
+              onClick={() => handleSetViewMode('table')}
+            >
+              <List className="w-3.5 h-3.5 mr-1.5" /> List
+            </Button>
+            <Button 
+              variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} 
+              size="sm" 
+              className={`h-8 px-3 rounded-lg text-xs font-medium transition-all ${viewMode === 'kanban' ? 'bg-white dark:bg-[#252525] shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`} 
+              onClick={() => handleSetViewMode('kanban')}
+            >
+              <Columns className="w-3.5 h-3.5 mr-1.5" /> Kanban
+            </Button>
+          </div>
         </div>
       </div>
 

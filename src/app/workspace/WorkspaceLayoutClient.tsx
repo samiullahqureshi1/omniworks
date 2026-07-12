@@ -198,8 +198,8 @@ export default function WorkspaceLayoutClient({
 
   const activeNavItems = allNavItems.filter(item => item.roles.includes(effectiveRole));
 
-  const mainMenuNavNames = ['Dashboard', 'Projects', 'TeamOps Hub', 'Tasks', 'Time', 'Timesheet', 'Users', 'Clients', 'Rules'];
-  const otherNavNames = ['Reports', 'Settings'];
+  const mainMenuNavNames = ['Dashboard', 'Projects', 'TeamOps Hub', 'Tasks', 'Time', 'Timesheet', 'Users', 'Clients'];
+  const otherNavNames = ['Rules', 'Reports', 'Settings'];
 
   const mainMenuNavItems = activeNavItems.filter(item => mainMenuNavNames.includes(item.name));
   const otherNavItems = activeNavItems.filter(item => otherNavNames.includes(item.name));

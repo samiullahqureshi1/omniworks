@@ -9,7 +9,7 @@ import {
   ArrowLeft, Calendar, Clock, MoreHorizontal, Settings, 
   LayoutDashboard, CheckSquare, Users, Timer, Activity,
   Briefcase, MessageSquare, GripVertical, Plus, ShieldAlert,
-  Search, Check, X, Hash, Trash2, Repeat, ChevronDown
+  Search, Check, X, Hash, Trash2, Repeat, ChevronDown, Award, UserCheck, CalendarDays, Globe, Mail, Phone, Type
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -439,16 +439,11 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
         </div>
         {(isOwner || isPM) && (
           <div className="relative z-10 mt-2">
-              <Dialog open={isEditProjectOpen} onOpenChange={setIsEditProjectOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="shadow-sm">
-                    <Settings className="mr-2 h-4 w-4" /> Edit Project
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[700px] h-[90vh] p-0 flex flex-col overflow-hidden">
-                  <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shrink-0 shadow-sm">
-                    <DialogTitle>Edit Project</DialogTitle>
-                  </DialogHeader>
+            <Dialog open={isEditProjectOpen} onOpenChange={setIsEditProjectOpen}>
+              <DialogContent className="sm:max-w-[700px] h-[90vh] p-0 flex flex-col overflow-hidden">
+                <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shrink-0 shadow-sm">
+                  <DialogTitle>Edit Project</DialogTitle>
+                </DialogHeader>
                   <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
                     <form onSubmit={handleUpdateProject} className="space-y-6 pb-6">
                       {/* Rules Selector */}
@@ -765,93 +760,164 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
           )}
         
           {/* Top Header Expanded Info */}
-          <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-slate-200/60 dark:border-slate-800/60">
+          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6 pt-6 border-t border-slate-200/60 dark:border-slate-800/60">
             {/* Project Details */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-bold text-foreground flex items-center gap-2"><Briefcase size={14} className="text-primary"/> Details</h3>
-              <div className="grid grid-cols-2 gap-4">
+            <div className="lg:col-span-7 space-y-5">
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <Briefcase size={15} className="text-indigo-500"/> Details
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {!isStrictMember && (
-                  <div className="flex flex-col">
-                    <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">Client</span>
-                    <span className="font-semibold text-sm text-foreground">{project.client?.name || 'Internal'}</span>
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50/40 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
+                    <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/5 shadow-sm rounded-lg text-indigo-500">
+                      <Users size={16} />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Client</span>
+                      <span className="font-semibold text-xs text-foreground truncate">{project.client?.name || 'Internal'}</span>
+                    </div>
                   </div>
                 )}
-                <div className="flex flex-col">
-                  <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">Manager</span>
-                  <span className="font-semibold text-sm text-foreground">{project.projectManager?.name || 'Unassigned'}</span>
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50/40 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
+                  <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/5 shadow-sm rounded-lg text-indigo-500">
+                    <UserCheck size={16} />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Manager</span>
+                    <span className="font-semibold text-xs text-foreground truncate">{project.projectManager?.name || 'Unassigned'}</span>
+                  </div>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">Start Date</span>
-                  <span className="font-semibold text-sm text-foreground">{new Date(project.startDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50/40 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
+                  <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/5 shadow-sm rounded-lg text-indigo-500">
+                    <Calendar size={16} />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Start Date</span>
+                    <span className="font-semibold text-xs text-foreground truncate">
+                      {new Date(project.startDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">End Date</span>
-                  <span className="font-semibold text-sm text-foreground">{project.isOngoing ? 'Ongoing' : project.endDate ? new Date(project.endDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'Not set'}</span>
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50/40 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
+                  <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/5 shadow-sm rounded-lg text-indigo-500">
+                    <CalendarDays size={16} />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">End Date</span>
+                    <span className="font-semibold text-xs text-foreground truncate">
+                      {project.isOngoing ? 'Ongoing' : project.endDate ? new Date(project.endDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'Not set'}
+                    </span>
+                  </div>
                 </div>
               </div>
+
               {project.notes && (
-                <div className="mt-2">
-                  <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider block mb-1">Notes</span>
-                  <p className="text-xs text-slate-700 dark:text-slate-300 italic bg-muted/40 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+                <div className="p-3 bg-amber-50/20 dark:bg-amber-950/5 border border-amber-100/30 dark:border-amber-950/20 rounded-xl">
+                  <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider block mb-1">Notes</span>
+                  <p className="text-xs text-slate-700 dark:text-slate-300 italic leading-relaxed">
                     "{project.notes}"
                   </p>
                 </div>
               )}
+
               {project.customFields && (project.customFields as any[]).length > 0 && (
-                <div className="mt-4 pt-4 border-t border-slate-200/60 dark:border-slate-800/60">
-                  <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider block mb-2">Custom Fields</span>
-                  <div className="grid grid-cols-2 gap-4">
-                    {(project.customFields as any[]).map((field: any, idx: number) => (
-                      <div key={idx} className="flex flex-col">
-                        <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wider">{field.name}</span>
-                        {field.type === 'url' ? (
-                          <a 
-                            href={field.value.startsWith('http') ? field.value : `https://${field.value}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="font-semibold text-sm text-blue-600 dark:text-blue-400 hover:underline truncate"
-                          >
-                            {field.value}
-                          </a>
-                        ) : (
-                          <span className="font-semibold text-sm text-foreground truncate">{field.value}</span>
-                        )}
-                      </div>
-                    ))}
+                <div className="mt-5 pt-4 border-t border-slate-200/60 dark:border-slate-800/60 space-y-3">
+                  <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">Custom Fields</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {(project.customFields as any[]).map((field: any, idx: number) => {
+                      const getIconForType = (type: string) => {
+                        switch (type?.toLowerCase()) {
+                          case 'number': return <Hash size={16} />;
+                          case 'website':
+                          case 'url': return <Globe size={16} />;
+                          case 'email': return <Mail size={16} />;
+                          case 'phone': return <Phone size={16} />;
+                          default: return <Type size={16} />;
+                        }
+                      };
+
+                      return (
+                        <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50/40 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
+                          <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/5 shadow-sm rounded-lg text-indigo-500">
+                            {getIconForType(field.type)}
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider truncate">{field.name}</span>
+                            {field.type === 'url' || field.type === 'website' ? (
+                              <a 
+                                href={field.value.startsWith('http') ? field.value : `https://${field.value}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="font-semibold text-xs text-blue-600 dark:text-blue-400 hover:underline truncate"
+                              >
+                                {field.value}
+                              </a>
+                            ) : (
+                              <span className="font-semibold text-xs text-foreground truncate">{field.value}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
             </div>
 
             {/* Time & Progress */}
-            <div className="space-y-4">
+            <div className="lg:col-span-5 space-y-5">
               <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                <Timer size={14} className="text-primary"/> 
+                <Timer size={15} className="text-indigo-500"/> 
                 {isStrictMember ? 'Your Progress & Hours' : 'Progress & Hours'}
               </h3>
-              <div className="flex justify-between items-end">
-                <div>
-                  <p className="text-2xl font-extrabold tracking-tight text-foreground">{displayTotalTrackedHours} <span className="text-sm font-semibold text-muted-foreground">hrs</span></p>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mt-0.5">Total Logged Time</p>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="relative overflow-hidden bg-gradient-to-br from-emerald-50/30 via-white to-white dark:from-emerald-950/5 dark:via-[#1a1a1a] dark:to-[#1a1a1a] border border-slate-100 dark:border-white/[0.03] rounded-xl p-4 shadow-sm">
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Logged Hours</span>
+                      <p className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">
+                        {displayTotalTrackedHours} <span className="text-xs font-semibold text-muted-foreground">h</span>
+                      </p>
+                    </div>
+                    <div className="p-2 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-lg">
+                      <Timer size={16} />
+                    </div>
+                  </div>
                 </div>
+
                 {displayTotalAllocatedHours > 0 && (
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-foreground">{displayTotalAllocatedHours} <span className="text-xs font-semibold text-muted-foreground">hrs</span></p>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mt-0.5">Allocated Budget</p>
+                  <div className="relative overflow-hidden bg-gradient-to-br from-indigo-50/30 via-white to-white dark:from-indigo-950/5 dark:via-[#1a1a1a] dark:to-[#1a1a1a] border border-slate-100 dark:border-white/[0.03] rounded-xl p-4 shadow-sm">
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Allocated Limit</span>
+                        <p className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">
+                          {displayTotalAllocatedHours} <span className="text-xs font-semibold text-muted-foreground">h</span>
+                        </p>
+                      </div>
+                      <div className="p-2 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-lg">
+                        <Clock size={16} />
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
+
               {displayTotalAllocatedHours > 0 && (
-                <div className="space-y-2 mt-2">
-                  <div className="flex justify-between text-xs font-semibold">
-                    <span className={displayProgressPercent > 100 ? 'text-destructive' : 'text-primary'}>{displayProgressPercent}% Complete</span>
+                <div className="p-5 bg-slate-50/40 dark:bg-white/[0.01] border border-slate-100 dark:border-white/[0.04] rounded-2xl space-y-3.5">
+                  <div className="flex justify-between items-center text-xs font-bold">
+                    <span className={displayProgressPercent > 100 ? 'text-rose-500' : 'text-indigo-600 dark:text-indigo-400'}>
+                      {displayProgressPercent}% Complete
+                    </span>
                     {displayTotalTrackedHours > displayTotalAllocatedHours && (
-                      <span className="text-destructive flex items-center bg-destructive/10 px-1.5 py-0.5 rounded text-[10px]"><ShieldAlert size={10} className="mr-1"/> Over Budget</span>
+                      <span className="text-rose-500 flex items-center bg-rose-50 dark:bg-rose-950/20 px-2 py-0.5 rounded-lg text-[10px] font-bold border border-rose-100 dark:border-rose-900/30">
+                        <ShieldAlert size={11} className="mr-1"/> Over Budget
+                      </span>
                     )}
                   </div>
-                  <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
+                  <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
                     <div 
-                      className={`h-full rounded-full transition-all duration-1000 ${displayProgressPercent > 100 ? 'bg-gradient-to-r from-red-500 to-rose-600' : 'bg-gradient-to-r from-primary to-blue-500'}`} 
+                      className={`h-full rounded-full transition-all duration-1000 ${displayProgressPercent > 100 ? 'bg-gradient-to-r from-rose-500 to-red-600' : 'bg-gradient-to-r from-indigo-500 to-blue-600'}`} 
                       style={{ width: `${Math.min(100, displayProgressPercent)}%` }}
                     ></div>
                   </div>

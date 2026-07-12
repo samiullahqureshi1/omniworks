@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Plus, Clock, UserPlus, Sparkles } from 'lucide-react';
+import { Plus, Clock, UserPlus, Sparkles, Cpu } from 'lucide-react';
 import { motion } from 'framer-motion';
 import GlobalCreateProjectModal from '@/components/modals/GlobalCreateProjectModal';
 import GlobalAddUserModal from '@/components/modals/GlobalAddUserModal';
@@ -55,12 +55,13 @@ export default function DashboardHeader({ user }: { user: { name: string, role: 
               >
                 <UserPlus className="mr-2 h-[18px] w-[18px]" /> Invite User
               </Button>
-              <Button 
-                className="rounded-full shadow-md bg-[#1f1f1f] text-white hover:bg-black transition-colors h-11 px-6 font-semibold text-sm border border-white/10" 
-                onClick={() => setIsCreateProjectOpen(true)}
-              >
-                <Plus className="mr-2 h-[18px] w-[18px]" /> New Project
-              </Button>
+              <Link href="/workspace/rules">
+                <Button 
+                  className="rounded-full shadow-md bg-[#1f1f1f] text-white hover:bg-black transition-colors h-11 px-6 font-semibold text-sm border border-white/10 flex items-center"
+                >
+                  <Cpu className="mr-2 h-[18px] w-[18px]" /> Deploy Agent
+                </Button>
+              </Link>
             </>
           )}
         </motion.div>
