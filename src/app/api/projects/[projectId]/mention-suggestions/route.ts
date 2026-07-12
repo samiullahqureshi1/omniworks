@@ -49,6 +49,21 @@ export async function GET(request: Request, context: { params: Promise<{ project
     // Include client if we want them to be mentionable (usually yes, if message is public)
     if (project.client) users.push(project.client);
 
+    // Fetch all task assignees for tasks in this project
+    const taskAssignees = await prisma.taskAssignee.findMany({
+      where: {
+        task: {
+          projectId: projectId
+        }
+      },
+      select: {
+        user: {
+          select: { id: true, name: true, role: true }
+        }
+      }
+    });
+    users.push(...taskAssignees.map(ta => ta.user));
+
     // Deduplicate
     const uniqueUsers = Array.from(new Map(users.map(u => [u.id, u])).values());
 

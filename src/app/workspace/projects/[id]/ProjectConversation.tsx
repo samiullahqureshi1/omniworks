@@ -33,7 +33,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   // Mentions state
   const [suggestions, setSuggestions] = useState<{ users: any[], tasks: any[] }>({ users: [], tasks: [] });
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [suggestionType, setSuggestionType] = useState<'user'|'task'|null>(null);
+  const [suggestionType, setSuggestionType] = useState<'user'|'task'|'both'|null>(null);
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentions, setMentions] = useState<string[]>([]);
   const [taskMentions, setTaskMentions] = useState<string[]>([]);
@@ -125,7 +125,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
     // Simple mention detection
     const lastWord = value.split(' ').pop() || '';
     if (lastWord.startsWith('@')) {
-      setSuggestionType('user');
+      setSuggestionType('both');
       setMentionQuery(lastWord.substring(1).toLowerCase());
       setShowSuggestions(true);
     } else if (lastWord.startsWith('#')) {
@@ -444,33 +444,52 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
       <div className="p-4 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800 relative">
         {showSuggestions && (
           <div className="absolute bottom-full mb-2 left-4 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl overflow-hidden z-50">
-            <div className="max-h-64 overflow-y-auto py-2">
-              {suggestionType === 'user' && filteredUsers.map(u => (
-                <div 
-                  key={u.id} 
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-\[#fbfaf7\] dark:hover:bg-slate-800 cursor-pointer"
-                  onClick={() => insertMention(u.id, u.name.replace(/\s+/g, ''), 'user')}
-                >
-                  <Avatar className="h-6 w-6"><AvatarFallback className="text-[10px]">{u.name.substring(0,2)}</AvatarFallback></Avatar>
-                  <div>
-                    <p className="text-sm font-medium">{u.name}</p>
-                    <p className="text-[10px] text-muted-foreground uppercase">{u.role}</p>
-                  </div>
+            <div className="max-h-64 overflow-y-auto py-2 custom-scrollbar">
+              {(suggestionType === 'both' || suggestionType === 'user') && (
+                <div>
+                  <div className="px-3 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Users</div>
+                  {filteredUsers.length === 0 ? (
+                    <div className="px-3 py-1.5 text-xs text-muted-foreground italic">No users found</div>
+                  ) : (
+                    filteredUsers.map(u => (
+                      <div 
+                        key={u.id} 
+                        className="flex items-center gap-3 px-4 py-2 hover:bg-[#fbfaf7] dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                        onClick={() => insertMention(u.id, u.name.replace(/\s+/g, ''), 'user')}
+                      >
+                        <Avatar className="h-6 w-6"><AvatarFallback className="text-[10px]">{u.name.substring(0,2)}</AvatarFallback></Avatar>
+                        <div>
+                          <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">{u.name}</p>
+                          <p className="text-[9px] text-muted-foreground uppercase">{u.role}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
-              ))}
-              {suggestionType === 'task' && filteredTasks.map(t => (
-                <div 
-                  key={t.id} 
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-\[#fbfaf7\] dark:hover:bg-slate-800 cursor-pointer"
-                  onClick={() => insertMention(t.id, t.title.replace(/\s+/g, ''), 'task')}
-                >
-                  <Hash className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">{t.title}</p>
-                    {t.status && <p className="text-[10px] text-muted-foreground">{t.status.name}</p>}
-                  </div>
+              )}
+
+              {(suggestionType === 'both' || suggestionType === 'task') && (
+                <div className={suggestionType === 'both' ? "border-t border-slate-100 dark:border-slate-800 mt-2 pt-2" : ""}>
+                  <div className="px-3 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Tasks</div>
+                  {filteredTasks.length === 0 ? (
+                    <div className="px-3 py-1.5 text-xs text-muted-foreground italic">No tasks found</div>
+                  ) : (
+                    filteredTasks.map(t => (
+                      <div 
+                        key={t.id} 
+                        className="flex items-center gap-3 px-4 py-2 hover:bg-[#fbfaf7] dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                        onClick={() => insertMention(t.id, t.title.replace(/\s+/g, ''), 'task')}
+                      >
+                        <Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{t.title}</p>
+                          {t.status && <p className="text-[9px] text-muted-foreground">{t.status.name}</p>}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
-              ))}
+              )}
             </div>
           </div>
         )}

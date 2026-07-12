@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
   const projectIds = searchParams.getAll('projectId');
   const taskIds = searchParams.getAll('taskId');
+  const groupIds = searchParams.getAll('groupId');
   
   let channels: string[] = [];
   
@@ -25,6 +26,9 @@ export async function GET(req: NextRequest) {
   }
   if (taskIds.length) {
     taskIds.forEach(t => channels.push(`task:${t}`));
+  }
+  if (groupIds.length) {
+    groupIds.forEach(g => channels.push(`group:${g}`));
   }
 
   const encoder = new TextEncoder();

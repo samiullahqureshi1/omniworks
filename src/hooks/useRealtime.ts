@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export function useRealtime(channels: { projectId?: string; taskId?: string }[]) {
+export function useRealtime(channels: { projectId?: string; taskId?: string; groupId?: string }[]) {
   const [lastEvent, setLastEvent] = useState<{ event: string, payload: any } | null>(null);
 
   useEffect(() => {
@@ -8,6 +8,7 @@ export function useRealtime(channels: { projectId?: string; taskId?: string }[])
     channels.forEach(ch => {
       if (ch.projectId) params.append('projectId', ch.projectId);
       if (ch.taskId) params.append('taskId', ch.taskId);
+      if (ch.groupId) params.append('groupId', ch.groupId);
     });
 
     const url = `/api/realtime?${params.toString()}`;

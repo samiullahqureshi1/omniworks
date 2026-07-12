@@ -38,6 +38,8 @@ model Organization {
   projectTemplates ProjectTemplate[]
   taskTemplates    TaskTemplate[]
   rules            Rule[]
+  chatGroups    ChatGroup[]
+  groupMessages GroupMessage[]
 }
 
 enum Role {
@@ -84,6 +86,10 @@ model User {
   messageMentions       MessageMention[]
   messageReadReceipts   MessageReadReceipt[]
   presence              UserPresence?
+  ownedChatGroups       ChatGroup[]              @relation("ChatGroupOwner")
+  chatGroupMemberships  ChatGroupMember[]
+  groupMessagesSent    GroupMessage[]           @relation("GroupMessageSender")
+  groupReadReceipts     GroupMessageReadReceipt[]
 
   @@unique([email, organizationId])
   @@index([organizationId])
@@ -565,5 +571,70 @@ model RuleLog {
 
   @@index([ruleId])
 }
+
+model ChatGroup {
+  id             String   @id @default(uuid())
+  name           String
+  description    String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ownerId        String
+  owner          User     @relation("ChatGroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  members        ChatGroupMember[]
+  messages       GroupMessage[]
+
+  @@index([organizationId])
+}
+
+model ChatGroupMember {
+  id        String    @id @default(uuid())
+  groupId   String
+  group     ChatGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime  @default(now())
+
+  @@unique([groupId, userId])
+}
+
+model GroupMessage {
+  id              String        @id @default(uuid())
+  organizationId  String
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  groupId         String
+  group           ChatGroup     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  senderId        String
+  sender          User          @relation("GroupMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  content         String
+  parentMessageId String?
+  parentMessage   GroupMessage? @relation("GroupMessageReplies", fields: [parentMessageId], references: [id], onDelete: Cascade)
+  replies         GroupMessage[] @relation("GroupMessageReplies")
+  fileUrl         String?
+  fileName        String?
+  fileSize        Float?
+  isEdited        Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  readReceipts    GroupMessageReadReceipt[]
+
+  @@index([groupId])
+  @@index([organizationId])
+}
+
+model GroupMessageReadReceipt {
+  id        String       @id @default(uuid())
+  messageId String
+  message   GroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt    DateTime     @default(now())
+
+  @@unique([messageId, userId])
+}
+
 
 

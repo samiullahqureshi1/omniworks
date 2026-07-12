@@ -32,7 +32,8 @@ import {
   Cpu,
   Workflow,
   Info,
-  Mail
+  Mail,
+  MessageSquare
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
@@ -80,6 +81,7 @@ export default function WorkspaceLayoutClient({
     if (path.startsWith('/workspace/projects')) return 'Projects';
     if (path.startsWith('/workspace/teamops')) return 'TeamOps Hub';
     if (path.startsWith('/workspace/tasks')) return 'Tasks';
+    if (path.startsWith('/workspace/conversations')) return 'Conversations';
     if (path.startsWith('/workspace/time')) return 'Time';
     if (path.startsWith('/workspace/timesheet')) return 'Timesheet';
     if (path.startsWith('/workspace/users')) return 'Users';
@@ -187,6 +189,7 @@ export default function WorkspaceLayoutClient({
     { name: 'Projects', href: '/workspace/projects', icon: FolderKanban, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'TeamOps Hub', href: '/workspace/teamops', icon: Workflow, exact: false, roles: ['OWNER', 'PM', 'MEMBER'] },
     { name: 'Tasks', href: '/workspace/tasks', icon: CheckSquare, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
+    { name: 'Conversations', href: '/workspace/conversations', icon: MessageSquare, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'Time', href: '/workspace/time', icon: Timer, exact: false, roles: ['OWNER', 'PM', 'MEMBER'] },
     { name: 'Timesheet', href: '/workspace/timesheet', icon: FileText, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'Users', href: '/workspace/users', icon: UsersIcon, exact: false, roles: ['OWNER'] },
@@ -198,7 +201,7 @@ export default function WorkspaceLayoutClient({
 
   const activeNavItems = allNavItems.filter(item => item.roles.includes(effectiveRole));
 
-  const mainMenuNavNames = ['Dashboard', 'Projects', 'TeamOps Hub', 'Tasks', 'Time', 'Timesheet', 'Users', 'Clients'];
+  const mainMenuNavNames = ['Dashboard', 'Projects', 'TeamOps Hub', 'Tasks', 'Conversations', 'Time', 'Timesheet', 'Users', 'Clients'];
   const otherNavNames = ['Rules', 'Reports', 'Settings'];
 
   const mainMenuNavItems = activeNavItems.filter(item => mainMenuNavNames.includes(item.name));
