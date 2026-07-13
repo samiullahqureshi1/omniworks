@@ -18,7 +18,7 @@ import {
 import { List as ListIcon2 } from 'lucide-react';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Edit, Trash2, Repeat, TrendingUp, Hourglass } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, Repeat, TrendingUp, Hourglass, ChevronRight } from 'lucide-react';
 import { deleteTaskAction, updateTaskAction, getTaskTemplatesAction, deleteTaskTemplateAction, createTaskStatusAction, updateTaskStatusAction, deleteTaskStatusAction } from '@/app/actions/tasks';
 import { getTaskHiddenColumnsAction, setTaskHiddenColumnsAction } from '@/app/actions/settings';
 import { toast } from 'sonner';
@@ -28,14 +28,16 @@ import StatusManagementModal from './StatusManagementModal';
 import { DndContext, DragOverlay, useDraggable, useDroppable, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { addDays, addWeeks, format } from 'date-fns';
+import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 
-// ─── TableCustomFieldCell ────────────────────────────────────────────────────
+// ─── Table Cell Components ────────────────────────────────────────────────────
 
-function TableCustomFieldCell({ task, col, setTasks, tasks }: any) {
+function TableCustomFieldCell({ task, col, setTasks, tasks, currentUser }: any) {
   const customFields = Array.isArray(task.customFields) ? task.customFields : [];
   const field = customFields.find((f: any) => f.name === col.name);
   const value = field ? field.value : undefined;
-
+  
   let options = field?.options;
   if (!options && Array.isArray(tasks)) {
     const otherTask = tasks.find((t: any) => {
@@ -48,7 +50,10 @@ function TableCustomFieldCell({ task, col, setTasks, tasks }: any) {
     }
   }
 
+  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && task.project?.projectManagerId === currentUser?.userId);
+
   const updateValue = (val: any) => {
+    if (!isEditable) return;
     setTasks((prev: any) => prev.map((t: any) => {
       if (t.id === task.id) {
         const tFields = Array.isArray(t.customFields) ? [...t.customFields] : [];
@@ -72,17 +77,17 @@ function TableCustomFieldCell({ task, col, setTasks, tasks }: any) {
 
   switch (typeStr) {
     case 'text area':
-      return <textarea value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} py-2 resize-none custom-scrollbar`} />;
+      return <textarea disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} py-2 resize-none custom-scrollbar min-h-[40px]`} />;
     case 'checkbox':
       return (
         <div className="flex items-center justify-center h-full min-h-[40px]">
-          <input type="checkbox" checked={!!value} onChange={e => updateValue(e.target.checked)} className="h-4 w-4 cursor-pointer" />
+          <input type="checkbox" disabled={!isEditable} checked={!!value} onChange={e => updateValue(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
         </div>
       );
     case 'dropdown':
       return (
-        <select value={value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer`}>
-          <option value="">—</option>
+        <select disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer min-h-[40px]`}>
+          <option value="" disabled>—</option>
           {(options || []).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
         </select>
       );
@@ -93,38 +98,526 @@ function TableCustomFieldCell({ task, col, setTasks, tasks }: any) {
           {currentValues.map((v: string) => (
             <span key={v} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300">
               {v}
-              <button type="button" onClick={() => updateValue(currentValues.filter((val: string) => val !== v))} className="text-slate-400 hover:text-red-500"><X size={10} /></button>
+              {isEditable && (
+                <button type="button" onClick={() => updateValue(currentValues.filter((val: string) => val !== v))} className="text-slate-400 hover:text-red-500"><X size={10} /></button>
+              )}
             </span>
           ))}
-          <select
-            value=""
-            onChange={e => {
-              if (e.target.value && !currentValues.includes(e.target.value)) {
-                updateValue([...currentValues, e.target.value]);
-              }
-            }}
-            className="bg-transparent text-[11px] text-slate-500 outline-none cursor-pointer"
-          >
-            <option value="">+ Add</option>
-            {(options || []).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
-          </select>
+          {isEditable && (
+            <select
+              value=""
+              onChange={e => {
+                if (e.target.value && !currentValues.includes(e.target.value)) {
+                  updateValue([...currentValues, e.target.value]);
+                }
+              }}
+              className="bg-transparent text-[11px] text-slate-500 outline-none cursor-pointer"
+            >
+              <option value="">+ Add</option>
+              {(options || []).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+          )}
         </div>
       );
     }
     case 'date':
-      return <input type="date" value={value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer`} />;
+      return <input type="date" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer min-h-[40px]`} />;
     case 'number':
-      return <input type="number" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+      return <input type="number" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
     case 'email':
-      return <input type="email" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+      return <input type="email" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
     case 'phone':
-      return <input type="tel" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+      return <input type="tel" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
     case 'website':
     case 'url':
-      return <input type="url" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+      return <input type="url" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
     default:
-      return <input type="text" value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+      return <input type="text" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
   }
+}
+
+function TableTaskNameCell({ task, setTasks, currentUser }: any) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [title, setTitle] = useState(task.title);
+  const [isPending, startTransition] = React.useTransition();
+  const router = useRouter();
+
+  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && task.project?.projectManagerId === currentUser?.userId);
+
+  const handleSave = () => {
+    if (!title.trim() || title === task.title) {
+      setIsEditing(false);
+      return;
+    }
+    
+    const prevTitle = task.title;
+    setTasks((prev: any) => prev.map((t: any) => t.id === task.id ? { ...t, title } : t));
+    setIsEditing(false);
+
+    updateTaskAction(task.id, { title })
+      .then((res) => {
+        if (res.error) {
+          toast.error(res.error);
+          setTasks((prev: any) => prev.map((t: any) => t.id === task.id ? { ...t, title: prevTitle } : t));
+        } else {
+          router.refresh();
+        }
+      })
+      .catch((err) => {
+        toast.error(err.message || "Failed to update title");
+        setTasks((prev: any) => prev.map((t: any) => t.id === task.id ? { ...t, title: prevTitle } : t));
+      });
+  };
+
+  if (isEditing && isEditable) {
+    return (
+      <input
+        type="text"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleSave();
+          if (e.key === 'Escape') {
+            setTitle(task.title);
+            setIsEditing(false);
+          }
+        }}
+        autoFocus
+        className="w-full h-full border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 bg-transparent text-[13px] font-medium text-slate-800 dark:text-slate-200 outline-none min-h-[40px]"
+      />
+    );
+  }
+
+  return (
+    <div 
+      className={`flex items-center h-full min-h-[40px] px-3 text-[13px] font-medium text-slate-800 dark:text-slate-200 ${isEditable ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5' : ''}`}
+      onDoubleClick={() => {
+        if (isEditable) setIsEditing(true);
+      }}
+    >
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {task.title}
+        {task.isRepeated && (
+          <Badge variant="outline" className="text-[9px] bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0 px-1 font-semibold flex items-center gap-0.5 align-middle">
+            <Repeat size={8} /> Recurring
+          </Badge>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TableTaskStatusCell({ task, taskStatuses, setTasks, currentUser }: any) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isPending, startTransition] = React.useTransition();
+  const router = useRouter();
+
+  const isAssigned = task.assignees?.some((a: any) => a.userId === currentUser?.userId);
+  const isEditable = currentUser?.role === 'OWNER' || 
+                     (currentUser?.role === 'MEMBER' && (task.project?.projectManagerId === currentUser?.userId || isAssigned));
+
+  const handleUpdateStatus = (newStatusId: string) => {
+    if (task.statusId === newStatusId) return;
+
+    const previousStatus = task.status;
+    const previousStatusId = task.statusId;
+    const targetStatus = taskStatuses.find((s: any) => s.id === newStatusId);
+    
+    setTasks((prev: any) => prev.map((t: any) => 
+      t.id === task.id ? { ...t, statusId: newStatusId, status: targetStatus } : t
+    ));
+
+    updateTaskAction(task.id, { statusId: newStatusId })
+      .then((res) => {
+        if (res.error) {
+          toast.error(res.error);
+          setTasks((prev: any) => prev.map((t: any) => 
+            t.id === task.id ? { ...t, statusId: previousStatusId, status: previousStatus } : t
+          ));
+        } else {
+          router.refresh();
+        }
+      })
+      .catch((err) => {
+        toast.error(err.message || "Failed to update status");
+        setTasks((prev: any) => prev.map((t: any) => 
+          t.id === task.id ? { ...t, statusId: previousStatusId, status: previousStatus } : t
+        ));
+      });
+  };
+
+  if (!isEditable) {
+    return (
+      <div className="flex items-center px-3 h-full min-h-[40px]">
+        {task.status ? (
+          <Badge variant="outline" style={{ borderColor: task.status.color, color: task.status.color, backgroundColor: `${task.status.color}10` }}>
+            {task.status.name}
+          </Badge>
+        ) : (
+          <Badge variant="outline">No Status</Badge>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center justify-between w-full h-full min-h-[40px] px-3 hover:bg-slate-50 dark:hover:bg-white/5 outline-none text-left">
+          {task.status ? (
+            <Badge variant="outline" style={{ borderColor: task.status.color, color: task.status.color, backgroundColor: `${task.status.color}10` }}>
+              {task.status.name}
+            </Badge>
+          ) : (
+            <Badge variant="outline">No Status</Badge>
+          )}
+          <ChevronDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-48 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1 z-50">
+        {taskStatuses.map((s: any) => (
+          <DropdownMenuItem
+            key={s.id}
+            onClick={() => handleUpdateStatus(s.id)}
+            className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs font-semibold hover:bg-muted focus:bg-muted flex items-center gap-2"
+          >
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+            {s.name}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function TableTaskPriorityCell({ task, setTasks, currentUser }: any) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isPending, startTransition] = React.useTransition();
+  const router = useRouter();
+
+  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && task.project?.projectManagerId === currentUser?.userId);
+
+  const priorities = [
+    { value: "CRITICAL", label: "Urgent", color: "text-red-500", bg: "bg-red-50 dark:bg-red-950/20" },
+    { value: "HIGH", label: "High", color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-950/20" },
+    { value: "MEDIUM", label: "Normal", color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-950/20" },
+    { value: "LOW", label: "Low", color: "text-slate-400", bg: "bg-slate-50 dark:bg-slate-900/20" },
+  ];
+
+  const handlePrioritySelect = (newPriority: string) => {
+    if (task.priority === newPriority) return;
+    
+    const previousPriority = task.priority;
+    setTasks((prev: any) => prev.map((t: any) => 
+      t.id === task.id ? { ...t, priority: newPriority } : t
+    ));
+
+    updateTaskAction(task.id, { priority: newPriority as any })
+      .then((res) => {
+        if (res.error) {
+          toast.error(res.error);
+          setTasks((prev: any) => prev.map((t: any) => 
+            t.id === task.id ? { ...t, priority: previousPriority } : t
+          ));
+        } else {
+          router.refresh();
+        }
+      })
+      .catch((err) => {
+        toast.error(err.message || "Failed to update priority");
+        setTasks((prev: any) => prev.map((t: any) => 
+          t.id === task.id ? { ...t, priority: previousPriority } : t
+        ));
+      });
+  };
+
+  const getPriorityInfo = (val: string) => {
+    return priorities.find(p => p.value === val) || { label: val, color: "text-slate-500", bg: "bg-slate-100" };
+  };
+
+  const activeP = getPriorityInfo(task.priority);
+
+  if (!isEditable) {
+    return (
+      <div className="flex items-center px-3 h-full min-h-[40px]">
+        <Badge variant="outline" className={`${activeP.color} ${activeP.bg} border-transparent font-semibold`}>
+          {activeP.label}
+        </Badge>
+      </div>
+    );
+  }
+
+  return (
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center justify-between w-full h-full min-h-[40px] px-3 hover:bg-slate-50 dark:hover:bg-white/5 outline-none text-left">
+          <Badge variant="outline" className={`${activeP.color} ${activeP.bg} border-transparent font-semibold`}>
+            {activeP.label}
+          </Badge>
+          <ChevronDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-36 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1 z-50">
+        {priorities.map((p) => (
+          <DropdownMenuItem
+            key={p.value}
+            onClick={() => handlePrioritySelect(p.value)}
+            className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs font-semibold hover:bg-muted focus:bg-muted flex items-center gap-2"
+          >
+            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${p.color} ${p.bg}`}>
+              {p.label}
+            </span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function TableTaskDueDateCell({ task, setTasks, currentUser }: any) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isPending, startTransition] = React.useTransition();
+  const router = useRouter();
+
+  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && task.project?.projectManagerId === currentUser?.userId);
+
+  const handleDateSelect = (date: Date | undefined) => {
+    if (!date) return;
+    
+    const previousDate = task.dueDate;
+    const newDateStr = date.toISOString();
+    
+    setTasks((prev: any) => prev.map((t: any) => 
+      t.id === task.id ? { ...t, dueDate: newDateStr } : t
+    ));
+    setIsOpen(false);
+    
+    updateTaskAction(task.id, { dueDate: newDateStr })
+      .then((res) => {
+        if (res.error) {
+          toast.error(res.error);
+          setTasks((prev: any) => prev.map((t: any) => 
+            t.id === task.id ? { ...t, dueDate: previousDate } : t
+          ));
+        } else {
+          toast.success("Due date updated");
+          router.refresh();
+        }
+      })
+      .catch((err) => {
+        toast.error(err.message || "Failed to update due date");
+        setTasks((prev: any) => prev.map((t: any) => 
+          t.id === task.id ? { ...t, dueDate: previousDate } : t
+        ));
+      });
+  };
+
+  const quickDates = [
+    { label: "Today", date: new Date() },
+    { label: "Tomorrow", date: addDays(new Date(), 1) },
+    { label: "Next week", date: addWeeks(new Date(), 1) },
+    { label: "Next weekend", date: addDays(new Date(), 6 - new Date().getDay() + 7) },
+    { label: "2 weeks", date: addWeeks(new Date(), 2) },
+    { label: "4 weeks", date: addWeeks(new Date(), 4) },
+    { label: "8 weeks", date: addWeeks(new Date(), 8) },
+  ];
+
+  if (!isEditable) {
+    return (
+      <div className="flex items-center gap-1.5 w-full h-full bg-transparent text-slate-700 dark:text-slate-300 font-medium px-4 py-3 text-[13px] tracking-wide text-left select-none">
+        {task.dueDate ? (
+          <span className={new Date(task.dueDate) < new Date() ? 'text-red-500 font-semibold' : ''}>
+            {format(new Date(task.dueDate), 'MMM d, yyyy')}
+          </span>
+        ) : (
+          <span className="text-slate-400 font-normal">—</span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center gap-1.5 w-full h-full bg-transparent hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300 font-medium px-4 py-3 text-[13px] tracking-wide transition-colors outline-none text-left">
+          {task.dueDate ? (
+            <span className={new Date(task.dueDate) < new Date() ? 'text-red-500 font-semibold' : ''}>
+              {format(new Date(task.dueDate), 'MMM d, yyyy')}
+            </span>
+          ) : (
+            <span className="text-slate-400 font-normal">Set date</span>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-auto p-0 flex flex-row bg-white dark:bg-[#1C1C1C] rounded-xl shadow-lg border border-slate-200 dark:border-white/10" onInteractOutside={() => setIsOpen(false)}>
+        <div className="flex flex-col border-r border-slate-100 dark:border-white/5 w-[140px] py-2">
+          {quickDates.map((qd, i) => (
+            <button
+              key={i}
+              onClick={(e) => { e.preventDefault(); handleDateSelect(qd.date); }}
+              className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left group"
+            >
+              <span className="text-slate-700 dark:text-slate-300">{qd.label}</span>
+              <span className="text-[10px] text-slate-400 group-hover:text-slate-500">{format(qd.date, 'EEE')}</span>
+            </button>
+          ))}
+          <div className="mt-2 pt-2 border-t border-slate-100 dark:border-white/5">
+             <button 
+               onClick={(e) => {
+                 e.preventDefault();
+                 const previousDate = task.dueDate;
+                 setTasks((prev: any) => prev.map((t: any) => t.id === task.id ? { ...t, dueDate: null } : t));
+                 setIsOpen(false);
+
+                 updateTaskAction(task.id, { dueDate: "" })
+                   .then((res) => {
+                     if (res.error) {
+                       toast.error(res.error);
+                       setTasks((prev: any) => prev.map((t: any) => t.id === task.id ? { ...t, dueDate: previousDate } : t));
+                     } else {
+                       toast.success("Due date cleared");
+                       router.refresh();
+                     }
+                   })
+                   .catch((err) => {
+                     toast.error(err.message || "Failed to clear due date");
+                     setTasks((prev: any) => prev.map((t: any) => t.id === task.id ? { ...t, dueDate: previousDate } : t));
+                   });
+               }}
+               className="w-full flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-red-500"
+             >
+               Clear date
+             </button>
+          </div>
+        </div>
+        <div className="p-3">
+          <CalendarPicker
+            mode="single"
+            selected={task.dueDate ? new Date(task.dueDate) : undefined}
+            onSelect={handleDateSelect}
+          />
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function TableTaskAssigneeCell({ task, users, setTasks, currentUser }: any) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isPending, startTransition] = React.useTransition();
+  const router = useRouter();
+
+  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && task.project?.projectManagerId === currentUser?.userId);
+  const assignedUserIds = task.assignees?.map((a: any) => a.userId) || [];
+
+  // Filter out users who have CLIENT role
+  const assignableUsers = users.filter((u: any) => u.role !== 'CLIENT');
+
+  const handleToggleAssignee = (userId: string) => {
+    let newAssigneeIds = [...assignedUserIds];
+    if (newAssigneeIds.includes(userId)) {
+      newAssigneeIds = newAssigneeIds.filter(id => id !== userId);
+    } else {
+      newAssigneeIds.push(userId);
+    }
+
+    const previousAssignees = task.assignees;
+    
+    // Optimistically construct the new task.assignees array
+    const newAssignees = newAssigneeIds.map(id => {
+      const foundUser = users.find((u: any) => u.id === id);
+      return {
+        userId: id,
+        taskId: task.id,
+        user: { id, name: foundUser ? foundUser.name : '' }
+      };
+    });
+
+    setTasks((prev: any) => prev.map((t: any) => 
+      t.id === task.id ? { ...t, assignees: newAssignees } : t
+    ));
+
+    updateTaskAction(task.id, { assigneeIds: newAssigneeIds })
+      .then((res) => {
+        if (res.error) {
+          toast.error(res.error);
+          setTasks((prev: any) => prev.map((t: any) => 
+            t.id === task.id ? { ...t, assignees: previousAssignees } : t
+          ));
+        } else {
+          router.refresh();
+        }
+      })
+      .catch((err) => {
+        toast.error(err.message || "Failed to update assignees");
+        setTasks((prev: any) => prev.map((t: any) => 
+          t.id === task.id ? { ...t, assignees: previousAssignees } : t
+        ));
+      });
+  };
+
+  if (!isEditable) {
+    return (
+      <div className="flex items-center gap-1 px-3 h-full min-h-[40px] select-none">
+        <div className="flex -space-x-2 overflow-hidden">
+          {task.assignees?.map((a: any) => (
+            <div key={a.userId} className="w-7 h-7 rounded-full bg-primary/10 border-2 border-background flex items-center justify-center text-[10px] font-bold text-primary shrink-0" title={a.user.name}>
+              {a.user.name.charAt(0).toUpperCase()}
+            </div>
+          ))}
+          {(!task.assignees || task.assignees.length === 0) && (
+            <span className="text-slate-400 font-normal text-xs">—</span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+      <DropdownMenuTrigger asChild>
+        <button className="flex items-center justify-between w-full h-full min-h-[40px] px-3 hover:bg-slate-50 dark:hover:bg-white/5 outline-none text-left">
+          <div className="flex -space-x-2 overflow-hidden">
+            {task.assignees?.map((a: any) => (
+              <div key={a.userId} className="w-7 h-7 rounded-full bg-primary/10 border-2 border-background flex items-center justify-center text-[10px] font-bold text-primary shrink-0 animate-in fade-in zoom-in duration-200" title={a.user.name}>
+                {a.user.name.charAt(0).toUpperCase()}
+              </div>
+            ))}
+            {(!task.assignees || task.assignees.length === 0) && (
+              <span className="text-slate-400 font-normal text-xs text-left">Unassigned</span>
+            )}
+          </div>
+          <ChevronDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1.5 shrink-0" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-slate-200 dark:border-white/10 p-1 z-50 max-h-60 overflow-y-auto custom-scrollbar">
+        {assignableUsers.map((u: any) => {
+          const isAssigned = assignedUserIds.includes(u.id);
+          return (
+            <DropdownMenuItem
+              key={u.id}
+              onClick={(e) => {
+                e.preventDefault(); // Keep menu open for multiple assignments
+                handleToggleAssignee(u.id);
+              }}
+              className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs font-semibold hover:bg-muted focus:bg-muted flex items-center justify-between gap-2"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-[9px] font-bold text-primary shrink-0">
+                  {u.name.charAt(0).toUpperCase()}
+                </div>
+                <span className="truncate">{u.name}</span>
+              </div>
+              {isAssigned && (
+                <Check size={14} className="text-primary shrink-0" />
+              )}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 // ─── Kanban helpers ───────────────────────────────────────────────────────────
@@ -939,7 +1432,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
               className={`h-8 px-3 rounded-lg text-xs font-medium transition-all ${viewMode === 'table' ? 'bg-white dark:bg-[#252525] shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`} 
               onClick={() => handleSetViewMode('table')}
             >
-              <List className="w-3.5 h-3.5 mr-1.5" /> List
+              <LayoutGrid className="w-3.5 h-3.5 mr-1.5" /> Table
             </Button>
             <Button 
               variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} 
@@ -958,12 +1451,14 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow>
-                <TableHead>Task</TableHead>
-                <TableHead>Project</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Priority</TableHead>
-                <TableHead>Assignees</TableHead>
-                <TableHead>Hours</TableHead>
+                <TableHead className="w-10 text-center font-semibold text-slate-700 dark:text-slate-300">#</TableHead>
+                <TableHead className="border-l border-slate-100 dark:border-white/5 font-semibold text-slate-700 dark:text-slate-300">Task</TableHead>
+                <TableHead className="border-l border-slate-100 dark:border-white/5 font-semibold text-slate-700 dark:text-slate-300">Project</TableHead>
+                <TableHead className="border-l border-slate-100 dark:border-white/5 font-semibold text-slate-700 dark:text-slate-300">Status</TableHead>
+                <TableHead className="border-l border-slate-100 dark:border-white/5 font-semibold text-slate-700 dark:text-slate-300">Priority</TableHead>
+                <TableHead className="border-l border-slate-100 dark:border-white/5 font-semibold text-slate-700 dark:text-slate-300">Due Date</TableHead>
+                <TableHead className="border-l border-slate-100 dark:border-white/5 font-semibold text-slate-700 dark:text-slate-300">Assignees</TableHead>
+                <TableHead className="border-l border-slate-100 dark:border-white/5 font-semibold text-slate-700 dark:text-slate-300">Hours</TableHead>
                 {customColumns.map(col => (
                   <TableHead key={col.id} className="w-[180px] text-slate-500 font-medium text-[13px] border-l border-slate-100 dark:border-white/5">
                     <div className="flex items-center justify-between group/col">
@@ -1002,53 +1497,37 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
             <TableBody>
               {filteredTasks.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7 + customColumns.length} className="text-center h-24 text-muted-foreground">
+                  <TableCell colSpan={9 + customColumns.length} className="text-center h-24 text-muted-foreground">
                     No tasks found matching your filters.
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredTasks.map((task: any) => (
-                  <TableRow key={task.id} className="group hover:bg-muted/30">
-                    <TableCell>
-                      <div className="font-medium flex items-center gap-1.5 flex-wrap">
-                        {task.title}
-                        {task.isRepeated && (
-                          <Badge variant="outline" className="text-[9px] bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0 px-1 font-semibold flex items-center gap-0.5 align-middle">
-                            <Repeat size={8} /> Recurring
-                          </Badge>
-                        )}
-                      </div>
-                      {task.dueDate && <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1"><Calendar size={12} /> {formatDate(task.dueDate)}</div>}
+                filteredTasks.map((task: any, index: number) => (
+                  <TableRow key={task.id} className="group hover:bg-slate-50/55 dark:hover:bg-white/5 transition-colors border-b border-slate-100 dark:border-white/5 bg-white dark:bg-transparent">
+                    <TableCell className="text-center font-medium text-slate-400 text-xs px-4">
+                      {index + 1}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="border-l border-slate-100 dark:border-white/5 p-0">
+                      <TableTaskNameCell task={task} setTasks={setTasks} currentUser={currentUser} />
+                    </TableCell>
+                    <TableCell className="border-l border-slate-100 dark:border-white/5">
                       <div className="text-sm font-medium hover:underline cursor-pointer" onClick={() => router.push(`/workspace/projects/${task.projectId}`)}>
                         {task.project.name}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      {task.status ? (
-                        <Badge variant="outline" style={{ borderColor: task.status.color, color: task.status.color, backgroundColor: `${task.status.color}10` }}>
-                          {task.status.name}
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline">No Status</Badge>
-                      )}
+                    <TableCell className="border-l border-slate-100 dark:border-white/5 p-0">
+                      <TableTaskStatusCell task={task} taskStatuses={taskStatuses} setTasks={setTasks} currentUser={currentUser} />
                     </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className={`${getPriorityColor(task.priority)} border-transparent`}>
-                        {task.priority}
-                      </Badge>
+                    <TableCell className="border-l border-slate-100 dark:border-white/5 p-0">
+                      <TableTaskPriorityCell task={task} setTasks={setTasks} currentUser={currentUser} />
                     </TableCell>
-                    <TableCell>
-                      <div className="flex -space-x-2">
-                        {task.assignees.map((a: any) => (
-                          <div key={a.userId} className="w-7 h-7 rounded-full bg-primary/10 border-2 border-background flex items-center justify-center text-[10px] font-bold text-primary" title={a.user.name}>
-                            {a.user.name.charAt(0).toUpperCase()}
-                          </div>
-                        ))}
-                      </div>
+                    <TableCell className="border-l border-slate-100 dark:border-white/5 p-0 text-[13px] font-medium text-slate-700 dark:text-slate-300">
+                      <TableTaskDueDateCell task={task} setTasks={setTasks} currentUser={currentUser} />
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="border-l border-slate-100 dark:border-white/5 p-0">
+                      <TableTaskAssigneeCell task={task} users={users} setTasks={setTasks} currentUser={currentUser} />
+                    </TableCell>
+                    <TableCell className="border-l border-slate-100 dark:border-white/5">
                       <div className="text-xs">
                         <span className="font-medium text-emerald-600">{formatHours(task.trackedHours)}</span>
                         <span className="text-muted-foreground"> / {task.allocatedHours ? formatHours(task.allocatedHours) : '-'}</span>
@@ -1056,14 +1535,14 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                     </TableCell>
                     {customColumns.map(col => (
                       <TableCell key={col.id} className="border-l border-slate-100 dark:border-white/5 p-0 align-top">
-                        <TableCustomFieldCell task={task} col={col} setTasks={setTasks} tasks={tasks} />
+                        <TableCustomFieldCell task={task} col={col} setTasks={setTasks} tasks={tasks} currentUser={currentUser} />
                       </TableCell>
                     ))}
-                    <TableCell>
+                    <TableCell className="border-l border-slate-100 dark:border-white/5 text-center">
                       {currentUser.role !== 'CLIENT' && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 mx-auto">
                               <MoreHorizontal className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
