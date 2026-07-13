@@ -52,6 +52,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           member: { select: { id: true, name: true } },
           task: { select: { id: true, title: true } }
         }
+      },
+      activeTimers: {
+        include: {
+          member: { select: { id: true, name: true } },
+          task: { select: { id: true, title: true } }
+        }
       }
     },
   });

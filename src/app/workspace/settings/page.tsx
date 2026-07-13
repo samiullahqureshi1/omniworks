@@ -30,7 +30,7 @@ export default async function SettingsPage() {
         <p className="text-xs text-slate-500 dark:text-slate-400">Manage your workspace configuration and personal security.</p>
       </div>
 
-      <SettingsTabsClient>
+      <SettingsTabsClient userRole={sessionUser.role}>
         <SecurityFormsClient initialTwoFactorEnabled={user.twoFactorEnabled} />
       </SettingsTabsClient>
     </div>

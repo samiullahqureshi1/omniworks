@@ -41,11 +41,16 @@ export async function getDashboardDataAction() {
    
     // 1. Owner Dashboard View
     if (role === "OWNER") {
-      const [totalProjects, totalUsers, totalHoursObj, recentLogs, recentTasks, pendingPastDueCount, totalCompleteTasks, totalPendingTasks] =
+      const [totalProjects, totalUsers, totalHoursObj, activeTimersHoursObj, recentLogs, recentTasks, pendingPastDueCount, totalCompleteTasks, totalPendingTasks] =
         await Promise.all([
           prisma.project.count({ where: { organizationId } }),
           prisma.user.count({ where: { organizationId } }),
           prisma.timeEntry.aggregate({
+            where: { organizationId },
+            _sum: { duration: true },
+          }),
+          // Include time currently accumulating on running (not-yet-stopped) timers
+          prisma.activeTimer.aggregate({
             where: { organizationId },
             _sum: { activeWorkedDuration: true },
           }),
@@ -104,7 +109,7 @@ export async function getDashboardDataAction() {
         metrics: {
           totalProjects,
           totalUsers,
-          totalHours: (totalHoursObj._sum.activeWorkedDuration || 0) / 3600,
+          totalHours: (totalHoursObj._sum.duration || 0) + (activeTimersHoursObj._sum.activeWorkedDuration || 0) / 3600,
           projectStatusCounts,
           recentLogs,
           recentTasks,
@@ -121,13 +126,14 @@ export async function getDashboardDataAction() {
       const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
-      const [assignedProjects, myHoursObj, myHoursLastWeekObj, myTasks, recentLogs] =
+      const [assignedProjects, myHoursObj, myHoursLastWeekObj, myActiveTimer, myTasks, recentLogs] =
         await Promise.all([
           prisma.project.findMany({
             where: {
               organizationId,
               OR: [
                 { assignees: { some: { userId } } },
+                { tasks: { some: { assignees: { some: { userId } } } } },
                 { projectManagerId: userId },
               ],
             },
@@ -137,12 +143,14 @@ export async function getDashboardDataAction() {
           }),
           prisma.timeEntry.aggregate({
             where: { memberId: userId, organizationId, createdAt: { gte: oneWeekAgo } },
-            _sum: { activeWorkedDuration: true },
+            _sum: { duration: true },
           }),
           prisma.timeEntry.aggregate({
             where: { memberId: userId, organizationId, createdAt: { gte: twoWeeksAgo, lt: oneWeekAgo } },
-            _sum: { activeWorkedDuration: true },
+            _sum: { duration: true },
           }),
+          // Time accumulating on a currently running (not-yet-stopped) timer
+          prisma.activeTimer.findUnique({ where: { memberId: userId } }),
           prisma.task.findMany({
             where: {
               project: { organizationId },
@@ -196,8 +204,12 @@ export async function getDashboardDataAction() {
         (p: any) => p.projectManagerId === userId,
       );
 
-      const hoursThisWeek = (myHoursObj._sum.activeWorkedDuration || 0) / 3600;
-      const hoursLastWeek = (myHoursLastWeekObj._sum.activeWorkedDuration || 0) / 3600;
+      // Only fold the live timer into "this week" if it was actually started this week
+      const activeTimerSeconds = (myActiveTimer && myActiveTimer.startTime >= oneWeekAgo)
+        ? (myActiveTimer.activeWorkedDuration || 0)
+        : 0;
+      const hoursThisWeek = (myHoursObj._sum.duration || 0) + activeTimerSeconds / 3600;
+      const hoursLastWeek = myHoursLastWeekObj._sum.duration || 0;
 
       // Mock productivity score based on task completion and hours
       const productivityScore = Math.min(100, Math.round(50 + (tasksCompletedThisWeek * 2) + (hoursThisWeek * 0.5)));
@@ -253,11 +265,24 @@ export async function getDashboardDataAction() {
         },
       });
 
+      // Also include time on currently running (not-yet-stopped) timers
+      const activeTimersForClient = await prisma.activeTimer.findMany({
+        where: {
+          projectId: { in: projectIds },
+          organizationId,
+        },
+      });
+
       let totalHours = 0;
       // trackingLogs.forEach((log) => {
-      trackingLogs.forEach((log: TimeLog) => {
-        if (log.activeWorkedDuration) {
-          totalHours += log.activeWorkedDuration / 3600;
+      trackingLogs.forEach((log: any) => {
+        if (log.duration) {
+          totalHours += log.duration;
+        }
+      });
+      activeTimersForClient.forEach((t) => {
+        if (t.activeWorkedDuration) {
+          totalHours += t.activeWorkedDuration / 3600;
         }
       });
 
@@ -358,8 +383,8 @@ export async function getReportsDataAction(filter: {
     let totalHours = 0;
 
     // logs.forEach((log) => {
-    logs.forEach((log: TimeLog) => {
-      const hours = (log.activeWorkedDuration || 0) / 3600;
+    logs.forEach((log: any) => {
+      const hours = log.duration || 0;
 
       const pName = log.project?.name || "Unknown";
       const uName = log.member?.name || "Unknown";
@@ -377,10 +402,8 @@ export async function getReportsDataAction(filter: {
     return {
       success: true,
       // logs: logs.map((l) => {
-      logs: logs.map((l: TimeLog) => {
-        const h = l.activeWorkedDuration
-          ? Math.round((l.activeWorkedDuration / 3600) * 100) / 100
-          : 0;
+      logs: logs.map((l: any) => {
+        const h = l.duration || 0;
         return {
           id: l.id,
           userName: l.member?.name || "Unknown",
@@ -390,7 +413,7 @@ export async function getReportsDataAction(filter: {
           startTime: l.startTime,
           endTime: l.endTime,
           description: l.notes || "",
-          hours: h,
+          hours: Math.round(h * 100) / 100,
         };
       }),
       projectSummary,

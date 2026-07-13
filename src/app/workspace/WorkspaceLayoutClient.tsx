@@ -17,7 +17,6 @@ import {
   LogOut,
   Command,
   CheckSquare,
-  FileText,
   Moon,
   Sun,
   ChevronDown,
@@ -30,6 +29,7 @@ import {
   Trash2,
   Plus,
   Cpu,
+  Bot,
   Workflow,
   Info,
   Mail,
@@ -103,13 +103,44 @@ export default function WorkspaceLayoutClient({
       if (lastEvent.event === 'message_sent' && lastEvent.payload.message) {
         const msg = lastEvent.payload.message;
         if (msg.senderId !== user.userId) {
-          toast.info(`New message from ${msg.sender?.name || 'someone'}`, {
-            description: msg.content.substring(0, 50) + (msg.content.length > 50 ? '...' : ''),
+          const senderName = msg.sender?.name || 'someone';
+          const title = `New message from ${senderName}`;
+          const body = msg.content
+            ? msg.content.substring(0, 80) + (msg.content.length > 80 ? '...' : '')
+            : (msg.fileName ? `Sent a file: ${msg.fileName}` : 'Sent a new message');
+
+          const targetUrl = msg.groupId
+            ? '/workspace/conversations'
+            : msg.taskId
+              ? `/workspace/tasks?taskId=${msg.taskId}`
+              : `/workspace/projects/${msg.projectId}?tab=conversation`;
+
+          // In-app toast
+          toast.info(title, {
+            description: body,
             action: {
               label: 'View',
-              onClick: () => router.push(`/workspace/projects/${msg.projectId}?tab=conversation`)
+              onClick: () => router.push(targetUrl)
             }
           });
+
+          // Native desktop / OS notification (like Slack, Teams, etc.)
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            try {
+              const desktopNotification = new Notification(title, {
+                body,
+                icon: '/favicon.ico',
+                tag: msg.id || `${msg.groupId || msg.projectId}-${Date.now()}`,
+              });
+              desktopNotification.onclick = () => {
+                window.focus();
+                router.push(targetUrl);
+                desktopNotification.close();
+              };
+            } catch (err) {
+              console.error('Failed to show desktop notification', err);
+            }
+          }
         }
       }
     }
@@ -117,6 +148,13 @@ export default function WorkspaceLayoutClient({
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  // Ask for permission to show native desktop notifications once, on load
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
   }, []);
 
   const handleLogout = async () => {
@@ -191,7 +229,6 @@ export default function WorkspaceLayoutClient({
     { name: 'Tasks', href: '/workspace/tasks', icon: CheckSquare, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'Conversations', href: '/workspace/conversations', icon: MessageSquare, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'Time', href: '/workspace/time', icon: Timer, exact: false, roles: ['OWNER', 'PM', 'MEMBER'] },
-    { name: 'Timesheet', href: '/workspace/timesheet', icon: FileText, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
     { name: 'Users', href: '/workspace/users', icon: UsersIcon, exact: false, roles: ['OWNER'] },
     { name: 'Clients', href: '/workspace/clients', icon: Briefcase, exact: false, roles: ['OWNER'] },
     { name: 'Rules', href: '/workspace/rules', icon: Cpu, exact: false, roles: ['OWNER'] },
@@ -201,7 +238,7 @@ export default function WorkspaceLayoutClient({
 
   const activeNavItems = allNavItems.filter(item => item.roles.includes(effectiveRole));
 
-  const mainMenuNavNames = ['Dashboard', 'Projects', 'TeamOps Hub', 'Tasks', 'Conversations', 'Time', 'Timesheet', 'Users', 'Clients'];
+  const mainMenuNavNames = ['Dashboard', 'Projects', 'TeamOps Hub', 'Tasks', 'Conversations', 'Time', 'Users', 'Clients'];
   const otherNavNames = ['Rules', 'Reports', 'Settings'];
 
   const mainMenuNavItems = activeNavItems.filter(item => mainMenuNavNames.includes(item.name));
@@ -541,12 +578,18 @@ export default function WorkspaceLayoutClient({
                  </div>
 
                  {/* 2. Deploy Agent Button with Text */}
-                 <Link href="/workspace/rules">
-                   <button className="flex items-center gap-2 px-3.5 h-10 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:text-slate-200 transition-all font-bold text-xs">
-                     <Cpu size={15} className="text-primary" />
+                 <div className="relative inline-flex items-center">
+                   <button
+                     disabled
+                     className="flex items-center gap-2 px-3.5 h-10 bg-white dark:bg-[#1f1f1f] rounded-full shadow-sm border border-black/5 dark:border-white/10 text-slate-700 dark:text-slate-200 transition-all font-bold text-xs opacity-60 cursor-not-allowed"
+                   >
+                     <Bot size={15} className="text-primary" />
                      <span>Deploy Agent</span>
                    </button>
-                 </Link>
+                   <span className="absolute -top-2 -right-2 bg-[#f97316] text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm whitespace-nowrap">
+                     Coming Soon
+                   </span>
+                 </div>
 
                  {/* 3. Profile Dropdown Button showing Image and Name */}
                  <DropdownMenu>

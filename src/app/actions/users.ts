@@ -72,11 +72,11 @@ export async function addUserAction(formData: FormData) {
     const passwordHash = await hashPassword(rawPassword);
 
     // -------------------------------------------------------
-    // For CLIENT role: auto-create a personal org with OWNER
+    // For CLIENT/MEMBER roles: auto-create a personal org with OWNER
     // role first (so it becomes the default on login), then
-    // add them to the current (shared) org as CLIENT.
+    // add them to the current (shared) org with their designated role.
     // -------------------------------------------------------
-    if (role === 'CLIENT') {
+    if (role === 'CLIENT' || role === 'MEMBER') {
       // 1. Create personal organization
       const personalOrgName = name.trim().split(' ')[0] + "'s Workspace";
       const personalSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now().toString().slice(-4);
@@ -117,19 +117,19 @@ export async function addUserAction(formData: FormData) {
         data: { ownerUserId: ownerUser.id },
       });
 
-      // 3. Create User record with CLIENT in the current (shared) org
+      // 3. Create User record in the current (shared) org
       await prisma.user.create({
         data: {
           name,
           email,
           passwordHash,
-          role: 'CLIENT',
+          role: role,
           status: 'ACTIVE',
           organizationId: session.organizationId,
         },
       });
     } else {
-      // Non-CLIENT: add directly to current org
+      // Non-CLIENT/MEMBER: add directly to current org
       await prisma.user.create({
         data: {
           name,

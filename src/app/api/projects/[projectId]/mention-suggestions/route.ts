@@ -64,8 +64,10 @@ export async function GET(request: Request, context: { params: Promise<{ project
     });
     users.push(...taskAssignees.map(ta => ta.user));
 
-    // Deduplicate
-    const uniqueUsers = Array.from(new Map(users.map(u => [u.id, u])).values());
+    // Deduplicate, and don't suggest the current user (you can't mention yourself)
+    const uniqueUsersMap = new Map(users.map(u => [u.id, u]));
+    uniqueUsersMap.delete(session.userId);
+    const uniqueUsers = Array.from(uniqueUsersMap.values());
 
     // Fetch tasks for the project
     const tasks = await prisma.task.findMany({

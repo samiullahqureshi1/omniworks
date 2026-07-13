@@ -418,11 +418,9 @@ export async function updateProjectAction(
 
     if (!project) return { error: 'Project not found.' };
 
-    // Check permissions: OWNER has full access, CLIENT can edit their assigned projects, MEMBER can edit their managed projects
+    // Check permissions: OWNER has full access, MEMBER can edit their managed projects, CLIENT cannot edit projects
     if (session.role === 'CLIENT') {
-      if (project.clientId !== session.userId) {
-        return { error: 'Unauthorized: Access denied.' };
-      }
+      return { error: 'Unauthorized: Clients cannot edit projects.' };
     } else if (session.role === 'MEMBER') {
       if (project.projectManagerId !== session.userId) {
         return { error: 'Unauthorized: Access denied.' };
@@ -523,8 +521,8 @@ export async function updateProjectStatusAction(projectId: string, statusId: str
 
     if (!project) return { error: 'Project not found.' };
 
-    if (session.role === 'CLIENT' && project.clientId !== session.userId) {
-      return { error: 'Unauthorized: Access denied.' };
+    if (session.role === 'CLIENT') {
+      return { error: 'Unauthorized: Clients cannot update project status.' };
     }
     if (session.role === 'MEMBER' && project.projectManagerId !== session.userId) {
       return { error: 'Unauthorized: Access denied.' };
@@ -695,8 +693,8 @@ export async function updateProjectDueDateAction(projectId: string, endDate: str
     });
     if (!project) return { error: "Project not found or access denied." };
 
-    if (session.role === 'CLIENT' && project.clientId !== session.userId) {
-      return { error: 'Unauthorized: Access denied.' };
+    if (session.role === 'CLIENT') {
+      return { error: 'Unauthorized: Clients cannot update project due date.' };
     }
     if (session.role === 'MEMBER' && project.projectManagerId !== session.userId) {
       return { error: 'Unauthorized: Access denied.' };
@@ -732,8 +730,8 @@ export async function updateProjectCustomFieldsAction(projectId: string, customF
     });
     if (!project) return { error: "Project not found or access denied." };
 
-    if (session.role === 'CLIENT' && project.clientId !== session.userId) {
-      return { error: 'Unauthorized: Access denied.' };
+    if (session.role === 'CLIENT') {
+      return { error: 'Unauthorized: Clients cannot update project custom fields.' };
     }
     if (session.role === 'MEMBER' && project.projectManagerId !== session.userId) {
       return { error: 'Unauthorized: Access denied.' };
@@ -764,8 +762,8 @@ export async function updateProjectPriorityAction(projectId: string, priority: s
     });
     if (!project) return { error: "Project not found or access denied." };
 
-    if (session.role === 'CLIENT' && project.clientId !== session.userId) {
-      return { error: 'Unauthorized: Access denied.' };
+    if (session.role === 'CLIENT') {
+      return { error: 'Unauthorized: Clients cannot update project priority.' };
     }
     if (session.role === 'MEMBER' && project.projectManagerId !== session.userId) {
       return { error: 'Unauthorized: Access denied.' };

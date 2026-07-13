@@ -16,6 +16,7 @@ export default async function ConversationsPage() {
       ...(session.role === 'MEMBER' ? {
         OR: [
           { assignees: { some: { userId: session.userId } } },
+          { tasks: { some: { assignees: { some: { userId: session.userId } } } } },
           { projectManagerId: session.userId }
         ]
       } : {})

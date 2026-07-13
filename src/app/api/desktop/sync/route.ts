@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import jwt from 'jsonwebtoken';
+import { emitAppEvent } from '@/lib/events';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-desktop-secret-key-123';
 
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     // 1. Sync ActiveTimer (update or create the user's active timer)
     if (activeTimers && activeTimers.length > 0) {
       const timer = activeTimers[0];
-      await prisma.activeTimer.upsert({
+      const syncedTimer = await prisma.activeTimer.upsert({
         where: { memberId: userId },
         update: {
           projectId: timer.projectId,
@@ -57,8 +58,22 @@ export async function POST(request: NextRequest) {
           notes: timer.notes || null,
         }
       });
+
+      // Let anyone viewing this project/task/org live (dashboards, project
+      // detail page) know there's fresh tracked-time data to refetch.
+      emitAppEvent('timer_started', `organization:${organizationId}`, syncedTimer);
+      emitAppEvent('timer_started', `project:${syncedTimer.projectId}`, syncedTimer);
+      if (syncedTimer.taskId) emitAppEvent('timer_started', `task:${syncedTimer.taskId}`, syncedTimer);
+      emitAppEvent('timer_started', `user:${userId}`, syncedTimer);
     } else if (body.stopTimer) {
+      const stoppedTimers = await prisma.activeTimer.findMany({ where: { memberId: userId } });
       await prisma.activeTimer.deleteMany({ where: { memberId: userId } });
+      stoppedTimers.forEach(t => {
+        emitAppEvent('timer_stopped', `organization:${organizationId}`, t);
+        emitAppEvent('timer_stopped', `project:${t.projectId}`, t);
+        if (t.taskId) emitAppEvent('timer_stopped', `task:${t.taskId}`, t);
+        emitAppEvent('timer_stopped', `user:${userId}`, t);
+      });
     }
 
     // 2. Sync TimeEntries (if desktop app stopped a timer and submits a completed entry)
@@ -82,19 +97,23 @@ export async function POST(request: NextRequest) {
           }
         });
 
+        const activeWorkedSec = Math.round((entry.activeWorkedDuration || 0) * 3600);
+        const idleSec = Math.round((entry.idleDuration || 0) * 3600);
+
+        let savedEntry;
         if (existingEntry) {
-          await prisma.timeEntry.update({
+          savedEntry = await prisma.timeEntry.update({
             where: { id: existingEntry.id },
             data: {
               endTime: new Date(entry.endTime),
               duration: (existingEntry.duration || 0) + entry.duration,
-              activeWorkedDuration: (existingEntry.activeWorkedDuration || 0) + entry.activeWorkedDuration,
-              idleDuration: (existingEntry.idleDuration || 0) + entry.idleDuration,
+              activeWorkedDuration: (existingEntry.activeWorkedDuration || 0) + activeWorkedSec,
+              idleDuration: (existingEntry.idleDuration || 0) + idleSec,
               notes: entry.notes || existingEntry.notes,
             }
           });
         } else {
-          await prisma.timeEntry.create({
+          savedEntry = await prisma.timeEntry.create({
             data: {
               organizationId,
               memberId: userId,
@@ -103,13 +122,32 @@ export async function POST(request: NextRequest) {
               startTime: new Date(entry.startTime),
               endTime: new Date(entry.endTime),
               duration: entry.duration,
-              activeWorkedDuration: entry.activeWorkedDuration,
-              idleDuration: entry.idleDuration,
+              activeWorkedDuration: activeWorkedSec,
+              idleDuration: idleSec,
               notes: entry.notes || null,
               entryType: 'TIMER',
               status: 'SAVED',
             }
           });
+        }
+
+        // Keep the task's cached trackedHours in sync with the real total,
+        // same as the manual-entry and stop-timer flows do.
+        if (savedEntry.taskId && entry.duration) {
+          await prisma.task.update({
+            where: { id: savedEntry.taskId },
+            data: { trackedHours: { increment: entry.duration } }
+          }).catch(err => console.error('Failed to update task trackedHours from desktop sync:', err));
+        }
+
+        // Notify anyone with this project/task/org open so they refetch and
+        // see the newly-synced hours without needing a manual reload.
+        emitAppEvent('manual_time_added', `organization:${organizationId}`, savedEntry);
+        emitAppEvent('manual_time_added', `project:${savedEntry.projectId}`, savedEntry);
+        emitAppEvent('manual_time_added', `user:${userId}`, savedEntry);
+        if (savedEntry.taskId) {
+          emitAppEvent('manual_time_added', `task:${savedEntry.taskId}`, savedEntry);
+          emitAppEvent('task_hours_updated', `task:${savedEntry.taskId}`, savedEntry);
         }
       }
     }

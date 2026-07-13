@@ -136,7 +136,7 @@ export default function TaskFormModal({
 
   // Custom Fields Drawer States
   const [isFieldsDrawerOpen, setIsFieldsDrawerOpen] = useState(false);
-  const [fieldsTab, setFieldsTab] = useState<"create_new" | "add_existing">("create_new");
+  const [fieldsTab, setFieldsTab] = useState<"create_new" | "add_existing">(currentUser?.role === 'OWNER' ? "create_new" : "add_existing");
   const [selectedFieldType, setSelectedFieldType] = useState<string | null>(null);
   const [newCustomFieldName, setNewCustomFieldName] = useState("");
   const [newFieldOptions, setNewFieldOptions] = useState<string[]>([]);
@@ -1325,14 +1325,16 @@ export default function TaskFormModal({
                     />
                   </div>
                   <div className="flex gap-6 text-sm font-medium">
-                    <button 
-                      type="button"
-                      onClick={() => setFieldsTab("create_new")}
-                      className={`relative pb-2 ${fieldsTab === "create_new" ? "text-slate-900 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}
-                    >
-                      Create new
-                      {fieldsTab === "create_new" && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-slate-900 dark:bg-white rounded-t" />}
-                    </button>
+                    {currentUser?.role === 'OWNER' && (
+                      <button 
+                        type="button"
+                        onClick={() => setFieldsTab("create_new")}
+                        className={`relative pb-2 ${fieldsTab === "create_new" ? "text-slate-900 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}
+                      >
+                        Create new
+                        {fieldsTab === "create_new" && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-slate-900 dark:bg-white rounded-t" />}
+                      </button>
+                    )}
                     <button 
                       type="button"
                       onClick={() => setFieldsTab("add_existing")}

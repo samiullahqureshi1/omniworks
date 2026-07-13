@@ -170,7 +170,7 @@ function TableDueDateCell({ project, setProjects, currentUser }: any) {
   const [isPending, startTransition] = React.useTransition();
   const router = useRouter();
 
-  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'CLIENT' && project.clientId === currentUser?.userId) || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
+  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
 
   const handleDateSelect = (date: Date | undefined) => {
     if (!date) return;
@@ -276,7 +276,7 @@ function TablePriorityCell({ project, setProjects, currentUser }: any) {
   const [isPending, startTransition] = React.useTransition();
   const router = useRouter();
 
-  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'CLIENT' && project.clientId === currentUser?.userId) || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
+  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
 
   const priorities = [
     { value: "CRITICAL", label: "Urgent", color: "text-red-500", bg: "bg-red-50 dark:bg-red-950/20" },
@@ -358,7 +358,7 @@ function TableCustomFieldCell({ project, col, setProjects, projects, currentUser
   const field = fieldIndex >= 0 ? customFields[fieldIndex] : null;
   const value = field ? field.value : undefined;
 
-  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'CLIENT' && project.clientId === currentUser?.userId) || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
+  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
 
   let options = field?.options;
   if (!options && Array.isArray(projects)) {
@@ -462,7 +462,7 @@ function TableNameCell({ project, setProjects, currentUser }: any) {
   const [isPending, startTransition] = React.useTransition();
   const router = useRouter();
 
-  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'CLIENT' && project.clientId === currentUser?.userId) || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
+  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
 
   const handleSave = () => {
     if (!name.trim() || name === project.name) {
@@ -541,7 +541,7 @@ function TableStatusCell({ project, projectStatuses, setProjects, currentUser }:
   const [isPending, startTransition] = React.useTransition();
   const router = useRouter();
 
-  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'CLIENT' && project.clientId === currentUser?.userId) || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
+  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
 
   const filteredStatuses = projectStatuses.filter((s: any) => 
     s.name.toLowerCase().includes(search.toLowerCase())
@@ -732,13 +732,15 @@ function KanbanColumn({ status, title, count, projectStatuses, children, onAddPr
         )}
       </div>
       
-      <button 
-        onClick={onAddProject}
-        className="flex items-center gap-2 px-2 py-1.5 mb-3 text-sm font-medium transition-colors hover:opacity-80 rounded-md hover:bg-black/5 dark:hover:bg-white/5"
-        style={{ color: statusColor }}
-      >
-        <Plus size={16} /> Add Project
-      </button>
+      {currentUser?.role === 'OWNER' && (
+        <button 
+          onClick={onAddProject}
+          className="flex items-center gap-2 px-2 py-1.5 mb-3 text-sm font-medium transition-colors hover:opacity-80 rounded-md hover:bg-black/5 dark:hover:bg-white/5"
+          style={{ color: statusColor }}
+        >
+          <Plus size={16} /> Add Project
+        </button>
+      )}
 
       <div className="flex flex-col gap-2.5 overflow-y-auto custom-scrollbar pr-1 flex-1 pb-2">
         {children}
@@ -855,7 +857,7 @@ export default function ProjectsClient({
   const [isDeleteTemplateOpen, setIsDeleteTemplateOpen] = useState(false);
   const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
   const [isFieldsDrawerOpen, setIsFieldsDrawerOpen] = useState(false);
-  const [fieldsTab, setFieldsTab] = useState("create_new");
+  const [fieldsTab, setFieldsTab] = useState(currentUser?.role === 'OWNER' ? "create_new" : "add_existing");
   const [selectedFieldType, setSelectedFieldType] = useState<string | null>(null);
   const [newFieldOptions, setNewFieldOptions] = useState<string[]>([]);
   const [newOptionInput, setNewOptionInput] = useState("");
@@ -3723,13 +3725,15 @@ export default function ProjectsClient({
                   <Input placeholder="Search Task Fields" className="pl-3 py-5 text-sm rounded-lg border-slate-300 dark:border-white/10 bg-transparent focus-visible:ring-1" />
                 </div>
                 <div className="flex gap-6 text-sm font-medium">
-                  <button 
-                    onClick={() => setFieldsTab("create_new")}
-                    className={`relative pb-2 ${fieldsTab === "create_new" ? "text-slate-900 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}
-                  >
-                    Create new
-                    {fieldsTab === "create_new" && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-slate-900 dark:bg-white rounded-t" />}
-                  </button>
+                  {currentUser?.role === 'OWNER' && (
+                    <button 
+                      onClick={() => setFieldsTab("create_new")}
+                      className={`relative pb-2 ${fieldsTab === "create_new" ? "text-slate-900 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}
+                    >
+                      Create new
+                      {fieldsTab === "create_new" && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-slate-900 dark:bg-white rounded-t" />}
+                    </button>
+                  )}
                   <button 
                     onClick={() => setFieldsTab("add_existing")}
                     className={`relative pb-2 ${fieldsTab === "add_existing" ? "text-slate-900 dark:text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}

@@ -32,7 +32,36 @@ import ProjectConversation, { ProjectConversationRef } from './ProjectConversati
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { useRealtime } from '@/hooks/useRealtime';
 
+const formatTrackedTime = (hours: number) => {
+  if (hours <= 0) return '0h';
+  if (hours < 1) {
+    const mins = Math.round(hours * 60);
+    return `${mins}m`;
+  }
+  return `${hours.toFixed(1)}h`;
+};
+
+const renderTrackedTime = (hours: number) => {
+  if (hours <= 0) {
+    return (
+      <>0 <span className="text-xs font-semibold text-muted-foreground">h</span></>
+    );
+  }
+  if (hours < 1) {
+    const mins = Math.round(hours * 60);
+    return (
+      <>{mins} <span className="text-xs font-semibold text-muted-foreground">m</span></>
+    );
+  }
+  return (
+    <>{hours.toFixed(1)} <span className="text-xs font-semibold text-muted-foreground">h</span></>
+  );
+};
+
 export default function ProjectDetailClient({ project, currentUser, users = [], taskStatuses = [], projectStatuses = [] }: { project: any, currentUser: any, users?: any[], taskStatuses?: any[], projectStatuses?: any[] }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const [activeTab, setActiveTab] = useState('overview');
   const [isPending, startTransition] = useTransition();
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
@@ -159,6 +188,24 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
     }
   }, [lastEvent]);
 
+  // Re-fetch server data (logged hours, allocated hours, etc.) whenever
+  // someone starts/stops/updates a timer or adds manual time on this project,
+  // so the numbers on this page stay live instead of requiring a manual reload.
+  useEffect(() => {
+    if ([
+      'timer_started',
+      'timer_stopped',
+      'timer_idle',
+      'timer_resumed',
+      'manual_time_added',
+      'task_hours_updated',
+      'time_entry_updated',
+      'time_entry_deleted',
+    ].includes(lastEvent?.event || '')) {
+      router.refresh();
+    }
+  }, [lastEvent, router]);
+
   const handleMentionTask = (taskId: string, taskTitle: string) => {
     conversationRef.current?.insertMention(taskId, taskTitle, 'task');
   };
@@ -201,10 +248,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
     }
     return Array.from(membersMap.values());
   }, [project, users]);
-  
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
+
 
   useEffect(() => {
     if (searchParams.get('edit') === 'true') {
@@ -258,14 +302,23 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
   const canManageTasks = isOwner || isPM || isClient; // As per rules: Clients can create tasks in own projects.
 
   // Metrics
+  // NOTE: activeWorkedDuration on TimeEntry rows is stored in seconds, so we
+  // convert seconds -> ms (*1000) below before converting to hours. Live/
+  // in-progress timers (not yet stopped) live in the separate `activeTimers`
+  // relation and must be included too, otherwise a member who is actively
+  // tracking time but hasn't stopped the timer yet would show 0h logged.
   const getTaskTrackedHours = (taskId: string) => {
-    const ms = project.timeEntries?.filter((t: any) => t.taskId === taskId).reduce((acc: number, t: any) => acc + (t.activeWorkedDuration || 0) * 1000, 0) || 0;
-    return Math.round((ms / (1000 * 60 * 60)) * 100) / 100;
+    const entryHours = project.timeEntries?.filter((t: any) => t.taskId === taskId).reduce((acc: number, t: any) => acc + (t.duration || 0), 0) || 0;
+    const activeSeconds = project.activeTimers?.filter((t: any) => t.taskId === taskId).reduce((acc: number, t: any) => acc + (t.activeWorkedDuration || 0), 0) || 0;
+    const activeHours = activeSeconds / 3600;
+    return Math.round((entryHours + activeHours) * 100) / 100;
   };
 
   const getMemberTrackedHours = (userId: string) => {
-    const ms = project.timeEntries?.filter((t: any) => t.memberId === userId).reduce((acc: number, t: any) => acc + (t.activeWorkedDuration || 0) * 1000, 0) || 0;
-    return Math.round((ms / (1000 * 60 * 60)) * 100) / 100;
+    const entryHours = project.timeEntries?.filter((t: any) => t.memberId === userId).reduce((acc: number, t: any) => acc + (t.duration || 0), 0) || 0;
+    const activeSeconds = project.activeTimers?.filter((t: any) => t.memberId === userId).reduce((acc: number, t: any) => acc + (t.activeWorkedDuration || 0), 0) || 0;
+    const activeHours = activeSeconds / 3600;
+    return Math.round((entryHours + activeHours) * 100) / 100;
   };
 
   const getMemberAllocatedHours = (userId: string) => {
@@ -291,8 +344,10 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
       ? Math.round((displayTotalTrackedHours / displayTotalAllocatedHours) * 100)
       : 0;
   } else {
-    const totalTrackedMs = project.timeEntries?.reduce((acc: number, t: any) => acc + (t.activeWorkedDuration || 0) * 1000, 0) || 0;
-    displayTotalTrackedHours = Math.round((totalTrackedMs / (1000 * 60 * 60)) * 100) / 100;
+    const entryHours = project.timeEntries?.reduce((acc: number, t: any) => acc + (t.duration || 0), 0) || 0;
+    const activeSeconds = project.activeTimers?.reduce((acc: number, t: any) => acc + (t.activeWorkedDuration || 0), 0) || 0;
+    const activeHours = activeSeconds / 3600;
+    displayTotalTrackedHours = Math.round((entryHours + activeHours) * 100) / 100;
     displayProgressPercent = project.totalAllocatedHours 
       ? Math.round((displayTotalTrackedHours / project.totalAllocatedHours) * 100)
       : 0;
@@ -877,7 +932,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                     <div className="space-y-1">
                       <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Logged Hours</span>
                       <p className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">
-                        {displayTotalTrackedHours} <span className="text-xs font-semibold text-muted-foreground">h</span>
+                        {renderTrackedTime(displayTotalTrackedHours)}
                       </p>
                     </div>
                     <div className="p-2 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-lg">
@@ -981,7 +1036,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                               </div>
                               <div className="flex items-center gap-1 font-mono bg-muted/30 px-1.5 py-0.5 rounded">
                                 <Clock size={10} className="text-primary/70" />
-                                <span>{tracked.toFixed(1)} / {allocated.toFixed(1)} hrs</span>
+                                <span>{formatTrackedTime(tracked)} / {allocated.toFixed(1)} hrs</span>
                               </div>
                             </div>
                           </li>
@@ -1034,7 +1089,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                               <div className="flex items-center justify-end text-xs text-muted-foreground mt-1">
                                 <div className="flex items-center gap-1 font-mono bg-muted/30 px-1.5 py-0.5 rounded">
                                   <Clock size={10} className="text-primary/70" />
-                                  <span>{tracked.toFixed(1)} / {allocated.toFixed(1)} hrs</span>
+                                  <span>{formatTrackedTime(tracked)} / {allocated.toFixed(1)} hrs</span>
                                 </div>
                               </div>
                             )}

@@ -552,7 +552,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   const [customColumns, setCustomColumns] = useState<{ id: string, name: string, type: string }[]>([]);
   const [hiddenColumns, setHiddenColumns] = useState<string[]>([]);
   const [isFieldsDrawerOpen, setIsFieldsDrawerOpen] = useState(false);
-  const [fieldsTab, setFieldsTab] = useState('create_new');
+  const [fieldsTab, setFieldsTab] = useState(currentUser?.role === 'OWNER' ? 'create_new' : 'add_existing');
   const [selectedFieldType, setSelectedFieldType] = useState<string | null>(null);
   const [newFieldOptions, setNewFieldOptions] = useState<string[]>([]);
   const [newOptionInput, setNewOptionInput] = useState('');
@@ -615,14 +615,32 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
 
   // ── Existing custom field names (for "Add existing" tab)
   const existingCustomFields = React.useMemo(() => {
-    return Array.from(
-      new Set(
-        tasks
-          .filter((t: any) => t.customFields && Array.isArray(t.customFields))
-          .flatMap((t: any) => t.customFields.map((f: any) => f.name).filter(Boolean))
-      )
-    ).sort() as string[];
-  }, [tasks]);
+    const fieldsSet = new Set<string>();
+    
+    // From projects
+    if (Array.isArray(projects)) {
+      projects.forEach((p: any) => {
+        if (p.customFields && Array.isArray(p.customFields)) {
+          p.customFields.forEach((f: any) => {
+            if (f.name) fieldsSet.add(f.name);
+          });
+        }
+      });
+    }
+
+    // From tasks
+    if (Array.isArray(tasks)) {
+      tasks.forEach((t: any) => {
+        if (t.customFields && Array.isArray(t.customFields)) {
+          t.customFields.forEach((f: any) => {
+            if (f.name) fieldsSet.add(f.name);
+          });
+        }
+      });
+    }
+
+    return Array.from(fieldsSet).sort() as string[];
+  }, [tasks, projects]);
 
   useEffect(() => {
     if (isTemplateSelectOpen) {
@@ -972,7 +990,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                 ))}
                 <TableHead className="w-[60px] text-center border-l border-slate-100 dark:border-white/5">
                   <button
-                    onClick={() => { setFieldsTab('create_new'); setIsFieldsDrawerOpen(true); }}
+                    onClick={() => { setFieldsTab(currentUser?.role === 'OWNER' ? 'create_new' : 'add_existing'); setIsFieldsDrawerOpen(true); }}
                     className="p-1 hover:bg-slate-100 dark:hover:bg-white/5 rounded text-slate-400 transition-colors"
                     title="Add custom field"
                   >
@@ -1465,13 +1483,15 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
 
                 <div className="p-4 border-b border-slate-100 dark:border-white/5 space-y-4">
                   <div className="flex gap-6 text-sm font-medium">
-                    <button
-                      onClick={() => setFieldsTab('create_new')}
-                      className={`relative pb-2 ${fieldsTab === 'create_new' ? 'text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                    >
-                      Create new
-                      {fieldsTab === 'create_new' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-slate-900 dark:bg-white rounded-t" />}
-                    </button>
+                    {currentUser?.role === 'OWNER' && (
+                      <button
+                        onClick={() => setFieldsTab('create_new')}
+                        className={`relative pb-2 ${fieldsTab === 'create_new' ? 'text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                      >
+                        Create new
+                        {fieldsTab === 'create_new' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-slate-900 dark:bg-white rounded-t" />}
+                      </button>
+                    )}
                     <button
                       onClick={() => setFieldsTab('add_existing')}
                       className={`relative pb-2 ${fieldsTab === 'add_existing' ? 'text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}

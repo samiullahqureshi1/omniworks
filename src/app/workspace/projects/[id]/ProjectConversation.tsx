@@ -37,6 +37,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentions, setMentions] = useState<string[]>([]);
   const [taskMentions, setTaskMentions] = useState<string[]>([]);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
 
   // Edit/Delete state
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -266,6 +267,19 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   const filteredUsers = suggestions.users.filter(u => u.name.toLowerCase().includes(mentionQuery));
   const filteredTasks = suggestions.tasks.filter(t => t.title.toLowerCase().includes(mentionQuery));
 
+  // Flat, ordered list matching the render order below, so keyboard nav (Arrow
+  // Up/Down + Enter) can move through and select the same items a mouse click would.
+  const combinedSuggestions: { type: 'user' | 'task'; id: string; name: string }[] = [
+    ...((suggestionType === 'both' || suggestionType === 'user') ? filteredUsers.map(u => ({ type: 'user' as const, id: u.id, name: u.name })) : []),
+    ...((suggestionType === 'both' || suggestionType === 'task') ? filteredTasks.map(t => ({ type: 'task' as const, id: t.id, name: t.title })) : []),
+  ];
+
+  // Reset the highlighted suggestion whenever the list/query changes so it
+  // doesn't point at a stale/out-of-range item.
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [mentionQuery, suggestionType, showSuggestions]);
+
   const getMessageStatus = (msg: any) => {
     if (msg.status === 'sending') return <Loader2 className="animate-spin text-slate-300 w-3 h-3" />;
     if (msg.status === 'failed') return <X className="text-red-500 w-3 h-3" />;
@@ -451,10 +465,11 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                   {filteredUsers.length === 0 ? (
                     <div className="px-3 py-1.5 text-xs text-muted-foreground italic">No users found</div>
                   ) : (
-                    filteredUsers.map(u => (
-                      <div 
-                        key={u.id} 
-                        className="flex items-center gap-3 px-4 py-2 hover:bg-[#fbfaf7] dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                    filteredUsers.map((u, idx) => (
+                      <div
+                        key={u.id}
+                        className={`flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors ${idx === highlightedIndex ? 'bg-[#fbfaf7] dark:bg-slate-800' : 'hover:bg-[#fbfaf7] dark:hover:bg-slate-800'}`}
+                        onMouseEnter={() => setHighlightedIndex(idx)}
                         onClick={() => insertMention(u.id, u.name.replace(/\s+/g, ''), 'user')}
                       >
                         <Avatar className="h-6 w-6"><AvatarFallback className="text-[10px]">{u.name.substring(0,2)}</AvatarFallback></Avatar>
@@ -474,19 +489,23 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                   {filteredTasks.length === 0 ? (
                     <div className="px-3 py-1.5 text-xs text-muted-foreground italic">No tasks found</div>
                   ) : (
-                    filteredTasks.map(t => (
-                      <div 
-                        key={t.id} 
-                        className="flex items-center gap-3 px-4 py-2 hover:bg-[#fbfaf7] dark:hover:bg-slate-800 cursor-pointer transition-colors"
-                        onClick={() => insertMention(t.id, t.title.replace(/\s+/g, ''), 'task')}
-                      >
-                        <Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{t.title}</p>
-                          {t.status && <p className="text-[9px] text-muted-foreground">{t.status.name}</p>}
+                    filteredTasks.map((t, idx) => {
+                      const globalIdx = (suggestionType === 'both' ? filteredUsers.length : 0) + idx;
+                      return (
+                        <div
+                          key={t.id}
+                          className={`flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors ${globalIdx === highlightedIndex ? 'bg-[#fbfaf7] dark:bg-slate-800' : 'hover:bg-[#fbfaf7] dark:hover:bg-slate-800'}`}
+                          onMouseEnter={() => setHighlightedIndex(globalIdx)}
+                          onClick={() => insertMention(t.id, t.title.replace(/\s+/g, ''), 'task')}
+                        >
+                          <Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{t.title}</p>
+                            {t.status && <p className="text-[9px] text-muted-foreground">{t.status.name}</p>}
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               )}
@@ -534,6 +553,32 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                 value={content}
                 onChange={handleInput}
                 onKeyDown={(e) => {
+                  if (showSuggestions && combinedSuggestions.length > 0) {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setHighlightedIndex((prev) => (prev + 1) % combinedSuggestions.length);
+                      return;
+                    }
+                    if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setHighlightedIndex((prev) => (prev - 1 + combinedSuggestions.length) % combinedSuggestions.length);
+                      return;
+                    }
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      const selected = combinedSuggestions[highlightedIndex];
+                      if (selected) {
+                        insertMention(selected.id, selected.name.replace(/\s+/g, ''), selected.type);
+                      }
+                      return;
+                    }
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setShowSuggestions(false);
+                      return;
+                    }
+                  }
+
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     sendMessage();

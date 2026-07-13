@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Plus, Clock, UserPlus, Sparkles, Cpu } from 'lucide-react';
+import { Plus, Clock, UserPlus, Sparkles, Bot } from 'lucide-react';
 import { motion } from 'framer-motion';
 import GlobalCreateProjectModal from '@/components/modals/GlobalCreateProjectModal';
 import GlobalAddUserModal from '@/components/modals/GlobalAddUserModal';
@@ -55,13 +54,17 @@ export default function DashboardHeader({ user }: { user: { name: string, role: 
               >
                 <UserPlus className="mr-2 h-[18px] w-[18px]" /> Invite User
               </Button>
-              <Link href="/workspace/rules">
-                <Button 
-                  className="rounded-full shadow-md bg-[#1f1f1f] text-white hover:bg-black transition-colors h-11 px-6 font-semibold text-sm border border-white/10 flex items-center"
+              <div className="relative inline-flex items-center">
+                <Button
+                  disabled
+                  className="rounded-full shadow-md bg-[#1f1f1f] text-white h-11 px-6 font-semibold text-sm border border-white/10 flex items-center opacity-60 cursor-not-allowed hover:bg-[#1f1f1f]"
                 >
-                  <Cpu className="mr-2 h-[18px] w-[18px]" /> Deploy Agent
+                  <Bot className="mr-2 h-[18px] w-[18px]" /> Deploy Agent
                 </Button>
-              </Link>
+                <span className="absolute -top-2 -right-2 bg-[#f97316] text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm whitespace-nowrap">
+                  Coming Soon
+                </span>
+              </div>
             </>
           )}
         </motion.div>

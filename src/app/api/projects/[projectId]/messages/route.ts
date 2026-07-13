@@ -182,6 +182,12 @@ export async function POST(request: Request, context: { params: Promise<{ projec
     // Realtime Event
     emitAppEvent('message_sent', `project:${projectId}`, { message });
 
+    // Also push to each recipient's personal channel so desktop notifications
+    // fire no matter what page they're currently on
+    recipientIds.forEach(userId => {
+      emitAppEvent('message_sent', `user:${userId}`, { message });
+    });
+
     // Send Notifications to mentioned users and task participants (async, don't await)
     (async () => {
       try {

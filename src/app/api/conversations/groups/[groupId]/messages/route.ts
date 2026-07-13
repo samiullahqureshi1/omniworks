@@ -165,6 +165,18 @@ export async function POST(
     // Emit Realtime Event
     emitAppEvent('message_sent', `group:${groupId}`, { message });
 
+    // Also push to each member's personal channel so desktop notifications
+    // fire no matter what page they're currently on
+    const groupMembers = await prisma.chatGroupMember.findMany({
+      where: { groupId },
+      select: { userId: true }
+    });
+    groupMembers.forEach(m => {
+      if (m.userId !== session.userId) {
+        emitAppEvent('message_sent', `user:${m.userId}`, { message });
+      }
+    });
+
     return NextResponse.json({ message });
   } catch (error: any) {
     console.error('Send group message error:', error);

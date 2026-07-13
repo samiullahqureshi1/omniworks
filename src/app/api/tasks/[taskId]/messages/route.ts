@@ -62,7 +62,7 @@ export async function POST(request: Request, context: { params: Promise<{ taskId
     // Verify access
     const task = await prisma.task.findFirst({
       where: { id: taskId, organizationId: session.organizationId },
-      include: { project: { include: { client: { select: { id: true, name: true } } } } }
+      include: { project: { include: { client: { select: { id: true, name: true } } } }, assignees: true }
     });
 
     if (!task) {
@@ -95,6 +95,21 @@ export async function POST(request: Request, context: { params: Promise<{ taskId
 
     // Realtime Event
     emitAppEvent('message_sent', `task:${taskId}`, { message });
+
+    // Also push to each participant's personal channel (assignees, PM, owners)
+    // so desktop notifications fire no matter what page they're currently on
+    const taskRecipientIds = new Set<string>();
+    task.assignees.forEach(a => taskRecipientIds.add(a.userId));
+    if (task.project.projectManagerId) taskRecipientIds.add(task.project.projectManagerId);
+    const taskOwners = await prisma.user.findMany({
+      where: { organizationId: session.organizationId, role: 'OWNER' },
+      select: { id: true }
+    });
+    taskOwners.forEach(o => taskRecipientIds.add(o.id));
+    taskRecipientIds.delete(session.userId);
+    taskRecipientIds.forEach(userId => {
+      emitAppEvent('message_sent', `user:${userId}`, { message });
+    });
 
     // Send Notifications to mentioned users (async, don't await)
     if (mentions.length > 0) {
