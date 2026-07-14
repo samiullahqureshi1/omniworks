@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useTransition, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -133,8 +133,12 @@ export default function TeamOpsClient({
   taskStatuses: any[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const activeTab = (tabParam === 'dashboard' || tabParam === 'projects' || tabParam === 'templates' || tabParam === 'rules' || tabParam === 'reports')
+    ? tabParam
+    : 'dashboard';
   const [projects, setProjects] = useState(initialProjects);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "projects" | "templates" | "rules" | "reports">("dashboard");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [viewMode, setViewMode] = useState<"TABLE" | "KANBAN" | "LIST">("TABLE");
@@ -785,33 +789,7 @@ export default function TeamOpsClient({
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b overflow-x-auto gap-6 no-scrollbar">
-        {[
-          { id: "dashboard", label: "Dashboard", icon: LayoutGrid },
-          { id: "projects", label: "All Internal Projects", icon: FolderKanban },
-          { id: "templates", label: "Templates", icon: FileText },
-          { id: "rules", label: "Rules", icon: Cpu },
-          { id: "reports", label: "Reports", icon: BarChart3 }
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 py-3 px-1 border-b-2 text-sm font-semibold transition-all shrink-0 ${
-                isActive
-                  ? "border-purple-600 text-purple-600 dark:border-purple-400 dark:text-purple-400"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Icon size={16} />
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+
 
       {/* Content tabs */}
       {activeTab === "dashboard" && (

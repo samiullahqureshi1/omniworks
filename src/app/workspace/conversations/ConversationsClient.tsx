@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRealtime } from '@/hooks/useRealtime';
+import { useSearchParams, useRouter } from 'next/navigation';
 import ProjectConversation from '../projects/[id]/ProjectConversation';
 import {
   MessageSquare,
@@ -74,17 +75,15 @@ export default function ConversationsClient({
   users,
   organizations
 }: ConversationsClientProps) {
-  const [activeTab, setActiveTab] = useState<'projects' | 'teams'>('projects');
-  
-  // Projects tab state
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    projects.length > 0 ? projects[0].id : null
-  );
-  const [projectSearch, setProjectSearch] = useState('');
+  // Read tab and selection from URL params (set by ConversationsSidebarPanel)
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const activeTab = (searchParams.get('chatTab') as 'projects' | 'teams') || 'projects';
+  const selectedProjectId = searchParams.get('project') || (projects.length > 0 ? projects[0].id : null);
+  const selectedGroupId = searchParams.get('group');
 
   // Teams tab state
   const [groups, setGroups] = useState<any[]>([]);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [groupSearch, setGroupSearch] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -128,14 +127,7 @@ export default function ConversationsClient({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Filter lists
-  const filteredProjects = projects.filter(p =>
-    p.name.toLowerCase().includes(projectSearch.toLowerCase())
-  );
-
-  const filteredGroups = groups.filter(g =>
-    g.name.toLowerCase().includes(groupSearch.toLowerCase())
-  );
+  // filteredProjects and filteredGroups are now handled by ConversationsSidebarPanel
 
   const filteredUsers = users.filter(u =>
     u.id !== currentUser.id &&
@@ -274,7 +266,11 @@ export default function ConversationsClient({
         setSelectedMembers([]);
         setIsCreateModalOpen(false);
         setGroups(prev => [data.group, ...prev]);
-        setSelectedGroupId(data.group.id);
+        const createParams = new URLSearchParams(window.location.search);
+        createParams.set('chatTab', 'teams');
+        createParams.set('group', data.group.id);
+        createParams.delete('project');
+        router.push(`/workspace/conversations?${createParams.toString()}`);
       } else {
         const data = await res.json();
         toast.error(data.error || 'Failed to create group');
@@ -503,7 +499,9 @@ export default function ConversationsClient({
       if (res.ok) {
         toast.success('Invitation declined');
         setGroups(prev => prev.filter(g => g.id !== selectedGroupId));
-        setSelectedGroupId(null);
+        const declineParams = new URLSearchParams(window.location.search);
+        declineParams.delete('group');
+        router.push(`/workspace/conversations?${declineParams.toString()}`);
       } else {
         toast.error('Failed to decline invitation');
       }
@@ -534,7 +532,11 @@ export default function ConversationsClient({
         toast.success(`Connection request sent to ${targetUser.name}`);
         setIsDirectModalOpen(false);
         setGroups(prev => [data.group, ...prev]);
-        setSelectedGroupId(data.group.id);
+        const directParams = new URLSearchParams(window.location.search);
+        directParams.set('chatTab', 'teams');
+        directParams.set('group', data.group.id);
+        directParams.delete('project');
+        router.push(`/workspace/conversations?${directParams.toString()}`);
       } else {
         const data = await res.json();
         toast.error(data.error || 'Failed to start direct chat');
@@ -598,7 +600,9 @@ export default function ConversationsClient({
       if (res.ok) {
         toast.success('Group deleted successfully');
         setGroups(prev => prev.filter(g => g.id !== selectedGroupId));
-        setSelectedGroupId(null);
+        const deleteParams = new URLSearchParams(window.location.search);
+        deleteParams.delete('group');
+        router.push(`/workspace/conversations?${deleteParams.toString()}`);
         setIsSettingsModalOpen(false);
       } else {
         toast.error('Failed to delete group');
@@ -662,206 +666,8 @@ export default function ConversationsClient({
   const isPendingInvitation = activeGroup?.isDirect && activeGroup?.status === 'PENDING';
 
   return (
-    <div className="flex h-[calc(100vh-140px)] border border-slate-100 dark:border-slate-800 rounded-3xl overflow-hidden bg-white dark:bg-[#181818] shadow-sm relative">
+    <div className="flex h-full overflow-hidden bg-white dark:bg-[#181818]">
       
-      {/* LEFT PANEL: Lists (Projects or Groups) */}
-      <div className="w-80 border-r border-slate-100 dark:border-slate-800 flex flex-col bg-slate-50/50 dark:bg-[#151515] shrink-0 h-full">
-        {/* Navigation Tabs */}
-        <div className="grid grid-cols-2 p-2.5 gap-1 shrink-0 border-b border-slate-100 dark:border-slate-800">
-          <button
-            onClick={() => setActiveTab('projects')}
-            className={`flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
-              activeTab === 'projects'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/40 hover:text-slate-800 dark:hover:text-white'
-            }`}
-          >
-            <FolderKanban size={16} />
-            Projects
-          </button>
-          <button
-            onClick={() => setActiveTab('teams')}
-            className={`flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
-              activeTab === 'teams'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/40 hover:text-slate-800 dark:hover:text-white'
-            }`}
-          >
-            <MessageSquare size={16} />
-            Teams
-          </button>
-        </div>
-
-        {/* Search & Actions Panel */}
-        <div className="p-3 shrink-0 flex flex-col gap-2 border-b border-slate-100 dark:border-slate-800">
-          {activeTab === 'projects' ? (
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Search projects..."
-                value={projectSearch}
-                onChange={e => setProjectSearch(e.target.value)}
-                className="pl-9 bg-white dark:bg-[#1f1f1f] border-slate-100 dark:border-slate-800 h-9 rounded-xl text-xs focus-visible:ring-primary"
-              />
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Search chat groups..."
-                  value={groupSearch}
-                  onChange={e => setGroupSearch(e.target.value)}
-                  className="pl-9 bg-white dark:bg-[#1f1f1f] border-slate-100 dark:border-slate-800 h-9 rounded-xl text-xs focus-visible:ring-primary"
-                />
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <Button
-                  size="sm"
-                  onClick={() => setIsCreateModalOpen(true)}
-                  className="bg-primary hover:bg-primary/95 text-white h-9 w-9 rounded-xl p-0 flex items-center justify-center transition-all shadow-sm"
-                  title="Create Group"
-                >
-                  <UsersIcon size={16} />
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => setIsDirectModalOpen(true)}
-                  className="bg-primary hover:bg-primary/95 text-white h-9 w-9 rounded-xl p-0 flex items-center justify-center transition-all shadow-sm"
-                  title="Start Direct Chat"
-                >
-                  <Plus size={18} />
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* List Content */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1.5 custom-scrollbar">
-          {activeTab === 'projects' ? (
-            filteredProjects.length > 0 ? (
-              filteredProjects.map(project => {
-                const isSelected = selectedProjectId === project.id;
-                return (
-                  <button
-                    key={project.id}
-                    onClick={() => setSelectedProjectId(project.id)}
-                    className={`w-full text-left p-3.5 rounded-xl flex items-start gap-3 transition-all duration-200 border ${
-                      isSelected
-                        ? 'bg-white dark:bg-slate-900 border-indigo-500/30 dark:border-indigo-500/20 shadow-md shadow-indigo-500/5'
-                        : 'bg-transparent border-transparent hover:bg-slate-100/50 dark:hover:bg-slate-800/10 text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    {/* Left icon wrapper */}
-                    <div className={`p-2 rounded-xl shrink-0 ${
-                      isSelected 
-                        ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400' 
-                        : 'bg-slate-100/70 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400'
-                    }`}>
-                      <FolderKanban size={16} />
-                    </div>
-
-                    {/* Right details */}
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="font-bold text-xs text-slate-800 dark:text-white truncate">{project.name}</div>
-                        {/* Selected Indicator Dot */}
-                        {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0 animate-pulse" />}
-                      </div>
-                      
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate line-clamp-1">
-                        {stripHtml(project.description) || 'No description'}
-                      </p>
-                      
-                      <div className="flex items-center gap-1.5 pt-1">
-                        <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                          project.priority === 'HIGH' || project.priority === 'CRITICAL'
-                            ? 'bg-rose-50/50 border-rose-100 text-rose-600 dark:bg-rose-950/10 dark:border-rose-900/30 dark:text-rose-400'
-                            : project.priority === 'MEDIUM'
-                            ? 'bg-amber-50/50 border-amber-100 text-amber-600 dark:bg-amber-950/10 dark:border-amber-900/30 dark:text-amber-400'
-                            : 'bg-emerald-50/50 border-emerald-100 text-emerald-600 dark:bg-emerald-950/10 dark:border-emerald-900/30 dark:text-emerald-400'
-                        }`}>
-                          {project.priority}
-                        </span>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })
-            ) : (
-              <div className="text-center py-8 text-xs text-slate-400">No projects found.</div>
-            )
-          ) : (
-            filteredGroups.length > 0 ? (
-              filteredGroups.map(group => {
-                const isSelected = selectedGroupId === group.id;
-                // Calculate unread count (e.g. messages not read by current user)
-                const lastMsg = group.messages?.[0];
-                const unreadCount = group.messages?.filter(
-                  (m: any) => !m.readReceipts?.some((r: any) => r.userId === currentUser.id)
-                ).length || 0;
-
-                const otherMember = group.isDirect
-                  ? group.members?.find((m: any) => m.userId !== currentUser.id)?.user
-                  : null;
-                const displayName = otherMember ? otherMember.name : group.name;
-
-                return (
-                  <button
-                    key={group.id}
-                    onClick={() => setSelectedGroupId(group.id)}
-                    className={`w-full text-left p-3 rounded-2xl flex items-center justify-between transition-all duration-200 ${
-                      isSelected
-                        ? 'bg-white dark:bg-[#202020] border-l-4 border-primary shadow-sm'
-                        : 'hover:bg-slate-100/50 dark:hover:bg-slate-800/20 text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      {group.isDirect && otherMember ? (
-                        <Avatar className="w-10 h-10 shrink-0 border border-slate-100 dark:border-white/10 shadow-sm rounded-xl">
-                          <AvatarImage src={`https://api.dicebear.com/7.x/notionists/svg?seed=${otherMember.name}`} />
-                          <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold uppercase rounded-xl">
-                            {otherMember.name.substring(0, 2)}
-                          </AvatarFallback>
-                        </Avatar>
-                      ) : (
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center shrink-0 font-black shadow-sm text-sm">
-                          {group.name.substring(0, 2).toUpperCase()}
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="font-bold text-sm text-slate-900 dark:text-white truncate flex items-center gap-1.5">
-                          {displayName}
-                          {group.isDirect && group.status === 'PENDING' && (
-                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 shrink-0">
-                              Pending
-                            </span>
-                          )}
-                        </div>
-                        {lastMsg ? (
-                          <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                            <span className="font-semibold">{lastMsg.sender?.name || 'Someone'}:</span> {lastMsg.content || (lastMsg.fileUrl ? 'Shared a file' : '')}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-slate-400 dark:text-slate-500 italic truncate">No messages yet</div>
-                        )}
-                      </div>
-                    </div>
-                    {unreadCount > 0 && (
-                      <span className="ml-2 bg-primary text-white text-[10px] font-bold h-5 px-1.5 rounded-full flex items-center justify-center shrink-0 min-w-[20px]">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </button>
-                );
-              })
-            ) : (
-              <div className="text-center py-8 text-xs text-slate-400">No chat groups found.</div>
-            )
-          )}
-        </div>
-      </div>
 
       {/* RIGHT CHAT AREA */}
       <div className="flex-1 flex bg-white dark:bg-[#181818] h-full overflow-hidden">
