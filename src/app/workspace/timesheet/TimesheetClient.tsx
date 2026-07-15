@@ -233,28 +233,28 @@ export default function TimesheetClient({ currentUser, projects, users, tasks }:
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="shadow-sm border-slate-200">
+        <Card className="shadow-sm border-slate-200 dark:border-white/10">
           <CardContent className="p-5 flex flex-col justify-center">
             <p className="text-sm font-medium text-muted-foreground mb-1">Tracked/Billable</p>
             <p className="text-3xl font-bold tracking-tight text-primary">{globalFormatHours(totalBillableHours)}</p>
             <p className="text-xs text-muted-foreground mt-1">Active time only</p>
           </CardContent>
         </Card>
-        <Card className="shadow-sm border-slate-200">
+        <Card className="shadow-sm border-slate-200 dark:border-white/10">
           <CardContent className="p-5 flex flex-col justify-center">
             <p className="text-sm font-medium text-muted-foreground mb-1">Total Session</p>
             <p className="text-3xl font-bold tracking-tight text-foreground">{formatHours(totalSessionSec)}</p>
             <p className="text-xs text-muted-foreground mt-1">Includes idle time ({formatHours(totalIdleSec)})</p>
           </CardContent>
         </Card>
-        <Card className="shadow-sm border-slate-200 hidden md:block">
+        <Card className="shadow-sm border-slate-200 dark:border-white/10 hidden md:block">
           <CardContent className="p-5 flex flex-col justify-center">
             <p className="text-sm font-medium text-muted-foreground mb-1">Logs</p>
             <p className="text-3xl font-bold tracking-tight text-foreground">{totalEntries}</p>
             <p className="text-xs text-muted-foreground mt-1">Across {uniqueTasks} tasks</p>
           </CardContent>
         </Card>
-        <Card className="shadow-sm border-slate-200 hidden md:block">
+        <Card className="shadow-sm border-slate-200 dark:border-white/10 hidden md:block">
           <CardContent className="p-5 flex flex-col justify-center">
             <p className="text-sm font-medium text-muted-foreground mb-1">Projects</p>
             <p className="text-3xl font-bold tracking-tight text-foreground">{uniqueProjects}</p>
@@ -284,7 +284,7 @@ export default function TimesheetClient({ currentUser, projects, users, tasks }:
         
         {entries.length === 0 ? (
           <div className="p-12 text-center text-muted-foreground flex flex-col items-center justify-center">
-            <Search className="w-8 h-8 mb-4 text-slate-300" />
+            <Search className="w-8 h-8 mb-4 text-slate-300 dark:text-slate-600" />
             <p className="text-lg font-medium">No time entries found</p>
             <p className="text-sm mt-1">Adjust your filters and try again.</p>
           </div>
@@ -324,7 +324,7 @@ export default function TimesheetClient({ currentUser, projects, users, tasks }:
                     )}
                     <TableCell className="text-right">
                       <div className="font-mono font-bold">{formatHours(e.activeWorkedDuration)}</div>
-                      {e.idleDuration > 0 && <div className="text-xs text-orange-500 font-mono">+{formatHours(e.idleDuration)} idle</div>}
+                      {e.idleDuration > 0 && <div className="text-xs text-orange-500 dark:text-orange-400 font-mono">+{formatHours(e.idleDuration)} idle</div>}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-[10px] uppercase">{e.entryType}</Badge>
@@ -341,7 +341,7 @@ export default function TimesheetClient({ currentUser, projects, users, tasks }:
                   const gIdle = groupEntries.reduce((acc, e) => acc + e.idleDuration, 0);
                   return (
                     <React.Fragment key={groupKey}>
-                      <TableRow className="bg-muted/40 hover:bg-muted/40 border-t-2 border-slate-200">
+                      <TableRow className="bg-muted/40 hover:bg-muted/40 border-t-2 border-slate-200 dark:border-white/10">
                         <TableCell colSpan={!isMember ? 6 : 5} className="py-2">
                           <div className="flex items-center justify-between w-full">
                             <span className="font-bold text-primary">{groupKey}</span>
@@ -370,7 +370,7 @@ export default function TimesheetClient({ currentUser, projects, users, tasks }:
                           )}
                           <TableCell className="text-right">
                             <div className="font-mono font-medium">{formatHours(e.activeWorkedDuration)}</div>
-                            {e.idleDuration > 0 && <div className="text-[10px] text-orange-500 font-mono">+{formatHours(e.idleDuration)} idle</div>}
+                            {e.idleDuration > 0 && <div className="text-[10px] text-orange-500 dark:text-orange-400 font-mono">+{formatHours(e.idleDuration)} idle</div>}
                           </TableCell>
                           <TableCell><Badge variant="outline" className="text-[10px]">{e.entryType}</Badge></TableCell>
                           <TableCell><Badge variant="secondary" className="text-[10px]">{e.status}</Badge></TableCell>

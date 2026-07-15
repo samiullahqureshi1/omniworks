@@ -5,8 +5,6 @@ import { prisma } from '@/lib/db';
 import { unstable_cache } from 'next/cache';
 import WorkspaceLayoutClient from './WorkspaceLayoutClient';
 
-import { ThemeProvider } from '@/components/ThemeProvider';
-
 // Cache org/PM data per user for 30 seconds to avoid re-querying on every tab navigation.
 // This is invalidated automatically after 30s or when the user switches org (via router.refresh).
 const getLayoutData = unstable_cache(
@@ -91,10 +89,8 @@ export default async function WorkspaceLayout({
   );
 
   return (
-    <ThemeProvider>
-      <WorkspaceLayoutClient user={{...user, isPM}} userOrganizations={userOrganizations}>
-        {children}
-      </WorkspaceLayoutClient>
-    </ThemeProvider>
+    <WorkspaceLayoutClient user={{...user, isPM}} userOrganizations={userOrganizations}>
+      {children}
+    </WorkspaceLayoutClient>
   );
 }

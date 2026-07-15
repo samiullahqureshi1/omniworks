@@ -1,10 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { secondaryNavigation, SecondarySection, SecondaryNavItem } from './NavigationConfig';
 import { usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronDown, Plus, Trash2, ArrowRight } from 'lucide-react';
+import { ChevronDown, Plus, Trash2, ArrowRight, FileText, Pin } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +40,46 @@ export function SecondarySidebar({
   const sections = isSettingsPage
     ? (secondaryNavigation['settings'] || [])
     : (secondaryNavigation[activeTab] || []);
+
+  const [pinnedTemplates, setPinnedTemplates] = useState<any[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== 'home') return;
+    
+    const fetchTemplates = async () => {
+      setLoadingTemplates(true);
+      try {
+        const { getProjectTemplatesAction } = await import('@/app/actions/projects');
+        const res = await getProjectTemplatesAction();
+        if (res.success && res.templates) {
+          // Use the project templates pin key (not teamops internal templates)
+          const savedPinned = localStorage.getItem("omniwork_pinned_templates");
+          const pinnedIds: string[] = savedPinned ? JSON.parse(savedPinned) : [];
+          const filtered = res.templates.filter((t: any) => pinnedIds.includes(t.id)).slice(0, 5);
+          setPinnedTemplates(filtered);
+        }
+      } catch (err) {
+        console.error("Failed to load pinned templates in sidebar:", err);
+      } finally {
+        setLoadingTemplates(false);
+      }
+    };
+
+    fetchTemplates();
+    
+    const handleSync = () => {
+      fetchTemplates();
+    };
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('omniwork_templates_pinned_changed', handleSync);
+    window.addEventListener('omniwork_browse_templates', handleSync);
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('omniwork_templates_pinned_changed', handleSync);
+      window.removeEventListener('omniwork_browse_templates', handleSync);
+    };
+  }, [activeTab]);
 
   const handleItemClick = (item: SecondaryNavItem) => {
     if (item.comingSoon) {
@@ -166,6 +206,70 @@ export function SecondarySidebar({
             </div>
           );
         })}
+
+        {/* Pinned templates section */}
+        {activeTab === 'home' && (
+          <div className="animate-in fade-in duration-300">
+            <hr className="my-4 border-slate-200 dark:border-white/5" />
+            <div className="px-2.5 mb-2.5 flex items-center justify-between">
+              <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                Pinned Templates
+              </span>
+            </div>
+            {pinnedTemplates.length > 0 ? (
+              <div className="flex flex-col gap-1">
+                {pinnedTemplates.map((template) => (
+                  <div
+                    key={template.id}
+                    className="group relative w-full flex items-center rounded-lg transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
+                  >
+                    <button
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('omniwork_open_create_project', { detail: template }));
+                      }}
+                      className="w-full flex items-center px-2.5 py-2 min-w-0 text-left outline-none"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 w-full pr-6">
+                        <FileText size={16} className="shrink-0 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-350" />
+                        <span className="text-[13px] font-semibold truncate">{template.name}</span>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const savedPinned = localStorage.getItem("omniwork_pinned_templates");
+                        const pinnedIds: string[] = savedPinned ? JSON.parse(savedPinned) : [];
+                        const next = pinnedIds.filter((id) => id !== template.id);
+                        localStorage.setItem("omniwork_pinned_templates", JSON.stringify(next));
+                        window.dispatchEvent(new Event('omniwork_templates_pinned_changed'));
+                      }}
+                      className="absolute right-2 opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-slate-300 dark:hover:bg-white/10 text-amber-500 hover:text-red-500 transition-all cursor-pointer z-10"
+                      title="Unpin Template"
+                    >
+                      <Pin size={13} className="fill-amber-500 stroke-amber-500" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl border border-dashed border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/5 text-center">
+                <FileText size={20} className="mx-auto mb-2 text-slate-400 dark:text-slate-500" />
+                <h4 className="text-[11px] font-bold text-slate-700 dark:text-slate-300">No pinned templates</h4>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 leading-normal">
+                  Create a project, save it as template, then pin it to access quickly here.
+                </p>
+                <button
+                  onClick={() => window.dispatchEvent(new Event('omniwork_browse_templates'))}
+                  className="inline-block mt-2.5 text-[10px] font-bold text-violet-600 dark:text-violet-400 hover:underline outline-none cursor-pointer"
+                >
+                  Browse / Create templates
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

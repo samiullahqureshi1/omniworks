@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberStepper } from "@/components/ui/NumberStepper";
 import { Badge } from "@/components/ui/badge";
 import {
   Plus, Trash2, Hash, Globe, Mail, Phone, Tags, CheckSquare, CircleDashed, Type, EyeOff, Settings, X, ChevronDown, AlignLeft, Sparkles, Smile, List as ListIcon, Calendar as CalendarIcon, PlusSquare
@@ -553,10 +554,9 @@ export default function TaskFormModal({
                       <label className="text-sm font-medium">
                         Tracked Hours
                       </label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
+                      <NumberStepper
+                        step={0.1}
+                        min={0}
                         value={trackedHours}
                         onChange={(e) => setTrackedHours(e.target.value)}
                         placeholder="e.g. 5.5"
@@ -686,10 +686,9 @@ export default function TaskFormModal({
                                 Allocated Hours{" "}
                                 <span className="text-destructive">*</span>
                               </label>
-                              <Input
-                              type="number"
-                              step="0.1"
-                              min="0.1"
+                              <NumberStepper
+                              step={0.1}
+                              min={0.1}
                               required
                               value={tInput.allocatedHours}
                               onChange={(e) =>
@@ -709,10 +708,9 @@ export default function TaskFormModal({
                               <label className="text-sm font-medium">
                                 Tracked Hours
                               </label>
-                              <Input
-                                type="number"
-                                step="0.1"
-                                min="0"
+                              <NumberStepper
+                                step={0.1}
+                                min={0}
                                 value={trackedHours}
                                 onChange={(e) =>
                                   setTrackedHours(e.target.value)
@@ -841,7 +839,7 @@ export default function TaskFormModal({
                                       </div>
                                     );
                                   case 'number':
-                                    return <Input type="number" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="0" className={commonClasses} />;
+                                    return <NumberStepper value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="0" min={0} step={1} className={commonClasses} inputClassName="text-[14px] text-slate-700 dark:text-slate-300" />;
                                   case 'date':
                                     return <Input type="date" value={field.value || ''} onChange={e => updateValue(e.target.value)} className={commonClasses} />;
                                   case 'website':

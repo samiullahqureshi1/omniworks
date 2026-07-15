@@ -114,7 +114,7 @@ export default function AddManualTimeModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && <div className="text-sm text-red-500 bg-red-50 dark:bg-red-900/10 p-2 rounded">{error}</div>}
+          {error && <div className="text-sm text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/10 p-2 rounded">{error}</div>}
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Team Member</label>

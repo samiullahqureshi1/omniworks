@@ -47,7 +47,7 @@ export function MainSidebar({
   };
 
   return (
-    <div className="w-[54px] shrink-0 h-[calc(100vh-62px)] mt-0.5 mb-2 ml-2 rounded-[8px] bg-[#000000] flex flex-col items-center py-3 justify-between select-none overflow-hidden shadow-xl z-40 relative">
+    <div className="w-[54px] shrink-0 h-[calc(100vh-62px)] mt-0.5 mb-2 ml-2 rounded-[8px] bg-[#000000] dark:bg-[#0c0c0e] flex flex-col items-center py-3 justify-between select-none overflow-hidden shadow-xl z-40 relative">
       {/* Top Section */}
       <div className="flex flex-col items-center gap-2.5 w-full">
         
@@ -65,7 +65,7 @@ export function MainSidebar({
                 <ChevronsLeft size={14} />
               )}
             </button>
-            <div className="w-8 h-[1px] bg-[#1f1f24] my-1.5" />
+            <div className="w-8 h-[1px] bg-[#1f1f24] dark:bg-white/10 my-1.5" />
           </div>
         )}
 
@@ -94,7 +94,7 @@ export function MainSidebar({
                       </span>
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="center" side="right" className="w-48 bg-[#18181c] text-slate-200 rounded-xl border border-white/10 p-1.5 ml-2 z-50 shadow-xl">
+                  <DropdownMenuContent align="center" side="right" className="w-48 bg-[#18181c] dark:bg-[#151518] text-slate-200 rounded-xl border border-white/10 p-1.5 ml-2 z-50 shadow-xl">
                     <DropdownMenuItem 
                       onClick={() => setActiveTab('rules')}
                       className={`cursor-pointer rounded-lg px-2.5 py-2 text-xs font-semibold flex items-center gap-2 hover:bg-white/5 focus:bg-white/5 ${

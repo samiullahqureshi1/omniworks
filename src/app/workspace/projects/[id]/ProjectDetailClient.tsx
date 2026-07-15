@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NumberStepper } from '@/components/ui/NumberStepper';
 import { 
   ArrowLeft, Calendar, Clock, MoreHorizontal, Settings, 
   LayoutDashboard, CheckSquare, Users, Timer, Activity,
@@ -685,11 +686,11 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
 
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Project Budget ($)</label>
-                        <Input name="projectBudget" type="number" step="0.01" min="0" defaultValue={project.projectBudget || ''} />
+                        <NumberStepper name="projectBudget" step={1} min={0} defaultValue={project.projectBudget || ''} />
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Total Allocated Hours <span className="text-destructive">*</span></label>
-                        <Input name="totalAllocatedHours" type="number" step="0.1" min="0" required defaultValue={project.totalAllocatedHours || ''} />
+                        <NumberStepper name="totalAllocatedHours" step={0.1} min={0} required defaultValue={project.totalAllocatedHours || ''} />
                       </div>
 
                       {/* Custom Fields */}
@@ -1162,7 +1163,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Allocated Hours</label>
-                        <Input type="number" step="0.5" min="0" placeholder="e.g. 5.5" value={newTaskHours} onChange={e => setNewTaskHours(e.target.value)} />
+                        <NumberStepper step={0.5} min={0} placeholder="e.g. 5.5" value={newTaskHours} onChange={e => setNewTaskHours(e.target.value)} />
                       </div>
                     </div>
                     <div className="space-y-2">

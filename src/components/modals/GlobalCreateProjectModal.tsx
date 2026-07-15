@@ -4,9 +4,12 @@ import React, { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Users, Trash2, X, Loader2, ChevronDown, Check, Repeat, FolderKanban, Pin, Star, LayoutGrid, Search, Edit2, Calendar, Clock, ShieldAlert, Crown, Shield, MoreHorizontal, ArrowRight } from "lucide-react";
+import { NumberStepper } from "@/components/ui/NumberStepper";
+import { Plus, Users, Trash2, X, Loader2, ChevronDown, Check, Repeat, FolderKanban, Pin, Star, LayoutGrid, Search, Edit2, Calendar as CalendarIcon, Clock, ShieldAlert, Crown, Shield, MoreHorizontal, ArrowRight, Hash, Globe, Mail, Phone, Tags, CheckSquare, CircleDashed, Type, EyeOff, Settings } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import { addDays, addWeeks, format } from "date-fns";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +18,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  FormDialog,
+  FormDialogCancelButton,
+  FormDialogSubmitButton,
+  formFieldLabel,
+  formInputClass,
+} from "@/components/ui/FormDialog";
 import { toast } from "sonner";
 import { createProjectAction, quickCreateClientAction, createProjectTemplateAction, getProjectTemplatesAction, deleteProjectTemplateAction } from "@/app/actions/projects";
 import { getProjectFormDataAction } from "@/app/actions/getProjectFormDataAction";
@@ -31,9 +41,13 @@ import {
 export default function GlobalCreateProjectModal({
   isOpen,
   setIsOpen,
+  initialTemplate,
+  browseTemplatesSignal,
 }: {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
+  initialTemplate?: any;
+  browseTemplatesSignal?: number;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -45,6 +59,7 @@ export default function GlobalCreateProjectModal({
 
   // Form States
   const [description, setDescription] = useState("");
+  const [formAssigneeIds, setFormAssigneeIds] = useState<string[]>([]);
   const [isOngoing, setIsOngoing] = useState(false);
 
   // Form Control States for Project Creation
@@ -83,10 +98,45 @@ export default function GlobalCreateProjectModal({
   // Rule Form States
   const [ruleFormName, setRuleFormName] = useState("");
   const [ruleFormDescription, setRuleFormDescription] = useState("");
-  const [ruleFormFrequency, setRuleFormFrequency] = useState("DAILY");
-  const [ruleFormReminderTime, setRuleFormReminderTime] = useState("09:00 AM");
-  const [ruleFormActionType, setRuleFormActionType] = useState("SEND_REMINDER");
-  const [ruleFormRecipients, setRuleFormRecipients] = useState<string[]>(["PROJECT_MANAGER"]);
+  const [ruleFormTriggerField, setRuleFormTriggerField] = useState("Status");
+  const [ruleFormTriggerOperator, setRuleFormTriggerOperator] = useState("Equals");
+  const [ruleFormTriggerValue, setRuleFormTriggerValue] = useState("");
+  const [ruleFormActionType, setRuleFormActionType] = useState("In-app Notification");
+  const [ruleFormRecipients, setRuleFormRecipients] = useState<string[]>([]);
+  const [ruleFormRecipientSearch, setRuleFormRecipientSearch] = useState("");
+
+  // Auto-apply initialTemplate when modal opens with a template
+  useEffect(() => {
+    if (isOpen && initialTemplate) {
+      handleUseTemplate(initialTemplate);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialTemplate]);
+
+  // "Browse / Create templates" clicked: if any templates exist, open ONLY the
+  // template picker; otherwise open the project creation modal directly.
+  useEffect(() => {
+    if (!browseTemplatesSignal) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await getProjectTemplatesAction();
+        if (cancelled) return;
+        if (res.success && res.templates && res.templates.length > 0) {
+          setTemplates(res.templates);
+          setIsTemplateSelectOpen(true);
+        } else {
+          setIsOpen(true);
+        }
+      } catch {
+        if (!cancelled) setIsOpen(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browseTemplatesSignal]);
 
   const handleCreateRule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,9 +149,11 @@ export default function GlobalCreateProjectModal({
       const res = await createRuleAction({
         name: ruleFormName,
         description: ruleFormDescription,
-        frequency: ruleFormFrequency,
-        reminderTime: ruleFormReminderTime,
+        triggerField: ruleFormTriggerField,
+        triggerOperator: ruleFormTriggerOperator,
+        triggerValue: ruleFormTriggerValue,
         actionType: ruleFormActionType,
+        actionRecipients: ruleFormRecipients,
         recipients: ruleFormRecipients,
       });
 
@@ -121,10 +173,12 @@ export default function GlobalCreateProjectModal({
         // Reset form
         setRuleFormName("");
         setRuleFormDescription("");
-        setRuleFormFrequency("DAILY");
-        setRuleFormReminderTime("09:00 AM");
-        setRuleFormActionType("SEND_REMINDER");
-        setRuleFormRecipients(["PROJECT_MANAGER"]);
+        setRuleFormTriggerField("Status");
+        setRuleFormTriggerOperator("Equals");
+        setRuleFormTriggerValue("");
+        setRuleFormActionType("In-app Notification");
+        setRuleFormRecipients([]);
+        setRuleFormRecipientSearch("");
       }
     });
   };
@@ -402,7 +456,7 @@ export default function GlobalCreateProjectModal({
       projectBudget: formBudget ? Number(formBudget) : undefined,
       totalAllocatedHours: formAllocatedHours ? Number(formAllocatedHours) : undefined,
       notes: formNotes,
-      assigneeIds: [],
+      assigneeIds: formAssigneeIds,
       customFields,
       isRepeated: isRepeatEnabled,
       repeatSettings: {
@@ -442,6 +496,7 @@ export default function GlobalCreateProjectModal({
         setFormAllocatedHours("");
         setFormNotes("");
         setDescription("");
+        setFormAssigneeIds([]);
         setIsRepeatEnabled(false);
         setRepeatFrequency("DAILY");
         setRepeatTime("09:00");
@@ -491,11 +546,6 @@ export default function GlobalCreateProjectModal({
             </div>
             
             <div className="flex items-center gap-2 shrink-0">
-              {/* Templates Selector in Header */}
-              <Button type="button" variant="outline" size="sm" className="h-9 rounded-xl border bg-background px-3 text-xs font-semibold flex items-center gap-1.5 shadow-sm" onClick={() => setIsTemplateSelectOpen(true)}>
-                <FolderKanban className="h-3.5 w-3.5 text-muted-foreground" /> Select from Template...
-              </Button>
-              
               {/* Rules Selector in Header */}
               {attachedRuleIds.length > 0 && (
                 <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border border-indigo-100 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900/50 text-[10px] font-bold px-2 py-0.5 rounded-lg">
@@ -620,6 +670,74 @@ export default function GlobalCreateProjectModal({
                     ))}
                   </select>
                 </div>
+
+                {/* Assignees Multi-select */}
+                <div className="space-y-2 col-span-2">
+                  <label className="text-sm font-medium">Assigned Users (Multi-select)</label>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" variant="outline" className="w-full justify-between h-9 rounded-xl border text-slate-700 dark:text-slate-300 px-3 text-sm font-medium flex items-center">
+                        <span>{formAssigneeIds.length > 0 ? `${formAssigneeIds.length} user(s) selected` : "Select assignees..."}</span>
+                        <ChevronDown className="h-4 w-4 text-muted-foreground ml-2 shrink-0" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-[300px] max-h-[300px] overflow-y-auto bg-white dark:bg-[#1C1C1C] rounded-xl shadow-lg border border-slate-200 dark:border-white/10 p-2 z-50 custom-scrollbar" onInteractOutside={(e) => e.stopPropagation()}>
+                      {members.length === 0 ? (
+                        <div className="p-2 text-center text-xs text-slate-500">No active team members</div>
+                      ) : (
+                        members.map((m) => {
+                          const isAssigned = formAssigneeIds.includes(m.id);
+                          return (
+                            <DropdownMenuItem
+                              key={m.id}
+                              onSelect={(e) => e.preventDefault()}
+                              onClick={() => {
+                                if (isAssigned) {
+                                  setFormAssigneeIds(prev => prev.filter(id => id !== m.id));
+                                } else {
+                                  setFormAssigneeIds(prev => [...prev, m.id]);
+                                }
+                              }}
+                              className="cursor-pointer rounded-lg px-2.5 py-2 text-xs flex items-center gap-2 hover:bg-muted focus:bg-muted"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isAssigned}
+                                onChange={() => {}}
+                                className="rounded border-slate-300 w-3.5 h-3.5 cursor-pointer accent-blue-600 shrink-0"
+                              />
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">{m.name}</span>
+                                <span className="text-[10px] text-slate-400">{m.email}</span>
+                              </div>
+                            </DropdownMenuItem>
+                          );
+                        })
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {formAssigneeIds.length > 0 && (
+                    <div className="flex items-center flex-wrap gap-1.5 mt-2 p-2 bg-slate-50/50 dark:bg-white/5 rounded-xl border border-slate-100 dark:border-white/10">
+                      {formAssigneeIds.map(userId => {
+                        const userObj = members.find(m => m.id === userId);
+                        if (!userObj) return null;
+                        return (
+                          <Badge key={userId} variant="secondary" className="bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300 text-[11px] font-medium px-2 py-0.5 rounded-lg flex items-center gap-1">
+                            {userObj.name}
+                            <button
+                              type="button"
+                              onClick={() => setFormAssigneeIds(prev => prev.filter(id => id !== userId))}
+                              className="text-slate-400 hover:text-red-500 transition-colors"
+                            >
+                              <X size={12} />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Configuration */}
@@ -630,7 +748,7 @@ export default function GlobalCreateProjectModal({
                     <button 
                       type="button" 
                       onClick={() => setIsCreatingStatus(!isCreatingStatus)} 
-                      className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
                     >
                       {isCreatingStatus ? "Cancel" : "+ New Status"}
                     </button>
@@ -658,7 +776,7 @@ export default function GlobalCreateProjectModal({
                   ) : (
                     <>
                       {projectStatuses.length === 0 ? (
-                        <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                        <div className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 p-2 rounded-lg border border-amber-200 dark:border-amber-900/50">
                           No statuses available.{' '}
                           <button type="button" onClick={() => setIsCreatingStatus(true)} className="font-semibold underline">
                             Create one here.
@@ -671,6 +789,7 @@ export default function GlobalCreateProjectModal({
                           onChange={(e) => setFormStatusId(e.target.value)}
                           className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
                         >
+                          <option value="">No Status</option>
                           {projectStatuses.map((s) => (
                             <option key={s.id} value={s.id}>
                               {s.name}
@@ -711,20 +830,23 @@ export default function GlobalCreateProjectModal({
                     onChange={(e) => setFormStartDate(e.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 flex flex-col justify-between">
                   <div className="flex justify-between items-center">
-                    <label className="text-sm font-medium">End Date</label>
+                    <label className="text-sm font-medium">Due Date</label>
                     <div className="flex items-center gap-1.5">
                       <input
                         type="checkbox"
-                        id="ongoing"
+                        id="ongoing-global"
                         checked={isOngoing}
-                        onChange={(e) => setIsOngoing(e.target.checked)}
+                        onChange={(e) => {
+                          setIsOngoing(e.target.checked);
+                          if (e.target.checked) setFormEndDate("");
+                        }}
                         disabled={isRepeatEnabled}
                         className="rounded border-gray-300 text-primary focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                       <label
-                        htmlFor="ongoing"
+                        htmlFor="ongoing-global"
                         className={`text-xs ${isRepeatEnabled ? 'text-muted-foreground/50 cursor-not-allowed' : 'text-muted-foreground cursor-pointer'}`}
                       >
                         Ongoing
@@ -736,19 +858,52 @@ export default function GlobalCreateProjectModal({
                       * Ongoing is disabled for repeating projects.
                     </div>
                   )}
-                  {!isOngoing ? (
-                    <Input
-                      name="endDate"
-                      type="date"
-                      required={!isOngoing}
-                      value={formEndDate}
-                      onChange={(e) => setFormEndDate(e.target.value)}
-                    />
-                  ) : (
-                    <div className="flex h-9 w-full items-center justify-center rounded-xl border bg-muted/50 text-xs text-muted-foreground italic">
-                      Project has no end date
-                    </div>
-                  )}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" variant="outline" className="w-full justify-between h-9 rounded-xl border text-slate-700 dark:text-slate-300 px-3 text-sm font-medium flex items-center">
+                        {isOngoing ? (
+                          <span className="text-emerald-600 font-medium flex items-center gap-1.5"><Clock size={12} /> Ongoing</span>
+                        ) : formEndDate ? (
+                          <span>{format(new Date(formEndDate + "T12:00:00"), 'MMM d, yyyy')}</span>
+                        ) : (
+                          <span className="text-slate-400 font-normal">Set due date</span>
+                        )}
+                        <CalendarIcon className="h-4 w-4 text-muted-foreground ml-2 shrink-0" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-auto p-0 flex flex-row bg-white dark:bg-[#1C1C1C] rounded-xl shadow-lg border border-slate-200 dark:border-white/10 z-[9999]" onInteractOutside={(e) => e.stopPropagation()}>
+                      <div className="flex flex-col border-r border-slate-100 dark:border-white/5 w-[140px] py-2">
+                        <button type="button" onClick={() => { setFormEndDate(new Date().toISOString().split('T')[0]); setIsOngoing(false); }} className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left group">
+                          <span className="text-slate-700 dark:text-slate-300 font-medium">Today</span>
+                          <span className="text-[10px] text-slate-400 group-hover:text-slate-500">{format(new Date(), 'EEE')}</span>
+                        </button>
+                        <button type="button" onClick={() => { setFormEndDate(addDays(new Date(), 1).toISOString().split('T')[0]); setIsOngoing(false); }} className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left group">
+                          <span className="text-slate-700 dark:text-slate-300 font-medium">Tomorrow</span>
+                          <span className="text-[10px] text-slate-400 group-hover:text-slate-500">{format(addDays(new Date(), 1), 'EEE')}</span>
+                        </button>
+                        <button type="button" onClick={() => { setFormEndDate(addWeeks(new Date(), 1).toISOString().split('T')[0]); setIsOngoing(false); }} className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left group">
+                          <span className="text-slate-700 dark:text-slate-300 font-medium">Next week</span>
+                          <span className="text-[10px] text-slate-400 group-hover:text-slate-500">{format(addWeeks(new Date(), 1), 'EEE')}</span>
+                        </button>
+                        <button type="button" onClick={() => { setFormEndDate(addWeeks(new Date(), 2).toISOString().split('T')[0]); setIsOngoing(false); }} className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left">
+                          <span className="text-slate-700 dark:text-slate-300 font-medium">2 weeks</span>
+                        </button>
+                        {!isRepeatEnabled && (
+                          <button type="button" onClick={() => { setIsOngoing(true); setFormEndDate(""); }} className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left text-emerald-600 dark:text-emerald-400">
+                            <span className="font-medium">Ongoing</span>
+                            <Clock size={12} className="text-emerald-500" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="p-3">
+                        <Calendar
+                          mode="single"
+                          selected={formEndDate ? new Date(formEndDate + "T12:00:00") : undefined}
+                          onSelect={(date) => { if (date) { setFormEndDate(date.toISOString().split('T')[0]); setIsOngoing(false); } }}
+                        />
+                      </div>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
 
@@ -832,11 +987,10 @@ export default function GlobalCreateProjectModal({
                       (Optional)
                     </span>
                   </label>
-                  <Input
+                  <NumberStepper
                     name="projectBudget"
-                    type="number"
-                    step="0.01"
-                    min="0"
+                    step={1}
+                    min={0}
                     placeholder="e.g. 5000"
                     value={formBudget}
                     onChange={(e) => setFormBudget(e.target.value)}
@@ -847,11 +1001,10 @@ export default function GlobalCreateProjectModal({
                     Total Allocated Hours{" "}
                     <span className="text-destructive">*</span>
                   </label>
-                  <Input
+                  <NumberStepper
                     name="totalAllocatedHours"
-                    type="number"
-                    step="0.1"
-                    min="0"
+                    step={0.1}
+                    min={0}
                     required
                     placeholder="e.g. 120"
                     value={formAllocatedHours}
@@ -865,241 +1018,110 @@ export default function GlobalCreateProjectModal({
                 <div className="flex justify-between items-center">
                   <label className="text-sm font-medium flex items-center gap-1.5">
                     Custom Fields{" "}
-                    <span className="text-xs text-muted-foreground font-normal">
-                      (Optional)
-                    </span>
+                    <span className="text-xs text-muted-foreground font-normal">(Optional)</span>
                   </label>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() =>
-                      setCustomFields([
-                        ...customFields,
-                        {
-                          name: "",
-                          type: "text",
-                          value: "",
-                        },
-                      ])
-                    }
-                    className="h-8 text-xs"
+                    onClick={() => setCustomFields([...customFields, { name: "", type: "text", value: "" }])}
+                    className="h-8 px-3 text-[13px] bg-white dark:bg-[#252525] border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-slate-700 dark:text-slate-300 shadow-sm rounded-lg"
                   >
-                    <Plus className="mr-1 h-3 w-3" /> Add Field
+                    <Plus className="mr-1.5 h-3.5 w-3.5 text-slate-400" /> Add Field
                   </Button>
                 </div>
 
                 {customFields.length > 0 && (
                   <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
-                    {customFields.map((field, index) => (
-                      <div
-                        key={index}
-                        className="p-3 border rounded-xl bg-muted/20 space-y-3 relative group"
-                      >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCustomFields(
-                              customFields.filter((_, i) => i !== index)
-                            )
-                          }
-                          className="absolute right-2 top-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                    {customFields.map((field, index) => {
+                      const getIconForType = (type: string) => {
+                        switch (type) {
+                          case 'number': return <Hash size={14} className="text-slate-400" />;
+                          case 'url':
+                          case 'website': return <Globe size={14} className="text-slate-400" />;
+                          case 'email': return <Mail size={14} className="text-slate-400" />;
+                          case 'phone': return <Phone size={14} className="text-slate-400" />;
+                          case 'dropdown': return <Tags size={14} className="text-slate-400" />;
+                          case 'checkboxes': return <CheckSquare size={14} className="text-slate-400" />;
+                          case 'date': return <CircleDashed size={14} className="text-slate-400" />;
+                          default: return <Type size={14} className="text-slate-400" />;
+                        }
+                      };
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-medium text-muted-foreground">Field Name</label>
+                      const renderFieldValueInput = () => {
+                        const updateValue = (val: any) => {
+                          const newFields = [...customFields];
+                          newFields[index].value = val;
+                          setCustomFields(newFields);
+                        };
+                        const commonClasses = "h-full w-full border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-4 bg-transparent text-[14px] text-slate-700 dark:text-slate-300 rounded-none shadow-none outline-none appearance-none";
+                        switch (field.type) {
+                          case 'number': return <NumberStepper value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="0" min={0} step={1} className={commonClasses} inputClassName="text-[14px] text-slate-700 dark:text-slate-300" />;
+                          case 'date': return <Input type="date" value={field.value || ''} onChange={e => updateValue(e.target.value)} className={commonClasses} />;
+                          case 'website': case 'url': return <Input type="url" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="https://..." className={commonClasses} />;
+                          case 'phone': return <Input type="tel" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="+1..." className={commonClasses} />;
+                          case 'email': return <Input type="email" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="email@example.com" className={commonClasses} />;
+                          case 'checkbox': return <div className="flex items-center h-full px-4"><input type="checkbox" checked={!!field.value} onChange={e => updateValue(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" /></div>;
+                          default: return <Input type="text" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+                        }
+                      };
+
+                      return (
+                        <div
+                          key={index}
+                          className={`flex items-stretch w-full border border-slate-200 dark:border-white/10 rounded-md overflow-hidden group transition-all ${field.type === 'text area' ? 'h-[80px]' : 'h-[42px]'}`}
+                        >
+                          <div className="flex items-center gap-2 px-3 py-2 min-w-[150px] w-1/3 border-r border-slate-200 dark:border-white/10 bg-[#FAFAFA] dark:bg-[#1A1A1A] relative">
+                            {getIconForType(field.type)}
                             <Input
-                              placeholder="e.g. Skype ID, Website"
                               value={field.name}
                               onChange={(e) => {
                                 const newFields = [...customFields];
                                 newFields[index].name = e.target.value;
                                 setCustomFields(newFields);
                               }}
-                              className="h-8 text-xs bg-background"
-                              required
+                              className="h-7 text-[14px] bg-transparent border-0 focus-visible:ring-1 focus-visible:ring-slate-300 px-1 font-medium text-slate-700 dark:text-slate-300 w-full shadow-none"
+                              placeholder="Field name"
                             />
+                            <div className="absolute right-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#FAFAFA] dark:bg-[#1A1A1A] pl-1">
+                              <select
+                                value={field.type}
+                                onChange={(e) => {
+                                  const newFields = [...customFields];
+                                  newFields[index].type = e.target.value;
+                                  newFields[index].value = '';
+                                  setCustomFields(newFields);
+                                }}
+                                className="text-[10px] text-slate-500 bg-transparent border border-slate-200 dark:border-white/10 rounded px-1 cursor-pointer outline-none"
+                              >
+                                <option value="text">Text</option>
+                                <option value="number">Number</option>
+                                <option value="url">URL</option>
+                                <option value="email">Email</option>
+                                <option value="phone">Phone</option>
+                                <option value="date">Date</option>
+                                <option value="checkbox">Checkbox</option>
+                              </select>
+                            </div>
                           </div>
-
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-medium text-muted-foreground">Field Type</label>
-                            <select
-                              value={field.type}
-                              onChange={(e) => {
-                                const newFields = [...customFields];
-                                newFields[index].type = e.target.value;
-                                newFields[index].value = "";
-                                setCustomFields(newFields);
-                              }}
-                              className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
+                          <div className="flex-1 relative bg-white dark:bg-[#252525]">
+                            {renderFieldValueInput()}
+                            <button
+                              type="button"
+                              onClick={() => setCustomFields(customFields.filter((_, i) => i !== index))}
+                              className="absolute right-2 top-2 border border-slate-200 dark:border-white/10 rounded p-[3px] text-slate-500 hover:text-destructive hover:bg-slate-50 dark:hover:bg-white/5 transition-all bg-white dark:bg-[#252525] opacity-0 group-hover:opacity-100 shadow-sm z-10"
                             >
-                              <option value="text">Text</option>
-                              <option value="number">Number</option>
-                              <option value="url">URL</option>
-                            </select>
+                              <X size={13} />
+                            </button>
                           </div>
                         </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-medium text-muted-foreground">Value</label>
-                          <Input
-                            type={field.type === "number" ? "number" : "text"}
-                            placeholder={
-                              field.type === "url"
-                                ? "https://example.com"
-                                : field.type === "number"
-                                ? "0"
-                                : "Enter value..."
-                            }
-                            value={field.value}
-                            onChange={(e) => {
-                              const newFields = [...customFields];
-                              newFields[index].value = e.target.value;
-                              setCustomFields(newFields);
-                            }}
-                            className="h-8 text-xs bg-background"
-                            required
-                          />
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
-              {/* Project Tasks */}
-              <div className="space-y-3 pt-2">
-                <div className="flex justify-between items-center">
-                  <label className="text-sm font-medium">
-                    Initial Tasks{" "}
-                    <span className="text-xs text-muted-foreground font-normal">
-                      (Optional)
-                    </span>
-                  </label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setProjectTasks([
-                        ...projectTasks,
-                        {
-                          id: Math.random().toString(),
-                          title: "",
-                          description: "",
-                          status: "TODO",
-                          priority: "MEDIUM",
-                          assigneeId: "",
-                        },
-                      ])
-                    }
-                    className="h-8 text-xs"
-                  >
-                    <Plus className="mr-1 h-3 w-3" /> Add Task
-                  </Button>
-                </div>
 
-                {projectTasks.length > 0 && (
-                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
-                    {projectTasks.map((task, index) => (
-                      <div
-                        key={task.id}
-                        className="p-3 border rounded-xl bg-muted/20 space-y-3 relative group"
-                      >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setProjectTasks(
-                              projectTasks.filter((t) => t.id !== task.id),
-                            )
-                          }
-                          className="absolute right-2 top-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-
-                        <div className="space-y-1.5 pr-6">
-                          <Input
-                            placeholder="Task Title *"
-                            value={task.title}
-                            onChange={(e) => {
-                              const newTasks = [...projectTasks];
-                              newTasks[index].title = e.target.value;
-                              setProjectTasks(newTasks);
-                            }}
-                            className="h-8 text-sm bg-background"
-                            required
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Input
-                            placeholder="Description (Optional)"
-                            value={task.description}
-                            onChange={(e) => {
-                              const newTasks = [...projectTasks];
-                              newTasks[index].description = e.target.value;
-                              setProjectTasks(newTasks);
-                            }}
-                            className="h-8 text-sm bg-background"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2">
-                          <select
-                            value={task.status}
-                            onChange={(e) => {
-                              const newTasks = [...projectTasks];
-                              newTasks[index].status = e.target.value;
-                              setProjectTasks(newTasks);
-                            }}
-                            className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
-                          >
-                            <option value="TODO">To Do</option>
-                            <option value="IN_PROGRESS">In Progress</option>
-                            <option value="DONE">Done</option>
-                          </select>
-
-                          <select
-                            value={task.priority}
-                            onChange={(e) => {
-                              const newTasks = [...projectTasks];
-                              newTasks[index].priority = e.target.value as any;
-                              setProjectTasks(newTasks);
-                            }}
-                            className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
-                          >
-                            <option value="LOW">Low</option>
-                            <option value="MEDIUM">Medium</option>
-                            <option value="HIGH">High</option>
-                            <option value="CRITICAL">Critical</option>
-                          </select>
-
-                          <select
-                            value={task.assigneeId}
-                            onChange={(e) => {
-                              const newTasks = [...projectTasks];
-                              newTasks[index].assigneeId = e.target.value;
-                              setProjectTasks(newTasks);
-                            }}
-                            className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
-                          >
-                            <option value="">Unassigned</option>
-                            {members.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
 
               <DialogFooter className="pt-4 border-t mt-6 sticky bottom-0 bg-background pb-2 flex items-center justify-between">
                 <Button
@@ -1129,46 +1151,33 @@ export default function GlobalCreateProjectModal({
       </Dialog>
 
       {/* Quick Create Client Modal */}
-      <Dialog open={isQuickClientOpen} onOpenChange={setIsQuickClientOpen}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle>Quick Add Client</DialogTitle>
-            <DialogDescription>
-              Create a client record instantly to assign to this project.
-            </DialogDescription>
-          </DialogHeader>
-          <form
-            onSubmit={handleQuickCreateClient}
-            className="space-y-4 pt-4"
-          >
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Client Name</label>
-              <Input name="name" required placeholder="Acme Corp" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Client Email</label>
-              <Input
-                name="email"
-                type="email"
-                required
-                placeholder="contact@acme.com"
-              />
-            </div>
-            <DialogFooter className="pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsQuickClientOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? "Creating..." : "Create Client"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <FormDialog
+        open={isQuickClientOpen}
+        onOpenChange={setIsQuickClientOpen}
+        title="Quick Add Client"
+        description="Create a client record instantly to assign to this project."
+        footer={
+          <>
+            <FormDialogCancelButton onClick={() => setIsQuickClientOpen(false)} disabled={isPending}>
+              Cancel
+            </FormDialogCancelButton>
+            <FormDialogSubmitButton type="submit" form="quick-client-form" disabled={isPending}>
+              {isPending ? "Creating..." : "Create Client"}
+            </FormDialogSubmitButton>
+          </>
+        }
+      >
+        <form id="quick-client-form" onSubmit={handleQuickCreateClient} className="p-6 space-y-4">
+          <div className="space-y-2">
+            <label className={formFieldLabel}>Client Name</label>
+            <Input name="name" required placeholder="Acme Corp" className={formInputClass} />
+          </div>
+          <div className="space-y-2">
+            <label className={formFieldLabel}>Client Email</label>
+            <Input name="email" type="email" required placeholder="contact@acme.com" className={formInputClass} />
+          </div>
+        </form>
+      </FormDialog>
 
       {/* Save Template Name Modal */}
       <Dialog open={isSaveTemplateOpen} onOpenChange={setIsSaveTemplateOpen}>
@@ -1207,106 +1216,227 @@ export default function GlobalCreateProjectModal({
 
       {/* CREATE RULE DIALOG */}
       <Dialog open={isCreateRuleOpen} onOpenChange={setIsCreateRuleOpen}>
-        <DialogContent className="sm:max-w-[500px] bg-background border-border max-h-[85vh] overflow-y-auto custom-scrollbar">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[550px] bg-background border-border max-h-[85vh] p-0 flex flex-col overflow-hidden">
+          <DialogHeader className="p-6 pb-4 border-b shrink-0">
             <DialogTitle>Create Automation Rule</DialogTitle>
             <DialogDescription>
-              Define automation trigger schedules and actions.
+              Define automation trigger conditions and actions.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreateRule} className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Rule Name</label>
-              <Input
-                required
-                value={ruleFormName}
-                onChange={(e) => setRuleFormName(e.target.value)}
-                placeholder="e.g. Daily Project Report Reminder"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Description</label>
-              <Input
-                value={ruleFormDescription}
-                onChange={(e) => setRuleFormDescription(e.target.value)}
-                placeholder="Send daily reminder to PM"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border">
+          <form onSubmit={handleCreateRule} className="flex flex-col flex-1 overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Frequency</label>
-                <select
-                  value={ruleFormFrequency}
-                  onChange={(e) => setRuleFormFrequency(e.target.value)}
-                  className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
-                >
-                  <option value="DAILY">Daily</option>
-                          <option value="WEEKLY">Weekly</option>
-                          <option value="MONTHLY">Monthly</option>
-                          <option value="QUARTERLY">Quarterly</option>
-                          <option value="YEARLY">Yearly</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">Reminder Time</label>
+                <label className="text-xs font-semibold text-muted-foreground">Rule Name</label>
                 <Input
-                  value={ruleFormReminderTime}
-                  onChange={(e) => setRuleFormReminderTime(e.target.value)}
-                  placeholder="e.g. 06:00 PM"
+                  required
+                  value={ruleFormName}
+                  onChange={(e) => setRuleFormName(e.target.value)}
+                  placeholder="e.g. Bug Auto-Notification"
                 />
               </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Action Type</label>
-              <select
-                value={ruleFormActionType}
-                onChange={(e) => setRuleFormActionType(e.target.value)}
-                className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
-              >
-                <option value="SEND_REMINDER">Send Reminder</option>
-                <option value="CREATE_TASK">Create Task</option>
-                <option value="SEND_NOTIFICATION">Send Notification</option>
-              </select>
-            </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground">Description</label>
+                <Input
+                  value={ruleFormDescription}
+                  onChange={(e) => setRuleFormDescription(e.target.value)}
+                  placeholder="Alerts when a new bug is reported"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground">Send Reminder To</label>
-              <div className="flex flex-col gap-2 p-3 border rounded-xl bg-muted/20">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={ruleFormRecipients.includes('PROJECT_OWNER')}
-                    onChange={() => toggleRuleRecipient('PROJECT_OWNER')}
-                    className="rounded border-gray-300 text-primary"
-                  />
-                  Project Owner
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={ruleFormRecipients.includes('PROJECT_MANAGER')}
-                    onChange={() => toggleRuleRecipient('PROJECT_MANAGER')}
-                    className="rounded border-gray-300 text-primary"
-                  />
-                  Project Manager
-                </label>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={ruleFormRecipients.includes('ASSIGNED_USER')}
-                    onChange={() => toggleRuleRecipient('ASSIGNED_USER')}
-                    className="rounded border-gray-300 text-primary"
-                  />
-                  Assigned Users
-                </label>
+              {/* IF Trigger block */}
+              <div className="space-y-3 p-4 border rounded-2xl bg-muted/15">
+                <div className="text-xs font-bold text-primary flex items-center gap-1">
+                  <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold">IF</Badge>
+                  Condition
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Field</label>
+                    <select
+                      value={ruleFormTriggerField}
+                      onChange={(e) => setRuleFormTriggerField(e.target.value)}
+                      className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                    >
+                      <option value="Title">Title</option>
+                      <option value="Status">Status</option>
+                      <option value="Priority">Priority</option>
+                      <option value="Due Date">Due Date</option>
+                      <option value="Assigned User">Assigned User</option>
+                      <option value="Project">Project</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Condition</label>
+                    <select
+                      value={ruleFormTriggerOperator}
+                      onChange={(e) => setRuleFormTriggerOperator(e.target.value)}
+                      className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
+                    >
+                      <option value="Contains">Contains</option>
+                      <option value="Equals">Equals</option>
+                      <option value="Starts With">Starts With</option>
+                      <option value="Ends With">Ends With</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5 col-span-2">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Value</label>
+                    <Input
+                      required
+                      value={ruleFormTriggerValue}
+                      onChange={(e) => setRuleFormTriggerValue(e.target.value)}
+                      placeholder="e.g. Bug"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* THEN Action block */}
+              <div className="space-y-3 p-4 border rounded-2xl bg-muted/15">
+                <div className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                  <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold">THEN</Badge>
+                  Action & Recipients
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase">Action</label>
+                  <select
+                    value={ruleFormActionType}
+                    onChange={(e) => setRuleFormActionType(e.target.value)}
+                    className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1"
+                  >
+                    <option value="In-app Notification">In-app Notification</option>
+                    <option value="Notification Email">Notification Email</option>
+                    <option value="Create Task">Create Task</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">To (Recipients)</label>
+                  
+                  {/* Selected Pills */}
+                  {ruleFormRecipients.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50 dark:bg-zinc-900 border rounded-xl">
+                      {ruleFormRecipients.map(id => {
+                        const roleLabel = id === 'PROJECT_MANAGER' ? 'Project Manager' : id === 'PROJECT_OWNER' ? 'Project Owner' : id === 'ASSIGNED_USER' ? 'All Assigned Users' : '';
+                        const userLabel = users.find(u => u.id === id)?.name || id;
+                        const displayName = roleLabel || userLabel;
+                        return (
+                          <Badge key={id} variant="secondary" className="gap-1.5 pl-2 pr-1 py-0.5 rounded-lg text-[10px] font-semibold bg-background shadow-sm border border-slate-200 text-slate-800 dark:text-slate-200">
+                            {displayName}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); toggleRuleRecipient(id); }}
+                              className="hover:bg-muted p-0.5 rounded-full text-slate-500 hover:text-slate-900"
+                            >
+                              <X size={10} />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input
+                      placeholder="Search roles or team members..."
+                      value={ruleFormRecipientSearch}
+                      onChange={(e) => setRuleFormRecipientSearch(e.target.value)}
+                      className="pl-9 pr-4 rounded-xl text-sm"
+                    />
+                  </div>
+
+                  {/* Scroll Box */}
+                  <div className="border rounded-2xl p-2.5 max-h-[200px] overflow-y-auto space-y-3 bg-background custom-scrollbar">
+                    
+                    {/* Default Roles Grid */}
+                    {('project manager'.includes(ruleFormRecipientSearch.toLowerCase()) || 
+                      'project owner'.includes(ruleFormRecipientSearch.toLowerCase()) || 
+                      'all assigned users'.includes(ruleFormRecipientSearch.toLowerCase())) && (
+                      <div className="space-y-1.5">
+                        <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider block px-1">Roles</span>
+                        <div className="grid grid-cols-1 gap-2">
+                          {[
+                            { id: 'PROJECT_MANAGER', label: 'Project Manager (PM)', desc: 'Person leading project operations', icon: Shield },
+                            { id: 'PROJECT_OWNER', label: 'Project Owner', desc: 'Organization owner or creator', icon: Crown },
+                            { id: 'ASSIGNED_USER', label: 'All Assigned Users', desc: 'All members assigned to the task/project', icon: Users }
+                          ].filter(role => role.label.toLowerCase().includes(ruleFormRecipientSearch.toLowerCase())).map(role => {
+                            const isSel = ruleFormRecipients.includes(role.id);
+                            const IconComp = role.icon;
+                            return (
+                              <div 
+                                key={role.id} 
+                                onClick={() => toggleRuleRecipient(role.id)}
+                                className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                                  isSel 
+                                    ? 'border-primary bg-primary/5 text-primary' 
+                                    : 'border-slate-100 dark:border-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-900'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-lg shrink-0 ${isSel ? 'bg-primary/10 text-primary' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500'}`}>
+                                    <IconComp size={16} />
+                                  </div>
+                                  <div className="text-left">
+                                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-none">{role.label}</p>
+                                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{role.desc}</p>
+                                  </div>
+                                </div>
+                                <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${isSel ? 'border-primary bg-primary text-white' : 'border-slate-300'}`}>
+                                  {isSel && <Check size={10} className="stroke-[3]" />}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Specific Users List */}
+                    <div className="space-y-1.5 pt-1.5 border-t border-dashed">
+                      <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider block px-1">Specific Users</span>
+                      <div className="space-y-1.5">
+                        {users.filter(u => 
+                          u.name.toLowerCase().includes(ruleFormRecipientSearch.toLowerCase()) || 
+                          u.email.toLowerCase().includes(ruleFormRecipientSearch.toLowerCase())
+                        ).map(user => {
+                          const isSel = ruleFormRecipients.includes(user.id);
+                          return (
+                            <div 
+                              key={user.id} 
+                              onClick={() => toggleRuleRecipient(user.id)}
+                              className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                                isSel 
+                                  ? 'border-primary bg-primary/5 text-primary' 
+                                  : 'border-slate-100 dark:border-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-900'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-slate-200 to-slate-300 text-slate-700 dark:from-zinc-700 dark:to-zinc-800 dark:text-zinc-300 flex items-center justify-center text-xs font-extrabold shrink-0">
+                                  {user.name.substring(0, 2).toUpperCase()}
+                                </div>
+                                <div className="text-left">
+                                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-none">{user.name}</p>
+                                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{user.email}</p>
+                                </div>
+                              </div>
+                              <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${isSel ? 'border-primary bg-primary text-white' : 'border-slate-300'}`}>
+                                {isSel && <Check size={10} className="stroke-[3]" />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
               </div>
             </div>
 
-            <DialogFooter className="pt-4 border-t">
+            <DialogFooter className="p-6 pt-4 border-t bg-muted/10 shrink-0">
               <Button type="button" variant="outline" onClick={() => setIsCreateRuleOpen(false)}>
                 Cancel
               </Button>

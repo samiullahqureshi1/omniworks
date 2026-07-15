@@ -64,7 +64,7 @@ export default async function TeamOpsProjectDetailPage({ params }: { params: Pro
   if (!project) {
     return (
       <div className="p-12 text-center">
-        <h2 className="text-2xl font-bold text-slate-800">Internal Project Not Found</h2>
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Internal Project Not Found</h2>
         <p className="text-muted-foreground mt-2">The project might have been deleted, or you don't have permission to view it.</p>
       </div>
     );

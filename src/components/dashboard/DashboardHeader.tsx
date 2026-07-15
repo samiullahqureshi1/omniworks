@@ -49,17 +49,17 @@ export default function DashboardHeader({ user }: { user: { name: string, role: 
             <>
               <Button 
                 variant="outline" 
-                className="rounded-full shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors h-11 px-5 font-semibold text-sm border-black/5 dark:border-white/10" 
+                className="rounded-sm shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors h-10 px-5 font-semibold text-sm border-black/5 dark:border-white/10" 
                 onClick={() => setIsAddUserOpen(true)}
               >
-                <UserPlus className="mr-2 h-[18px] w-[18px]" /> Invite User
+                <UserPlus className="mr-2 h-[16px] w-[16px]" /> Invite User
               </Button>
               <div className="relative inline-flex items-center">
                 <Button
                   disabled
-                  className="rounded-full shadow-md bg-[#1f1f1f] text-white h-11 px-6 font-semibold text-sm border border-white/10 flex items-center opacity-60 cursor-not-allowed hover:bg-[#1f1f1f]"
+                  className="rounded-sm shadow-md bg-[#1f1f1f] text-white h-10 px-6 font-semibold text-sm border border-white/10 flex items-center opacity-60 cursor-not-allowed hover:bg-[#1f1f1f]"
                 >
-                  <Bot className="mr-2 h-[18px] w-[18px]" /> Deploy Agent
+                  <Bot className="mr-2 h-[16px] w-[16px]" /> Deploy Agent
                 </Button>
                 <span className="absolute -top-2 -right-2 bg-[#f97316] text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm whitespace-nowrap">
                   Coming Soon

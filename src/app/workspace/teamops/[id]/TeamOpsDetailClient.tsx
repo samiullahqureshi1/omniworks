@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NumberStepper } from '@/components/ui/NumberStepper';
 import { 
   ArrowLeft, Calendar, Clock, MoreHorizontal, Settings, 
   LayoutDashboard, CheckSquare, Users, Timer, Activity,
@@ -647,11 +648,11 @@ export default function TeamOpsDetailClient({
                       <div className="grid grid-cols-2 gap-4 bg-muted/10 p-4 rounded-xl border">
                         <div className="space-y-2">
                           <label className="text-sm font-medium">Budget ($)</label>
-                          <Input type="number" name="projectBudget" defaultValue={project.projectBudget || ''} />
+                          <NumberStepper name="projectBudget" step={1} min={0} defaultValue={project.projectBudget || ''} />
                         </div>
                         <div className="space-y-2">
                           <label className="text-sm font-medium">Allocated Hours</label>
-                          <Input type="number" name="totalAllocatedHours" defaultValue={project.totalAllocatedHours || ''} />
+                          <NumberStepper name="totalAllocatedHours" step={1} min={0} defaultValue={project.totalAllocatedHours || ''} />
                         </div>
                       </div>
 
@@ -903,8 +904,9 @@ export default function TeamOpsDetailClient({
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Allocated Hours</label>
-                <Input
-                  type="number"
+                <NumberStepper
+                  step={1}
+                  min={0}
                   value={newTaskHours}
                   onChange={(e) => setNewTaskHours(e.target.value)}
                   placeholder="e.g. 10"

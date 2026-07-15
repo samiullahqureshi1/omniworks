@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
+import { NumberStepper } from '@/components/ui/NumberStepper';
 
 interface ManualTimeModalProps {
   isOpen: boolean;
@@ -179,7 +180,7 @@ export function ManualTimeModal({
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Duration (Hours) <span className="text-destructive">*</span></label>
-              <Input type="number" step="0.1" min="0.1" value={duration} onChange={e => setDuration(e.target.value)} required placeholder="e.g. 2.5" />
+              <NumberStepper step={0.1} min={0.1} value={duration} onChange={e => setDuration(e.target.value)} required placeholder="e.g. 2.5" />
             </div>
 
             <div className="space-y-2">

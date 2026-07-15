@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { FormDialog, FormDialogCancelButton, FormDialogSubmitButton, formFieldLabel, formInputClass, formSelectClass } from '@/components/ui/FormDialog';
 import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addUserAction, editUserAction, deactivateUserAction, activateUserAction, resetUserPasswordAction, deleteUserAction } from '@/app/actions/users';
@@ -217,7 +218,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      {u.role === 'OWNER' && <ShieldAlert size={14} className="text-purple-500" />}
+                      {u.role === 'OWNER' && <ShieldAlert size={14} className="text-purple-500 dark:text-purple-400" />}
                       <span className={`text-sm font-medium ${u.role === 'OWNER' ? 'text-purple-600 dark:text-purple-400' : ''}`}>
                         {u.role.charAt(0) + u.role.slice(1).toLowerCase()}
                       </span>
@@ -225,7 +226,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
                   </TableCell>
                   <TableCell>
                     {u.status === 'ACTIVE' ? (
-                      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/20 shadow-sm">Active</Badge>
+                      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/20 shadow-sm">Active</Badge>
                     ) : (
                       <Badge variant="outline" className="bg-destructive/10 text-destructive hover:bg-destructive/20 border-destructive/20 shadow-sm">Inactive</Badge>
                     )}
@@ -254,7 +255,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
                               <UserX className="mr-2 h-4 w-4" /> Deactivate User
                             </DropdownMenuItem>
                           ) : (
-                            <DropdownMenuItem onClick={() => handleToggleStatus(u)} className="text-emerald-600 focus:text-emerald-600 cursor-pointer">
+                            <DropdownMenuItem onClick={() => handleToggleStatus(u)} className="text-emerald-600 dark:text-emerald-400 focus:text-emerald-600 dark:focus:text-emerald-400 cursor-pointer">
                               <UserCheck className="mr-2 h-4 w-4" /> Reactivate User
                             </DropdownMenuItem>
                           )}
@@ -278,37 +279,36 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
       </div>
 
       {/* Add User Modal */}
-      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Add New User</DialogTitle>
-            <DialogDescription>
-              Create a new user account manually. They will be able to log in immediately.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleAddSubmit} className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Name</label>
-              <Input name="name" required placeholder="John Doe" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Email</label>
-              <Input name="email" type="email" required placeholder="john@example.com" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Role</label>
-              <select name="role" required className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <option value="MEMBER">Member</option>
-                <option value="OWNER">Owner</option>
-              </select>
-            </div>
-            <DialogFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={isPending}>{isPending ? 'Adding...' : 'Add User'}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <FormDialog
+        open={isAddModalOpen}
+        onOpenChange={setIsAddModalOpen}
+        title="Add New User"
+        description="Create a new user account manually. They will be able to log in immediately."
+        footer={
+          <>
+            <FormDialogCancelButton onClick={() => setIsAddModalOpen(false)} disabled={isPending}>Cancel</FormDialogCancelButton>
+            <FormDialogSubmitButton type="submit" form="add-user-form" disabled={isPending}>{isPending ? 'Adding...' : 'Add User'}</FormDialogSubmitButton>
+          </>
+        }
+      >
+        <form id="add-user-form" onSubmit={handleAddSubmit} className="p-6 space-y-4">
+          <div className="space-y-2">
+            <label className={formFieldLabel}>Name</label>
+            <Input name="name" required placeholder="John Doe" className={formInputClass} />
+          </div>
+          <div className="space-y-2">
+            <label className={formFieldLabel}>Email</label>
+            <Input name="email" type="email" required placeholder="john@example.com" className={formInputClass} />
+          </div>
+          <div className="space-y-2">
+            <label className={formFieldLabel}>Role</label>
+            <select name="role" required className={formSelectClass}>
+              <option value="MEMBER">Member</option>
+              <option value="OWNER">Owner</option>
+            </select>
+          </div>
+        </form>
+      </FormDialog>
 
       {/* Edit User Modal */}
       <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>

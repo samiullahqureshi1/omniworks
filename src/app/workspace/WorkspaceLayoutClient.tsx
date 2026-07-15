@@ -17,6 +17,7 @@ import { SecondarySidebar } from '@/components/navigation/SecondarySidebar';
 import { ConversationsSidebarPanel } from '@/components/navigation/ConversationsSidebarPanel';
 import { Header } from '@/components/navigation/Header';
 import { Input } from '@/components/ui/input';
+import GlobalCreateProjectModal from '@/components/modals/GlobalCreateProjectModal';
 
 export default function WorkspaceLayoutClient({
   children,
@@ -44,6 +45,33 @@ export default function WorkspaceLayoutClient({
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'OWNER' | 'MEMBER' | 'CLIENT'>('MEMBER');
   const [isInvitingUser, setIsInvitingUser] = useState(false);
+
+  // Global Create Project Modal from Pinned Templates
+  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+  const [browseTemplatesSignal, setBrowseTemplatesSignal] = useState(0);
+
+  useEffect(() => {
+    // Fired when user clicks a pinned template — pre-fill modal with that template
+    const handleOpenProjectModal = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setSelectedTemplate(customEvent.detail || null);
+      setIsCreateProjectOpen(true);
+    };
+    // Fired when user clicks "Browse / Create templates" — the modal checks whether
+    // any templates exist and opens the template picker, or falls back to the
+    // project creation modal when there are none.
+    const handleBrowseTemplates = () => {
+      setSelectedTemplate(null);
+      setBrowseTemplatesSignal((n) => n + 1);
+    };
+    window.addEventListener('omniwork_open_create_project', handleOpenProjectModal);
+    window.addEventListener('omniwork_browse_templates', handleBrowseTemplates);
+    return () => {
+      window.removeEventListener('omniwork_open_create_project', handleOpenProjectModal);
+      window.removeEventListener('omniwork_browse_templates', handleBrowseTemplates);
+    };
+  }, []);
 
   const getActiveMainTab = (path: string) => {
     if (path.startsWith('/workspace/rules')) return 'rules';
@@ -588,6 +616,19 @@ export default function WorkspaceLayoutClient({
           </div>
         </div>
       )}
+
+      {/* Global Create Project Modal */}
+      <GlobalCreateProjectModal
+        isOpen={isCreateProjectOpen}
+        setIsOpen={(open) => {
+          setIsCreateProjectOpen(open);
+          if (!open) {
+            setSelectedTemplate(null);
+          }
+        }}
+        initialTemplate={selectedTemplate}
+        browseTemplatesSignal={browseTemplatesSignal}
+      />
     </TooltipProvider>
   );
 }

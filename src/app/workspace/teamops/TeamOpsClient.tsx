@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberStepper } from "@/components/ui/NumberStepper";
 import {
   FolderKanban,
   Search,
@@ -277,6 +278,9 @@ export default function TeamOpsClient({
         ? prev.filter((id) => id !== templateId)
         : [...prev, templateId];
       localStorage.setItem("omniwork_pinned_teamops_templates", JSON.stringify(next));
+      setTimeout(() => {
+        window.dispatchEvent(new Event('omniwork_templates_pinned_changed'));
+      }, 50);
       return next;
     });
   };
@@ -293,6 +297,9 @@ export default function TeamOpsClient({
       setPinnedTemplateIds((prev) => {
         const next = prev.filter((id) => id !== templateId);
         localStorage.setItem("omniwork_pinned_teamops_templates", JSON.stringify(next));
+        setTimeout(() => {
+          window.dispatchEvent(new Event('omniwork_templates_pinned_changed'));
+        }, 50);
         return next;
       });
     }
@@ -1684,8 +1691,9 @@ export default function TeamOpsClient({
               <div className="grid grid-cols-2 gap-4 bg-muted/10 p-4 rounded-xl border">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Budget Limit ($)</label>
-                  <Input
-                    type="number"
+                  <NumberStepper
+                    step={1}
+                    min={0}
                     placeholder="e.g. 5000"
                     value={formBudget}
                     onChange={(e) => setFormBudget(e.target.value)}
@@ -1693,8 +1701,9 @@ export default function TeamOpsClient({
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Allocated Hours</label>
-                  <Input
-                    type="number"
+                  <NumberStepper
+                    step={1}
+                    min={0}
                     placeholder="e.g. 120"
                     value={formAllocatedHours}
                     onChange={(e) => setFormAllocatedHours(e.target.value)}

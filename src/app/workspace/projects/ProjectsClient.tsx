@@ -7,6 +7,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberStepper } from "@/components/ui/NumberStepper";
 import {
   FolderKanban,
   Search,
@@ -443,7 +444,7 @@ function TableCustomFieldCell({ project, col, setProjects, projects, currentUser
     case 'date':
       return <input type="date" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer min-h-[40px]`} />;
     case 'number':
-      return <input type="number" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
+      return <NumberStepper disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" min={0} step={1} className={`${commonClasses} min-h-[40px]`} inputClassName="text-[13px] text-slate-700 dark:text-slate-300" />;
     case 'email':
       return <input type="email" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
     case 'phone':
@@ -2598,11 +2599,10 @@ export default function ProjectsClient({
                     (Optional)
                   </span>
                 </label>
-                <Input
+                <NumberStepper
                   name="projectBudget"
-                  type="number"
-                  step="0.01"
-                  min="0"
+                  step={1}
+                  min={0}
                   placeholder="e.g. 5000"
                   value={formBudget}
                   onChange={(e) => setFormBudget(e.target.value)}
@@ -2613,11 +2613,10 @@ export default function ProjectsClient({
                   Total Allocated Hours{" "}
                   <span className="text-destructive">*</span>
                 </label>
-                <Input
+                <NumberStepper
                   name="totalAllocatedHours"
-                  type="number"
-                  step="0.1"
-                  min="0"
+                  step={0.1}
+                  min={0}
                   required
                   placeholder="e.g. 120"
                   value={formAllocatedHours}
@@ -2715,7 +2714,7 @@ export default function ProjectsClient({
                             </div>
                           );
                         case 'number':
-                          return <Input type="number" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="0" className={commonClasses} />;
+                          return <NumberStepper value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="0" min={0} step={1} className={commonClasses} />;
                         case 'date':
                           return <Input type="date" value={field.value || ''} onChange={e => updateValue(e.target.value)} className={commonClasses} />;
                         case 'website':

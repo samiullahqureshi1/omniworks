@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NumberStepper } from '@/components/ui/NumberStepper';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatHours } from '@/lib/utils';
@@ -123,7 +124,7 @@ function TableCustomFieldCell({ task, col, setTasks, tasks, currentUser }: any) 
     case 'date':
       return <input type="date" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer min-h-[40px]`} />;
     case 'number':
-      return <input type="number" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
+      return <NumberStepper disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" min={0} step={1} className={`${commonClasses} min-h-[40px]`} inputClassName="text-[13px] text-slate-700 dark:text-slate-300" />;
     case 'email':
       return <input type="email" disabled={!isEditable} value={value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} min-h-[40px]`} />;
     case 'phone':

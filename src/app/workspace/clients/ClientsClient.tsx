@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { FormDialog, FormDialogCancelButton, FormDialogSubmitButton, formFieldLabel, formInputClass } from '@/components/ui/FormDialog';
 import { toast } from 'sonner';
 import { addUserAction, editUserAction, deactivateUserAction, activateUserAction, resetUserPasswordAction, deleteUserAction } from '@/app/actions/users';
 
@@ -224,7 +225,7 @@ export default function ClientsClient({ initialUsers, currentUser }: { initialUs
                   </TableCell>
                   <TableCell>
                     {u.status === 'ACTIVE' ? (
-                      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/20 shadow-sm">Active</Badge>
+                      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/20 shadow-sm">Active</Badge>
                     ) : (
                       <Badge variant="outline" className="bg-destructive/10 text-destructive hover:bg-destructive/20 border-destructive/20 shadow-sm">Inactive</Badge>
                     )}
@@ -253,7 +254,7 @@ export default function ClientsClient({ initialUsers, currentUser }: { initialUs
                               <UserX className="mr-2 h-4 w-4" /> Deactivate Client
                             </DropdownMenuItem>
                           ) : (
-                            <DropdownMenuItem onClick={() => handleToggleStatus(u)} className="text-emerald-600 focus:text-emerald-600 cursor-pointer">
+                            <DropdownMenuItem onClick={() => handleToggleStatus(u)} className="text-emerald-600 dark:text-emerald-400 focus:text-emerald-600 dark:focus:text-emerald-400 cursor-pointer">
                               <UserCheck className="mr-2 h-4 w-4" /> Reactivate Client
                             </DropdownMenuItem>
                           )}
@@ -273,30 +274,29 @@ export default function ClientsClient({ initialUsers, currentUser }: { initialUs
       </div>
 
       {/* Add Client Modal */}
-      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Add New Client</DialogTitle>
-            <DialogDescription>
-              Create a new client account manually. An email with their credentials will be sent.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleAddSubmit} className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Name</label>
-              <Input name="name" required placeholder="Acme Corp" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Email</label>
-              <Input name="email" type="email" required placeholder="contact@acme.com" />
-            </div>
-            <DialogFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={isPending}>{isPending ? 'Adding...' : 'Add Client'}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <FormDialog
+        open={isAddModalOpen}
+        onOpenChange={setIsAddModalOpen}
+        title="Add New Client"
+        description="Create a new client account manually. An email with their credentials will be sent."
+        footer={
+          <>
+            <FormDialogCancelButton onClick={() => setIsAddModalOpen(false)} disabled={isPending}>Cancel</FormDialogCancelButton>
+            <FormDialogSubmitButton type="submit" form="add-client-form" disabled={isPending}>{isPending ? 'Adding...' : 'Add Client'}</FormDialogSubmitButton>
+          </>
+        }
+      >
+        <form id="add-client-form" onSubmit={handleAddSubmit} className="p-6 space-y-4">
+          <div className="space-y-2">
+            <label className={formFieldLabel}>Name</label>
+            <Input name="name" required placeholder="Acme Corp" className={formInputClass} />
+          </div>
+          <div className="space-y-2">
+            <label className={formFieldLabel}>Email</label>
+            <Input name="email" type="email" required placeholder="contact@acme.com" className={formInputClass} />
+          </div>
+        </form>
+      </FormDialog>
 
       {/* Edit Client Modal */}
       <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>

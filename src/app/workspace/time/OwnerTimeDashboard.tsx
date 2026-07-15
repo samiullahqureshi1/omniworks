@@ -95,11 +95,11 @@ export default function OwnerTimeDashboard({ timeEntries, allUsers, allProjects,
   return (
     <div className="space-y-6">
       {/* Top Banner & Total Time */}
-      <div className="flex justify-between items-center bg-white p-4 shadow-sm border rounded-xl">
-        <div className="flex flex-col items-center justify-center bg-blue-50 border-t-4 border-blue-600 px-6 py-3 min-w-[150px]">
-          <span className="text-3xl font-bold text-blue-700">{Math.round(totalMinutes)}</span>
-          <span className="text-sm font-semibold text-gray-500">mins</span>
-          <span className="text-xs text-blue-500 mt-1 hover:underline cursor-pointer">Total Time</span>
+      <div className="flex justify-between items-center bg-white dark:bg-[#1f1f1f] p-4 shadow-sm border rounded-xl">
+        <div className="flex flex-col items-center justify-center bg-blue-50 dark:bg-blue-950/20 border-t-4 border-blue-600 dark:border-blue-500 px-6 py-3 min-w-[150px]">
+          <span className="text-3xl font-bold text-blue-700 dark:text-blue-400">{Math.round(totalMinutes)}</span>
+          <span className="text-sm font-semibold text-gray-500 dark:text-slate-400">mins</span>
+          <span className="text-xs text-blue-500 dark:text-blue-400 mt-1 hover:underline cursor-pointer">Total Time</span>
         </div>
         
         <div className="flex items-center gap-4">
@@ -112,11 +112,11 @@ export default function OwnerTimeDashboard({ timeEntries, allUsers, allProjects,
       </div>
 
       {/* Calendar Strip */}
-      <div className="bg-white p-4 shadow-sm border rounded-xl space-y-2 overflow-x-auto">
-        <div className="flex items-center gap-2 font-semibold text-blue-700 text-lg mb-2">
-          <ChevronLeft className="cursor-pointer hover:text-blue-900" onClick={prevMonth} />
+      <div className="bg-white dark:bg-[#1f1f1f] p-4 shadow-sm border rounded-xl space-y-2 overflow-x-auto">
+        <div className="flex items-center gap-2 font-semibold text-blue-700 dark:text-blue-400 text-lg mb-2">
+          <ChevronLeft className="cursor-pointer hover:text-blue-900 dark:hover:text-blue-300" onClick={prevMonth} />
           {monthName}
-          <ChevronRight className="cursor-pointer hover:text-blue-900" onClick={nextMonth} />
+          <ChevronRight className="cursor-pointer hover:text-blue-900 dark:hover:text-blue-300" onClick={nextMonth} />
         </div>
         <div className="flex gap-1 min-w-max">
           {Array.from({ length: daysInMonth }, (_, i) => {
@@ -130,8 +130,8 @@ export default function OwnerTimeDashboard({ timeEntries, allUsers, allProjects,
               <div 
                 key={day}
                 onClick={() => setSelectedDate(d)}
-                className={`flex flex-col items-center justify-center w-10 h-12 border cursor-pointer hover:bg-gray-50 transition-colors
-                  ${isSelected ? 'border-red-500 bg-red-50 text-red-600 font-bold' : 'border-gray-200 text-gray-600'}
+                className={`flex flex-col items-center justify-center w-10 h-12 border cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 transition-colors
+                  ${isSelected ? 'border-red-500 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 font-bold' : 'border-gray-200 dark:border-white/10 text-gray-600 dark:text-slate-400'}
                 `}
               >
                 <span className="text-[10px]">{dayName}</span>
@@ -143,13 +143,13 @@ export default function OwnerTimeDashboard({ timeEntries, allUsers, allProjects,
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-gray-100 p-3 rounded-lg border flex flex-wrap gap-4 items-center shadow-inner">
+      <div className="bg-gray-100 dark:bg-white/5 p-3 rounded-lg border flex flex-wrap gap-4 items-center shadow-inner">
         <div className="flex items-center gap-2">
-          <span className="bg-gray-400 text-white px-2 py-1 text-xs font-bold rounded">USER</span>
-          <select 
+          <span className="bg-gray-400 dark:bg-slate-700 text-white px-2 py-1 text-xs font-bold rounded">USER</span>
+          <select
             value={filterUser}
             onChange={(e) => setFilterUser(e.target.value)}
-            className="border-gray-300 rounded text-sm h-8"
+            className="border-gray-300 dark:border-white/10 dark:bg-[#1f1f1f] dark:text-white rounded text-sm h-8"
             disabled={userRole === 'MEMBER'}
           >
             {userRole === 'MEMBER' 
@@ -162,21 +162,21 @@ export default function OwnerTimeDashboard({ timeEntries, allUsers, allProjects,
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="bg-gray-400 text-white px-2 py-1 text-xs font-bold rounded">DATE</span>
-          <input 
-            type="date" 
+          <span className="bg-gray-400 dark:bg-slate-700 text-white px-2 py-1 text-xs font-bold rounded">DATE</span>
+          <input
+            type="date"
             value={selectedDate.toISOString().split('T')[0]}
             onChange={(e) => setSelectedDate(new Date(e.target.value))}
-            className="border-gray-300 rounded text-sm h-8 px-2"
+            className="border-gray-300 dark:border-white/10 dark:bg-[#1f1f1f] dark:text-white rounded text-sm h-8 px-2"
           />
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="bg-gray-400 text-white px-2 py-1 text-xs font-bold rounded">PROJECT</span>
-          <select 
+          <span className="bg-gray-400 dark:bg-slate-700 text-white px-2 py-1 text-xs font-bold rounded">PROJECT</span>
+          <select
             value={filterProject}
             onChange={(e) => setFilterProject(e.target.value)}
-            className="border-gray-300 rounded text-sm h-8 w-48 truncate"
+            className="border-gray-300 dark:border-white/10 dark:bg-[#1f1f1f] dark:text-white rounded text-sm h-8 w-48 truncate"
           >
             <option value="all">--- All Projects ---</option>
             {allProjects.map((p: any) => (
@@ -188,15 +188,15 @@ export default function OwnerTimeDashboard({ timeEntries, allUsers, allProjects,
 
       {/* Grid Display */}
       {isLoading ? (
-        <div className="flex justify-center p-10"><Clock className="animate-spin text-gray-400" /></div>
+        <div className="flex justify-center p-10"><Clock className="animate-spin text-gray-400 dark:text-slate-500" /></div>
       ) : groupedData.length === 0 ? (
-        <div className="text-center p-10 text-gray-500 bg-white border rounded-xl shadow-sm">
+        <div className="text-center p-10 text-gray-500 dark:text-slate-400 bg-white dark:bg-[#1f1f1f] border rounded-xl shadow-sm">
           No time tracked for this day.
         </div>
       ) : (
-        <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-white dark:bg-[#1f1f1f] border rounded-xl overflow-hidden shadow-sm">
           {/* Header row for 10 min slots */}
-          <div className="grid grid-cols-7 bg-gray-100 border-b divide-x font-bold text-gray-600 text-sm text-center">
+          <div className="grid grid-cols-7 bg-gray-100 dark:bg-white/5 border-b divide-x dark:divide-white/10 font-bold text-gray-600 dark:text-slate-300 text-sm text-center">
             <div className="p-2 flex items-center justify-center">Hour</div>
             <div className="p-2 flex items-center justify-center">:00 to :10</div>
             <div className="p-2 flex items-center justify-center">:10 to :20</div>
@@ -207,7 +207,7 @@ export default function OwnerTimeDashboard({ timeEntries, allUsers, allProjects,
           </div>
 
           {/* Hour rows */}
-          <div className="divide-y">
+          <div className="divide-y dark:divide-white/10">
             {groupedData.map((hourData, i) => (
               <div key={i} className="flex flex-col">
                 {/* Project Banner for the hour (simulating the worksnaps banner) */}
@@ -219,7 +219,7 @@ export default function OwnerTimeDashboard({ timeEntries, allUsers, allProjects,
                 
                 <div className="grid grid-cols-7 divide-x min-h-[120px]">
                   {/* Hour Label */}
-                  <div className="p-2 flex flex-col items-start justify-center font-bold text-gray-700 bg-white">
+                  <div className="p-2 flex flex-col items-start justify-center font-bold text-gray-700 dark:text-slate-300 bg-white dark:bg-[#1f1f1f]">
                     <div className="flex gap-2 items-center">
                       <input type="checkbox" className="rounded" />
                       <span className="text-lg">
@@ -230,13 +230,13 @@ export default function OwnerTimeDashboard({ timeEntries, allUsers, allProjects,
 
                   {/* Slots */}
                   {hourData.slots.map((slot, j) => (
-                    <div key={j} className="p-2 flex flex-col items-center justify-center space-y-2 hover:bg-gray-50 relative">
+                    <div key={j} className="p-2 flex flex-col items-center justify-center space-y-2 hover:bg-gray-50 dark:hover:bg-white/5 relative">
                       <div className="absolute top-1 left-1">
                         <input type="checkbox" className="rounded" />
                       </div>
                       
                       {slot.screenshot ? (
-                        <div className="w-full flex flex-col items-center border-2 border-green-500 p-0.5 rounded relative group bg-white shadow-sm mt-3">
+                        <div className="w-full flex flex-col items-center border-2 border-green-500 p-0.5 rounded relative group bg-white dark:bg-[#1f1f1f] shadow-sm mt-3">
                           {slot.screenshot.screenshotUrl ? (
                             <img src={slot.screenshot.screenshotUrl} alt="Screenshot" className="w-full h-[60px] object-cover cursor-pointer" />
                           ) : (
@@ -254,7 +254,7 @@ export default function OwnerTimeDashboard({ timeEntries, allUsers, allProjects,
                                // Map activity level (0-100) to 10 blocks
                                const level = (slot.screenshot.activityLevel || 50) / 10;
                                return (
-                                 <div key={idx} className={`h-2 flex-1 ${idx < level ? 'bg-green-600' : 'bg-gray-300'}`}></div>
+                                 <div key={idx} className={`h-2 flex-1 ${idx < level ? 'bg-green-600' : 'bg-gray-300 dark:bg-slate-700'}`}></div>
                                )
                             })}
                           </div>

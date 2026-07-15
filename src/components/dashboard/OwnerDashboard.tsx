@@ -43,9 +43,9 @@ export default function OwnerDashboard({ metrics }: { metrics: any }) {
   ];
 
   const reminders = [
-    { id: 1, title: "Task Review & Updates", desc: "Review completed tasks and update project board.", icon: CheckCircle2, color: "text-[#8b5cf6]", bg: "bg-purple-50 dark:bg-purple-900/20", active: false },
-    { id: 2, title: "Client Feedback Follow-Up", desc: "Review completed tasks and update project board.", icon: Activity, color: "text-white", bg: "bg-[#8b5cf6]", active: true },
-    { id: 3, title: "Sprint Planning Session", desc: "Collect client feedback for ongoing tasks.", icon: Clock3, color: "text-[#ef6b33]", bg: "bg-orange-50 dark:bg-orange-900/20", active: false }
+    { id: 1, title: "Task Review & Updates", desc: "Review completed tasks and update project board.", icon: CheckCircle2, color: "text-slate-600 dark:text-slate-300", bg: "bg-slate-100 dark:bg-white/10", active: false },
+    { id: 2, title: "Client Feedback Follow-Up", desc: "Review completed tasks and update project board.", icon: Activity, color: "text-white", bg: "bg-slate-900 dark:bg-white", active: true },
+    { id: 3, title: "Sprint Planning Session", desc: "Collect client feedback for ongoing tasks.", icon: Clock3, color: "text-slate-600 dark:text-slate-300", bg: "bg-slate-100 dark:bg-white/10", active: false }
   ];
 
   const tasks = recentTasks.map((t: any, index: number) => {
@@ -120,7 +120,7 @@ export default function OwnerDashboard({ metrics }: { metrics: any }) {
                     <span className="text-[32px] font-bold text-slate-900 dark:text-white leading-none block mb-1">{stat.value}</span>
                     <span className="text-sm text-slate-500 font-medium">{stat.label}</span>
                   </div>
-                  <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f0f4fd] dark:bg-[#2a303c] text-[#8b5cf6] text-sm font-semibold hover:bg-[#e0e7ff] transition-colors">
+                  <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 text-sm font-semibold hover:bg-slate-200 dark:hover:bg-white/15 transition-colors">
                     <Filter size={14} /> 1 Filter
                   </button>
                 </div>
@@ -131,35 +131,7 @@ export default function OwnerDashboard({ metrics }: { metrics: any }) {
       </div>
 
       {/* Middle Row: Analytics Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Project Progress */}
-        <motion.div variants={item}>
-          <Card className="h-[360px] border-none shadow-sm bg-white dark:bg-[#1f1f1f] rounded-[32px] p-2">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xl font-bold text-slate-900 dark:text-white">
-                Project Progress
-              </CardTitle>
-              <div className="px-3 py-1 rounded-full border-2 border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-500 bg-white dark:bg-[#1f1f1f] text-sm font-semibold flex items-center justify-center shadow-[0_2px_10px_-2px_rgba(37,99,235,0.2)]">
-                In Progress
-              </div>
-            </CardHeader>
-            <CardContent className="h-full flex flex-col">
-              <div className="flex items-end h-[160px] gap-4 mt-6">
-                {[12, 4, 17, 8].map((val, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center justify-end h-full group relative">
-                    <span className="absolute -top-6 text-sm font-bold text-slate-600">+{val}%</span>
-                    <div className="w-full relative h-[120px] rounded-[14px] bg-[#f0f4fd] dark:bg-slate-800/50 overflow-hidden">
-                      <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(139,92,246,0.1)_4px,rgba(139,92,246,0.1)_5px)]"></div>
-                      <div className="absolute bottom-0 w-full rounded-[14px] bg-[#0ea5e9]" style={{ height: `${val * 4}%` }}></div>
-                    </div>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase mt-3 text-center whitespace-nowrap">Not Started</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* Project Completed Radial Chart */}
         <motion.div variants={item}>
@@ -174,14 +146,14 @@ export default function OwnerDashboard({ metrics }: { metrics: any }) {
               <div className="flex flex-col gap-6 w-[120px]">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <div className="w-3 h-3 rounded-full bg-[#8b5cf6]"></div>
+                    <div className="w-3 h-3 rounded-full bg-slate-900 dark:bg-white"></div>
                     <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Project Done</span>
                   </div>
                   <span className="text-2xl font-bold text-slate-900 dark:text-white">{projectDonePercent}%</span>
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <div className="w-3 h-3 rounded-full bg-[#3b82f6]"></div>
+                    <div className="w-3 h-3 rounded-full bg-slate-500 dark:bg-slate-400"></div>
                     <span className="text-sm font-medium text-slate-600 dark:text-slate-400">In Progress</span>
                   </div>
                   <span className="text-2xl font-bold text-slate-900 dark:text-white">{inProgressPercent}%</span>
@@ -202,15 +174,15 @@ export default function OwnerDashboard({ metrics }: { metrics: any }) {
                   <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="8" className="text-slate-100 dark:text-slate-800" />
                   <circle cx="50" cy="50" r="28" fill="none" stroke="currentColor" strokeWidth="8" className="text-slate-100 dark:text-slate-800" />
                   <circle cx="50" cy="50" r="14" fill="none" stroke="currentColor" strokeWidth="8" className="text-slate-100 dark:text-slate-800" />
-                  
+
                   {/* Outer Ring (Project Done) */}
-                  <circle cx="50" cy="50" r="42" fill="none" stroke="#8b5cf6" strokeWidth="8" strokeLinecap="round" strokeDasharray={c42} strokeDashoffset={c42 - (projectDonePercent / 100) * c42} />
-                  
+                  <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeDasharray={c42} strokeDashoffset={c42 - (projectDonePercent / 100) * c42} className="text-slate-900 dark:text-white" />
+
                   {/* Middle Ring (In Progress) */}
-                  <circle cx="50" cy="50" r="28" fill="none" stroke="#3b82f6" strokeWidth="8" strokeLinecap="round" strokeDasharray={c28} strokeDashoffset={c28 - (inProgressPercent / 100) * c28} />
-                  
+                  <circle cx="50" cy="50" r="28" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeDasharray={c28} strokeDashoffset={c28 - (inProgressPercent / 100) * c28} className="text-slate-500 dark:text-slate-400" />
+
                   {/* Inner Ring (Backlog) */}
-                  <circle cx="50" cy="50" r="14" fill="none" stroke="#e2e8f0" strokeWidth="8" strokeLinecap="round" strokeDasharray={c14} strokeDashoffset={c14 - (backlogPercent / 100) * c14} className="dark:stroke-slate-500" />
+                  <circle cx="50" cy="50" r="14" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round" strokeDasharray={c14} strokeDashoffset={c14 - (backlogPercent / 100) * c14} className="text-slate-300 dark:text-slate-600" />
                 </svg>
               </div>
             </CardContent>
@@ -222,7 +194,7 @@ export default function OwnerDashboard({ metrics }: { metrics: any }) {
           <Card className="h-[360px] border-none shadow-sm bg-white dark:bg-[#1f1f1f] rounded-[32px] p-2">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-xl font-bold flex items-center gap-3 text-slate-900 dark:text-white">
-                <div className="p-1.5 bg-purple-50 dark:bg-purple-900/20 text-[#8b5cf6] rounded-lg"><ListTodo size={18}/></div>
+                <div className="p-1.5 bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 rounded-lg"><ListTodo size={18}/></div>
                 Task Summary
               </CardTitle>
               <div className="relative">
@@ -242,8 +214,8 @@ export default function OwnerDashboard({ metrics }: { metrics: any }) {
             <CardContent className="pt-2">
               <div className="flex items-center gap-6 mb-6 px-4">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-[#8b5cf6]"></div>
-                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Complete Task</span>
+                  <div className="w-3 h-3 rounded bg-slate-800 dark:bg-slate-300"></div>
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Complete Tasks</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded bg-slate-300 dark:bg-slate-600"></div>
@@ -253,12 +225,17 @@ export default function OwnerDashboard({ metrics }: { metrics: any }) {
               
               <div className="relative h-[180px] w-full px-4">
                 {/* CSS Step Chart visualization mimicking area chart */}
-                <div className="absolute inset-0 flex justify-between pr-4">
-                  {[115, 90, 75, 60, 45, 30, 15].map((val) => (
-                    <div key={val} className="absolute w-full border-t border-dashed border-slate-200 dark:border-slate-800" style={{ bottom: `${(val/115)*100}%` }}>
-                      <span className="absolute -left-4 -top-2.5 text-[10px] text-slate-400 bg-white dark:bg-[#1f1f1f] pr-1">{val}K</span>
-                    </div>
-                  ))}
+                <div className="absolute inset-y-0 left-8 right-8">
+                  {(() => {
+                    const maxCount = Math.max(totalCompleteTasks, totalPendingTasks, 5);
+                    const stepSize = Math.ceil(maxCount / 5);
+                    const yAxisSteps = Array.from({ length: 6 }, (_, i) => (5 - i) * stepSize);
+                    return yAxisSteps.map((val) => (
+                      <div key={val} className="absolute w-full border-t border-dashed border-slate-200 dark:border-slate-800" style={{ bottom: `${(val / yAxisSteps[0]) * 100}%` }}>
+                        <span className="absolute -left-9 -top-2 text-[10px] text-slate-400 bg-white dark:bg-[#1f1f1f] pr-1.5">{val}</span>
+                      </div>
+                    ));
+                  })()}
                 </div>
                 
                 {/* Simulated Area Paths */}
@@ -266,31 +243,37 @@ export default function OwnerDashboard({ metrics }: { metrics: any }) {
                   <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
                     <defs>
                       <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.4" />
-                        <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.05" />
+                        <stop offset="0%" stopColor="#475569" stopOpacity="0.35" />
+                        <stop offset="100%" stopColor="#475569" stopOpacity="0.05" />
                       </linearGradient>
                     </defs>
                     {/* Pending Path */}
                     <path d="M0,40 L15,40 L15,60 L35,60 L35,30 L55,30 L55,50 L75,50 L75,40 L100,40 L100,100 L0,100 Z" fill="#e2e8f0" opacity="0.5" className="dark:fill-slate-700"/>
-                    
+ 
                     {/* Complete Path */}
-                    <path d="M0,60 L15,60 L15,80 L35,80 L35,45 L55,45 L55,70 L75,70 L75,60 L100,60 L100,100 L0,100 Z" fill="url(#areaGradient)" stroke="#8b5cf6" strokeWidth="2" vectorEffect="non-scaling-stroke"/>
+                    <path d="M0,60 L15,60 L15,80 L35,80 L35,45 L55,45 L55,70 L75,70 L75,60 L100,60 L100,100 L0,100 Z" fill="url(#areaGradient)" stroke="#475569" strokeWidth="2" vectorEffect="non-scaling-stroke" className="dark:stroke-slate-300"/>
                   </svg>
-                  
+ 
                   {/* Tooltip Overlay */}
                   <div className="absolute left-[55%] top-[30%] w-px h-[70%] bg-slate-300 dark:bg-slate-600 flex flex-col items-center">
-                    <div className="absolute -top-1 w-2 h-2 rounded-full border-2 border-white bg-[#8b5cf6]"></div>
-                    <div className="absolute -top-6 w-2 h-2 rounded-full border-2 border-white bg-slate-400"></div>
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 bg-white dark:bg-slate-800 shadow-lg rounded-xl p-2 min-w-[80px] border border-slate-100 dark:border-slate-700 z-10">
-                       <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300"><div className="w-1.5 h-1.5 rounded-full bg-slate-400"></div> {totalPendingTasks.toLocaleString()}</div>
-                       <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 mt-1"><div className="w-1.5 h-1.5 rounded-full bg-[#8b5cf6]"></div> {totalCompleteTasks.toLocaleString()}</div>
+                    <div className="absolute -top-1 w-2 h-2 rounded-full border-2 border-white dark:border-[#1f1f1f] bg-slate-800 dark:bg-slate-300"></div>
+                    <div className="absolute -top-6 w-2 h-2 rounded-full border-2 border-white dark:border-[#1f1f1f] bg-slate-400"></div>
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 bg-white dark:bg-slate-800 shadow-lg rounded-xl p-2.5 min-w-[110px] border border-slate-100 dark:border-slate-700 z-10 flex flex-col gap-1.5">
+                       <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                         <div className="w-1.5 h-1.5 rounded-full bg-slate-400"></div>
+                         <span>Pending: {totalPendingTasks.toLocaleString()}</span>
+                       </div>
+                       <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                         <div className="w-1.5 h-1.5 rounded-full bg-slate-800 dark:bg-slate-350"></div>
+                         <span>Complete: {totalCompleteTasks.toLocaleString()}</span>
+                       </div>
                     </div>
                   </div>
                 </div>
-
+ 
                 <div className="absolute -bottom-6 inset-x-8 flex justify-between text-[10px] text-slate-400 font-bold">
                   <span>&lt;</span>
-                  <span>18th</span><span>19th</span><span>10th</span><span>21th</span><span>22th</span><span>23th</span><span>24th</span><span>25th</span>
+                  <span>18th</span><span>19th</span><span>20th</span><span>21st</span><span>22nd</span><span>23rd</span><span>24th</span><span>25th</span>
                   <span>&gt;</span>
                 </div>
               </div>
@@ -319,15 +302,15 @@ export default function OwnerDashboard({ metrics }: { metrics: any }) {
                 {reminders.map((r) => {
                   const Icon = r.icon;
                   return (
-                    <div key={r.id} className={`flex items-center gap-4 p-4 rounded-[20px] transition-all cursor-pointer ${r.active ? 'bg-[#8b5cf6] text-white shadow-lg' : 'bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333]'}`}>
-                      <div className={`h-12 w-12 shrink-0 rounded-full flex items-center justify-center ${r.active ? 'bg-white/20' : 'bg-slate-50 dark:bg-[#1f1f1f] border border-slate-100 dark:border-[#333]'}`}>
-                        <div className={`h-8 w-8 rounded-full flex items-center justify-center ${r.active ? 'bg-white' : r.bg}`}>
-                           <Icon size={16} className={r.active ? 'text-[#8b5cf6]' : r.color} />
+                    <div key={r.id} className={`flex items-center gap-4 p-4 rounded-[20px] transition-all cursor-pointer ${r.active ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-lg' : 'bg-white dark:bg-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#333]'}`}>
+                      <div className={`h-12 w-12 shrink-0 rounded-full flex items-center justify-center ${r.active ? 'bg-white/20 dark:bg-slate-900/10' : 'bg-slate-50 dark:bg-[#1f1f1f] border border-slate-100 dark:border-[#333]'}`}>
+                        <div className={`h-8 w-8 rounded-full flex items-center justify-center ${r.active ? 'bg-white dark:bg-slate-900' : r.bg}`}>
+                           <Icon size={16} className={r.active ? 'text-slate-900 dark:text-white' : r.color} />
                         </div>
                       </div>
                       <div className="flex flex-col min-w-0">
-                        <span className={`text-base font-bold truncate ${r.active ? 'text-white' : 'text-slate-900 dark:text-white'}`}>{r.title}</span>
-                        <span className={`text-xs truncate ${r.active ? 'text-white/80' : 'text-slate-500'}`}>{r.desc}</span>
+                        <span className={`text-base font-bold truncate ${r.active ? 'text-white dark:text-slate-900' : 'text-slate-900 dark:text-white'}`}>{r.title}</span>
+                        <span className={`text-xs truncate ${r.active ? 'text-white/80 dark:text-slate-900/70' : 'text-slate-500 dark:text-slate-400'}`}>{r.desc}</span>
                       </div>
                     </div>
                   );
@@ -352,7 +335,7 @@ export default function OwnerDashboard({ metrics }: { metrics: any }) {
                     placeholder="Search here..." 
                     value={searchQuery || ''}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9 pr-4 py-2 w-full sm:w-64 rounded-xl border border-slate-200 dark:border-slate-700 bg-[#f8f9fc] dark:bg-[#181818] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#8b5cf6]" 
+                    className="pl-9 pr-4 py-2 w-full sm:w-64 rounded-xl border border-slate-200 dark:border-slate-700 bg-[#f8f9fc] dark:bg-[#181818] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500"
                   />
                 </div>
                 <div className="relative">
