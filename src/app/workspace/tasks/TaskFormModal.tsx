@@ -12,6 +12,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberStepper } from "@/components/ui/NumberStepper";
+import { ModalTabsHeader } from "@/components/ui/ModalTabsHeader";
+import { DocumentsPanel, DraftDocument } from "@/components/documents/DocumentsPanel";
+import { createDocumentAction } from "@/app/actions/documents";
 import { Badge } from "@/components/ui/badge";
 import {
   Plus, Trash2, Hash, Globe, Mail, Phone, Tags, CheckSquare, CircleDashed, Type, EyeOff, Settings, X, ChevronDown, AlignLeft, Sparkles, Smile, List as ListIcon, Calendar as CalendarIcon, PlusSquare
@@ -144,6 +147,28 @@ export default function TaskFormModal({
   const [newOptionInput, setNewOptionInput] = useState("");
   const [activeTaskIndexForFields, setActiveTaskIndexForFields] = useState<number | null>(null);
   const [fieldsSearchTerm, setFieldsSearchTerm] = useState("");
+
+  // Tabbed header (Task | Doc) + attached documents
+  const [activeTab, setActiveTab] = useState<"task" | "doc">("task");
+  const [minimized, setMinimized] = useState(false);
+  const [draftDocs, setDraftDocs] = useState<DraftDocument[]>([]);
+
+  const persistDraftDocs = async (taskIds: string[]) => {
+    if (draftDocs.length === 0 || taskIds.length === 0) return;
+    for (const taskId of taskIds) {
+      for (const d of draftDocs) {
+        await createDocumentAction({
+          type: d.type,
+          title: d.title,
+          content: d.content ?? null,
+          fileUrl: d.fileUrl ?? null,
+          fileName: d.fileName ?? null,
+          fileSize: d.fileSize ?? null,
+          taskId,
+        });
+      }
+    }
+  };
 
   const existingCustomFields = useMemo(() => {
     const fieldsSet = new Set<string>();
@@ -369,6 +394,7 @@ export default function TaskFormModal({
           if (res.error) {
             toast.error(res.error);
           } else {
+            if (res.success && (res as any).task) await persistDraftDocs([(res as any).task.id]);
             toast.success("Repeated tasks created successfully");
             onSuccess();
           }
@@ -377,6 +403,7 @@ export default function TaskFormModal({
 
         // Multi-create
         let errors = 0;
+        const createdTaskIds: string[] = [];
         for (const tInput of tasksInput) {
           if (!tInput.title.trim()) continue; // Skip empty titles
           const res = await createTaskAction(
@@ -395,8 +422,12 @@ export default function TaskFormModal({
           if (res.error) {
             toast.error(`Error creating "${tInput.title}": ${res.error}`);
             errors++;
+          } else if (res.success && (res as any).task) {
+            createdTaskIds.push((res as any).task.id);
           }
         }
+
+        await persistDraftDocs(createdTaskIds);
 
         if (errors === 0) {
           toast.success(
@@ -429,22 +460,32 @@ export default function TaskFormModal({
               e.preventDefault();
           }}
         >
-          <DialogHeader className="px-6 py-4 border-b shrink-0 bg-background sticky top-0 z-20">
-            <DialogTitle className="text-xl">
-              {isEditing
-                ? isLimitedEdit
-                  ? "Update Task Status"
-                  : "Edit Task"
-                : "Create Tasks"}
-            </DialogTitle>
-            <DialogDescription>
-              {isEditing
-                ? "Update the details of your task."
-                : "Select a project and create one or multiple tasks for it."}
-            </DialogDescription>
-          </DialogHeader>
+          <ModalTabsHeader
+            tabs={[
+              { id: "task", label: "Task" },
+              { id: "doc", label: "Doc" },
+            ]}
+            activeTab={activeTab}
+            onTabChange={(id) => setActiveTab(id as "task" | "doc")}
+            onClose={() => onOpenChange(false)}
+            onMinimize={() => setMinimized((m) => !m)}
+          />
 
-          <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+          <div className={`flex-1 overflow-y-auto px-6 py-4 custom-scrollbar ${minimized ? "hidden" : ""}`}>
+          <div className={activeTab === "doc" ? "" : "hidden"}>
+            <DocumentsPanel
+              taskId={isEditing ? task.id : undefined}
+              entityLabel="task"
+              drafts={isEditing ? undefined : draftDocs}
+              onDraftsChange={isEditing ? undefined : setDraftDocs}
+            />
+            {!isEditing && (
+              <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">
+                Documents will be saved and attached when you create the task.
+              </p>
+            )}
+          </div>
+          <div className={activeTab === "task" ? "" : "hidden"}>
           {(() => {
             const projectTotalHours = selectedProject?.totalAllocatedHours || 0;
             const projectUsedHours = selectedProject?.usedHours || 0;
@@ -1003,6 +1044,7 @@ export default function TaskFormModal({
               </form>
             );
           })()}
+          </div>
           </div>
         </DialogContent>
       </Dialog>

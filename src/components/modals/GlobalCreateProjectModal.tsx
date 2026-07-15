@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberStepper } from "@/components/ui/NumberStepper";
+import { ModalTabsHeader } from "@/components/ui/ModalTabsHeader";
+import { DocumentsPanel, DraftDocument } from "@/components/documents/DocumentsPanel";
+import { createDocumentAction } from "@/app/actions/documents";
 import { Plus, Users, Trash2, X, Loader2, ChevronDown, Check, Repeat, FolderKanban, Pin, Star, LayoutGrid, Search, Edit2, Calendar as CalendarIcon, Clock, ShieldAlert, Crown, Shield, MoreHorizontal, ArrowRight, Hash, Globe, Mail, Phone, Tags, CheckSquare, CircleDashed, Type, EyeOff, Settings } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +59,26 @@ export default function GlobalCreateProjectModal({
 
   // Modal States
   const [isQuickClientOpen, setIsQuickClientOpen] = useState(false);
+
+  // Tabbed header (Project | Doc) + attached documents (draft until created)
+  const [activeTab, setActiveTab] = useState<"project" | "doc">("project");
+  const [minimized, setMinimized] = useState(false);
+  const [draftDocs, setDraftDocs] = useState<DraftDocument[]>([]);
+
+  const persistDraftDocs = async (projectId: string) => {
+    if (draftDocs.length === 0 || !projectId) return;
+    for (const d of draftDocs) {
+      await createDocumentAction({
+        type: d.type,
+        title: d.title,
+        content: d.content ?? null,
+        fileUrl: d.fileUrl ?? null,
+        fileName: d.fileName ?? null,
+        fileSize: d.fileSize ?? null,
+        projectId,
+      });
+    }
+  };
 
   // Form States
   const [description, setDescription] = useState("");
@@ -481,8 +504,13 @@ export default function GlobalCreateProjectModal({
       if (res.error) {
         toast.error(res.error);
       } else {
+        if (res.success && (res as any).project) {
+          await persistDraftDocs((res as any).project.id);
+        }
         toast.success("Project created successfully");
         setIsOpen(false);
+        setDraftDocs([]);
+        setActiveTab("project");
         setProjectTasks([]);
         setCustomFields([]);
         setFormName("");

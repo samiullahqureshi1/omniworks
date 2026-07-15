@@ -1,99 +1,315 @@
 import Link from "next/link";
-import { FaFacebookF, FaInstagram, FaXTwitter, FaGoogle } from "react-icons/fa6";
+import { FaFacebookF, FaInstagram, FaXTwitter, FaLinkedinIn } from "react-icons/fa6";
+
 
 const productLinks = [
-  { name: "Overview", href: "/" },
   { name: "Features", href: "/#features" },
+  { name: "Workflow", href: "/#workflow" },
   { name: "Integrations", href: "/#tools" },
   { name: "Pricing", href: "/#pricing" },
-  { name: "Compare Plans", href: "/compare-plans" },
+  { name: "Updates", href: "/changelog" },
 ];
+
 
 const resourceLinks = [
   { name: "Blog", href: "/blog" },
-  { name: "Case Studies", href: "/case-studies" },
-  { name: "Help Center", href: "/help-center" },
-  { name: "Guides & E-books", href: "/guides" },
-  { name: "API Documentation", href: "/api-docs" },
+  { name: "Help Center", href: "/help" },
+  { name: "Documentation", href: "/docs" },
+  { name: "API Reference", href: "/api" },
 ];
+
 
 const companyLinks = [
-  { name: "About Us", href: "/about" },
+  { name: "About", href: "/about" },
   { name: "Careers", href: "/careers" },
-  { name: "Press & Media Kit", href: "/press" },
-  { name: "Partners", href: "/partners" },
-  { name: "Security & Compliance", href: "/security" },
+  { name: "Contact", href: "/contact" },
+  { name: "Security", href: "/security" },
 ];
 
+
+
 export default function Footer() {
-  return (
-    <footer className="bg-[#fbfaf7] dark:bg-[#181818] px-6 pb-8 pt-28 text-[#111]">
-      <div className="mx-auto max-w-[1180px]">
-        <div className="grid gap-16 lg:grid-cols-[1.4fr_2fr]">
-          <div>
-            <Link href="/" className="flex items-center gap-3 text-3xl font-semibold">
-              <div className="grid grid-cols-3 gap-1">
-                {Array.from({ length: 9 }).map((_, i) => (
-                  <span key={i} className="h-2 w-2 rounded-full bg-black" />
-                ))}
-              </div>
-              Collabix
-            </Link>
 
-            <p className="mt-7 max-w-[430px] text-[22px] leading-tight text-black/75">
-              The all-in-one platform to manage, optimize, and secure your SaaS
-              stack.
-            </p>
-          </div>
+return (
 
-          <div className="grid gap-10 sm:grid-cols-3">
-            {[
-              ["Product", productLinks],
-              ["Resources", resourceLinks],
-              ["Company", companyLinks],
-            ].map(([title, links]) => (
-              <div key={title as string}>
-                <h3 className="text-3xl font-medium tracking-[-0.05em]">
-                  {title as string}
-                </h3>
+<footer className="
+bg-white
+px-6
+pb-8
+pt-28
+text-[#111]
+">
 
-                <ul className="mt-8 space-y-6">
-                  {(links as { name: string; href: string }[]).map((link) => (
-                    <li key={link.name}>
-                      <Link href={link.href} className="text-[20px] text-black/65">
-                        {link.name}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
 
-        <div className="mt-28 flex flex-col gap-6 rounded-full bg-white px-8 py-7 shadow-[0_20px_70px_rgba(0,0,0,0.04)] lg:flex-row lg:items-center lg:justify-between">
-          <p className="text-[20px] text-black/70">
-            © 2025 Collabix. All rights reserved.
-          </p>
+<div className="
+mx-auto
+max-w-[1180px]
+">
 
-          <Link href="/privacy-policy" className="text-[20px] text-black/70">
-            Privacy Policy
-          </Link>
 
-          <div className="flex items-center gap-9 text-black">
-            <FaFacebookF size={22} fill="black" />
-            <FaXTwitter className="text-[22px]" />
-            <FaGoogle className="text-[24px]" />
-            <FaInstagram size={23} />
-          </div>
+<div className="
+grid
+gap-14
+lg:grid-cols-[1.2fr_2fr]
+">
 
-          <Link href="/terms-and-conditions" className="text-[20px] text-black/70">
-            Terms & Condition
-          </Link>
 
-          <p className="text-[20px] text-black/70">All rights reserved.</p>
-        </div>
-      </div>
-    </footer>
-  );
+
+{/* Brand */}
+
+<div>
+
+
+<Link
+href="/"
+className="
+flex
+items-center
+gap-3
+text-2xl
+font-semibold
+tracking-tight
+"
+>
+
+
+{/* Omniwork SVG Logo */}
+
+<svg
+width="30"
+height="30"
+viewBox="0 0 30 30"
+fill="none"
+>
+
+<rect
+width="30"
+height="30"
+rx="8"
+fill="#111"
+/>
+
+
+<path
+d="M9 15C9 11.6863 11.6863 9 15 9C18.3137 9 21 11.6863 21 15"
+stroke="white"
+strokeWidth="2"
+strokeLinecap="round"
+/>
+
+
+<circle
+cx="15"
+cy="15"
+r="2"
+fill="white"
+/>
+
+
+</svg>
+
+
+Omniwork
+
+
+</Link>
+
+
+
+
+<p className="
+mt-6
+max-w-[380px]
+text-lg
+leading-relaxed
+text-black/60
+">
+
+The all-in-one workspace to manage projects,
+collaborate with your team, and improve productivity.
+
+</p>
+
+
+
+</div>
+
+
+
+
+
+
+{/* Links */}
+
+<div className="
+grid
+gap-10
+sm:grid-cols-3
+">
+
+
+{[
+["Product",productLinks],
+["Resources",resourceLinks],
+["Company",companyLinks]
+
+].map(([title,links])=>(
+
+
+<div key={title as string}>
+
+
+<h3 className="
+text-sm
+font-semibold
+uppercase
+tracking-widest
+text-black/50
+">
+
+{title as string}
+
+</h3>
+
+
+
+<ul className="
+mt-6
+space-y-4
+">
+
+
+{(links as {
+name:string;
+href:string
+}[]).map((item)=>(
+
+
+<li key={item.name}>
+
+<Link
+href={item.href}
+className="
+text-[15px]
+text-black/70
+hover:text-black
+transition
+"
+>
+
+{item.name}
+
+</Link>
+
+
+</li>
+
+
+))}
+
+
+</ul>
+
+
+</div>
+
+
+))}
+
+
+</div>
+
+
+
+</div>
+
+
+
+
+
+
+{/* Bottom */}
+
+<div className="
+mt-20
+flex
+flex-col
+gap-5
+rounded-[20px]
+border
+border-black/10
+bg-[#faf9f6]
+px-6
+py-5
+md:flex-row
+md:items-center
+md:justify-between
+">
+
+
+
+<p className="
+text-sm
+text-black/60
+">
+
+© 2026 Omniwork. All rights reserved.
+
+</p>
+
+
+
+<div className="
+flex
+items-center
+gap-5
+">
+
+
+<FaFacebookF size={17}/>
+
+<FaXTwitter size={17}/>
+
+<FaLinkedinIn size={18}/>
+
+<FaInstagram size={18}/>
+
+
+</div>
+
+
+
+<div className="
+flex
+gap-6
+text-sm
+text-black/60
+">
+
+<Link href="/privacy-policy">
+Privacy Policy
+</Link>
+
+
+<Link href="/terms">
+Terms & Conditions
+</Link>
+
+
+</div>
+
+
+
+</div>
+
+
+
+</div>
+
+
+</footer>
+
+
+);
+
 }
