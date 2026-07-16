@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { FileText, Paperclip, Plus, Upload, Trash2, Loader2, ExternalLink, Pencil } from "lucide-react";
+import { ChevronDown, FileText, ListPlus, Paperclip, Plus, Upload, Trash2, Loader2, ExternalLink, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { RichTextEditor } from "@/components/ui/RichTextEditor";
+import { ProjectDescriptionEditor, RichTextEditor } from "@/components/ui/RichTextEditor";
 import {
   getDocumentsAction,
   createDocumentAction,
@@ -20,6 +20,85 @@ export type DraftDocument = {
   fileName?: string;
   fileSize?: number;
 };
+
+/** Minimal ClickUp-style document composer used inside create-project modals. */
+export function ProjectDocumentComposer({
+  drafts,
+  onDraftsChange,
+}: {
+  drafts: DraftDocument[];
+  onDraftsChange: (drafts: DraftDocument[]) => void;
+}) {
+  const [title, setTitle] = React.useState("");
+  const [content, setContent] = React.useState("");
+
+  const createDraft = () => {
+    if (!title.trim()) {
+      toast.error("Please name this document.");
+      return;
+    }
+
+    onDraftsChange([
+      ...drafts,
+      {
+        tempId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        type: "DOC",
+        title: title.trim(),
+        content: content.trim(),
+      },
+    ]);
+    setTitle("");
+    setContent("");
+    toast.success("Document ready to create with this project.");
+  };
+
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-white dark:bg-[#1f1f1f]">
+      <div className="flex-1 overflow-y-auto px-7 py-6">
+        <div className="mb-6 flex items-center justify-between">
+          <button
+            type="button"
+            className="inline-flex h-9 items-center gap-2 rounded-[8px] border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
+          >
+            <ListPlus className="size-4" /> My Docs <ChevronDown className="size-4" />
+          </button>
+          {drafts.length > 0 && (
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500 dark:bg-white/10 dark:text-slate-300">
+              {drafts.length} doc{drafts.length === 1 ? "" : "s"} ready
+            </span>
+          )}
+        </div>
+
+        <input
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="Name this Doc..."
+          className="mb-6 w-full border-0 bg-transparent px-0 text-[25px] font-medium tracking-[-0.02em] text-slate-900 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-500"
+          autoFocus
+        />
+        <div className="relative pl-8">
+          <span className="pointer-events-none absolute left-0 top-0 text-2xl font-light text-slate-400">+</span>
+          <ProjectDescriptionEditor
+            content={content}
+            onChange={setContent}
+            placeholder="Write something or type '/' for commands"
+            plain
+          />
+        </div>
+      </div>
+
+      <div className="flex h-[60px] shrink-0 items-center justify-end border-t border-slate-200 px-7 dark:border-white/10">
+        <button
+          type="button"
+          onClick={createDraft}
+          className="h-10 rounded-[8px] bg-slate-950 px-6 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100"
+        >
+          Create Doc
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function formatSize(bytes?: number | null) {
   if (!bytes) return "";

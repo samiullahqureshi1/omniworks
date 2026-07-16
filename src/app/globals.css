@@ -133,3 +133,93 @@
 .animate-slide-up-fade {
   animation: slide-up-fade 0.4s ease-out forwards;
 }
+
+/* Compact ClickUp-style property matrix used in both create-project modals. */
+.project-properties-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 36px;
+  row-gap: 4px;
+  padding: 18px 4px;
+  border-top: 1px solid rgb(226 232 240 / 0.9);
+  border-bottom: 1px solid rgb(226 232 240 / 0.9);
+}
+
+.project-properties-grid > .grid {
+  display: contents;
+}
+
+.project-properties-grid > .grid > div {
+  display: grid;
+  min-width: 0;
+  min-height: 48px;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.project-properties-grid > .grid > div > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0;
+}
+
+.project-properties-grid label,
+.project-properties-grid > .grid > div > div:first-child {
+  color: rgb(100 116 139);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.project-properties-grid select,
+.project-properties-grid button[role="combobox"],
+.project-properties-grid input[type="date"] {
+  height: 36px;
+  border-radius: 8px !important;
+  border-color: transparent !important;
+  background: rgb(248 250 252) !important;
+  box-shadow: none !important;
+}
+
+.project-properties-grid select:hover,
+.project-properties-grid button[role="combobox"]:hover,
+.project-properties-grid input[type="date"]:hover {
+  border-color: rgb(203 213 225) !important;
+  background: #fff !important;
+}
+
+.project-properties-grid > .grid > div > :nth-child(n + 3) {
+  grid-column: 2;
+}
+
+.dark .project-properties-grid {
+  border-color: rgb(255 255 255 / 0.09);
+}
+
+.dark .project-properties-grid label,
+.dark .project-properties-grid > .grid > div > div:first-child {
+  color: rgb(148 163 184);
+}
+
+.dark .project-properties-grid select,
+.dark .project-properties-grid button[role="combobox"],
+.dark .project-properties-grid input[type="date"] {
+  background: rgb(255 255 255 / 0.05) !important;
+}
+
+@media (max-width: 720px) {
+  .project-properties-grid {
+    grid-template-columns: minmax(0, 1fr);
+    column-gap: 0;
+  }
+}
+
+@media (max-width: 460px) {
+  .project-properties-grid > .grid > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .project-properties-grid > .grid > div > :nth-child(n + 3) {
+    grid-column: 1;
+  }
+}

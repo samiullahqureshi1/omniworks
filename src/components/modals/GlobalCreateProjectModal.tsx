@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 import { ModalTabsHeader } from "@/components/ui/ModalTabsHeader";
-import { DocumentsPanel, DraftDocument } from "@/components/documents/DocumentsPanel";
+import { DraftDocument, ProjectDocumentComposer } from "@/components/documents/DocumentsPanel";
 import { createDocumentAction } from "@/app/actions/documents";
 import { Plus, Users, Trash2, X, Loader2, ChevronDown, Check, Repeat, FolderKanban, Pin, Star, LayoutGrid, Search, Edit2, Calendar as CalendarIcon, Clock, ShieldAlert, Crown, Shield, MoreHorizontal, ArrowRight, Hash, Globe, Mail, Phone, Tags, CheckSquare, CircleDashed, Type, EyeOff, Settings } from "lucide-react";
 import Link from "next/link";
@@ -31,7 +31,8 @@ import {
 import { toast } from "sonner";
 import { createProjectAction, quickCreateClientAction, createProjectTemplateAction, getProjectTemplatesAction, deleteProjectTemplateAction } from "@/app/actions/projects";
 import { getProjectFormDataAction } from "@/app/actions/getProjectFormDataAction";
-import { RichTextEditor } from "@/components/ui/RichTextEditor";
+import { ProjectDescriptionEditor } from "@/components/ui/RichTextEditor";
+import { ProjectRulesHeaderControl } from "@/components/modals/ProjectRulesHeaderControl";
 import { getRulesAction, createRuleAction } from "@/app/actions/rules";
 import {
   DropdownMenu,
@@ -62,7 +63,6 @@ export default function GlobalCreateProjectModal({
 
   // Tabbed header (Project | Doc) + attached documents (draft until created)
   const [activeTab, setActiveTab] = useState<"project" | "doc">("project");
-  const [minimized, setMinimized] = useState(false);
   const [draftDocs, setDraftDocs] = useState<DraftDocument[]>([]);
 
   const persistDraftDocs = async (projectId: string) => {
@@ -557,100 +557,59 @@ export default function GlobalCreateProjectModal({
   return (
     <>
       {/* Create Project Modal */}
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog open={isOpen} onOpenChange={(open) => {
+        setIsOpen(open);
+        if (!open) setActiveTab("project");
+      }}>
         <DialogContent
-          className="sm:max-w-[700px] h-[90vh] p-0 flex flex-col overflow-hidden"
+          className="w-[calc(100%-2rem)] sm:max-w-[820px] h-[78vh] min-h-[560px] max-h-[720px] p-0 flex flex-col overflow-hidden rounded-[8px] sm:rounded-[8px] [&>button]:hidden"
           onInteractOutside={(e) => {
             if (isQuickClientOpen) e.preventDefault();
           }}
         >
-          <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shrink-0 shadow-sm flex flex-row justify-between items-center gap-4">
-            <div className="space-y-1">
-              <DialogTitle>Create New Project</DialogTitle>
-              <DialogDescription>
-                Setup a new project workspace, assign a PM, and configure
-                timelines.
-              </DialogDescription>
-            </div>
-            
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Rules Selector in Header */}
-              {attachedRuleIds.length > 0 && (
-                <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border border-indigo-100 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900/50 text-[10px] font-bold px-2 py-0.5 rounded-lg">
-                  {attachedRuleIds.length} Rule{attachedRuleIds.length > 1 ? 's' : ''} Attached
-                </Badge>
-              )}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="outline" size="sm" className="h-9 rounded-xl border bg-background px-3 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
-                    Select Rules... <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1.5 z-50">
-                  {rules.filter(r => r.isActive).length === 0 ? (
-                    <div className="p-2.5 text-center text-xs text-muted-foreground">
-                      No active rules
-                    </div>
-                  ) : (
-                    rules
-                      .filter((r) => r.isActive)
-                      .map((r) => {
-                        const isAttached = attachedRuleIds.includes(r.id);
-                        return (
-                          <DropdownMenuItem
-                            key={r.id}
-                            onClick={() => {
-                              if (isAttached) {
-                                setAttachedRuleIds(prev => prev.filter(id => id !== r.id));
-                              } else {
-                                setAttachedRuleIds(prev => [...prev, r.id]);
-                              }
-                            }}
-                            className="cursor-pointer rounded-lg px-2.5 py-2 text-xs flex items-center justify-between hover:bg-muted focus:bg-muted"
-                          >
-                            <span>{r.name}</span>
-                            {isAttached && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />}
-                          </DropdownMenuItem>
-                        );
-                      })
-                  )}
-                  <DropdownMenuSeparator className="my-1 border-t" />
-                  <DropdownMenuItem
-                    onClick={() => setIsCreateRuleOpen(true)}
-                    className="cursor-pointer rounded-lg px-2.5 py-2 text-xs text-primary hover:bg-primary/5 focus:bg-primary/5 font-semibold flex items-center gap-1"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Create New Rule
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </DialogHeader>
+          <DialogTitle className="sr-only">
+            {activeTab === "doc" ? "Create Document" : "Create Project"}
+          </DialogTitle>
+          <ModalTabsHeader
+            tabs={[
+              { id: "project", label: "Project" },
+              { id: "doc", label: "Doc" },
+            ]}
+            activeTab={activeTab}
+            onTabChange={(tab) => setActiveTab(tab as "project" | "doc")}
+            onClose={() => {
+              setActiveTab("project");
+              setIsOpen(false);
+            }}
+            rightSlot={activeTab === "project" ? (
+              <ProjectRulesHeaderControl
+                rules={rules}
+                attachedRuleIds={attachedRuleIds}
+                onAttachedRuleIdsChange={setAttachedRuleIds}
+                onCreateRule={() => setIsCreateRuleOpen(true)}
+              />
+            ) : undefined}
+            className={activeTab === "doc" ? "border-b-0 dark:border-b-0" : undefined}
+          />
+          {activeTab === "project" ? (
+            <>
           <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
             <form onSubmit={handleCreateProject} className="space-y-6 pb-6">
 {/* Basics */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2 col-span-2">
-                  <label className="text-sm font-medium">
-                    Project Name <span className="text-destructive">*</span>
-                  </label>
-                  <Input
+                <div className="col-span-2">
+                  <input
                     name="name"
                     required
-                    placeholder="e.g. Website Redesign"
+                    placeholder="Name this Project..."
                     value={formName}
                     onChange={(e) => setFormName(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2 col-span-2">
-                  <label className="text-sm font-medium">Description</label>
-                  <RichTextEditor
-                    content={description}
-                    onChange={setDescription}
-                    placeholder="Brief overview of the project..."
+                    className="w-full border-0 bg-transparent px-0 text-[25px] font-medium tracking-[-0.02em] text-slate-900 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-500"
                   />
                 </div>
               </div>
 
+              <div className="project-properties-grid">
               <div className="grid grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg border">
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
@@ -700,7 +659,7 @@ export default function GlobalCreateProjectModal({
                 </div>
 
                 {/* Assignees Multi-select */}
-                <div className="space-y-2 col-span-2">
+                <div className="space-y-2">
                   <label className="text-sm font-medium">Assigned Users (Multi-select)</label>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -933,6 +892,21 @@ export default function GlobalCreateProjectModal({
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
+              </div>
+              </div>
+
+              <div className="space-y-3 border-t border-slate-200 pt-5 dark:border-white/10">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Description</h3>
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Add context, type “/” for blocks, or “@” to mention a teammate.</p>
+                </div>
+                <ProjectDescriptionEditor
+                  content={description}
+                  onChange={setDescription}
+                  placeholder="Add description, or write with AI"
+                  people={members}
+                  plain
+                />
               </div>
 
               {/* Repeat Settings */}
@@ -1175,6 +1149,10 @@ export default function GlobalCreateProjectModal({
               </DialogFooter>
             </form>
           </div>
+            </>
+          ) : (
+            <ProjectDocumentComposer drafts={draftDocs} onDraftsChange={setDraftDocs} />
+          )}
         </DialogContent>
       </Dialog>
 

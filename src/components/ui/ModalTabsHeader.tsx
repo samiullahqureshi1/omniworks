@@ -34,11 +34,11 @@ export function ModalTabsHeader({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-4 px-5 sm:px-6 pt-4 border-b border-slate-100 dark:border-white/5 bg-background sticky top-0 z-20 shrink-0",
+        "flex h-[60px] items-center justify-between gap-4 px-5 sm:px-6 border-b border-slate-100 dark:border-white/5 bg-background sticky top-0 z-20 shrink-0",
         className
       )}
     >
-      <div className="flex items-center gap-4 sm:gap-6 overflow-x-auto no-scrollbar -mb-px">
+      <div className="flex h-full items-stretch gap-4 sm:gap-6 overflow-x-auto no-scrollbar">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTab;
           return (
@@ -47,7 +47,7 @@ export function ModalTabsHeader({
               type="button"
               onClick={() => onTabChange(tab.id)}
               className={cn(
-                "relative whitespace-nowrap pb-3 text-[15px] font-semibold outline-none transition-colors",
+                "relative flex h-full items-center whitespace-nowrap text-[15px] font-semibold outline-none transition-colors",
                 isActive
                   ? "text-slate-900 dark:text-white"
                   : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
@@ -56,7 +56,7 @@ export function ModalTabsHeader({
               {tab.label}
               <span
                 className={cn(
-                  "absolute left-0 -bottom-px h-0.5 w-full rounded-full bg-slate-900 dark:bg-white transition-opacity",
+                  "absolute bottom-0 left-0 h-0.5 w-full rounded-full bg-slate-900 dark:bg-white transition-opacity",
                   isActive ? "opacity-100" : "opacity-0"
                 )}
               />
@@ -65,7 +65,7 @@ export function ModalTabsHeader({
         })}
       </div>
 
-      <div className="flex items-center gap-1.5 pb-2 shrink-0">
+      <div className="flex shrink-0 items-center gap-1.5">
         {rightSlot}
         {onMinimize && (
           <button
