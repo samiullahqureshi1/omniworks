@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { FormDialog, FormDialogCancelButton, FormDialogSubmitButton, formFieldLabel, formInputClass, formSelectClass } from '@/components/ui/FormDialog';
+import { FormDialog, FormDialogCancelButton, FormDialogSubmitButton, FormRoleSelect, formFieldLabel, formInputClass } from '@/components/ui/FormDialog';
 import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addUserAction, editUserAction, deactivateUserAction, activateUserAction, resetUserPasswordAction, deleteUserAction } from '@/app/actions/users';
@@ -24,6 +24,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
 
   // Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isAddFormValid, setIsAddFormValid] = useState(false);
   const [editUser, setEditUser] = useState<any>(null);
   const [resetUser, setResetUser] = useState<any>(null);
   const [deactivateUser, setDeactivateUser] = useState<any>(null);
@@ -58,6 +59,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
         toast.error(res.error);
       } else {
         toast.success(res.message);
+        setIsAddFormValid(false);
         setIsAddModalOpen(false);
         // Soft refresh the page data
         router.refresh(); 
@@ -281,32 +283,37 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
       {/* Add User Modal */}
       <FormDialog
         open={isAddModalOpen}
-        onOpenChange={setIsAddModalOpen}
+        onOpenChange={(open) => {
+          if (!open) setIsAddFormValid(false);
+          setIsAddModalOpen(open);
+        }}
         title="Add New User"
-        description="Create a new user account manually. They will be able to log in immediately."
+        description="Send an invitation to join your workspace organization."
         footer={
           <>
-            <FormDialogCancelButton onClick={() => setIsAddModalOpen(false)} disabled={isPending}>Cancel</FormDialogCancelButton>
-            <FormDialogSubmitButton type="submit" form="add-user-form" disabled={isPending}>{isPending ? 'Adding...' : 'Add User'}</FormDialogSubmitButton>
+            <FormDialogCancelButton onClick={() => {
+              setIsAddFormValid(false);
+              setIsAddModalOpen(false);
+            }} disabled={isPending}>Cancel</FormDialogCancelButton>
+            <FormDialogSubmitButton type="submit" form="add-user-form" disabled={isPending || !isAddFormValid}>{isPending ? 'Adding...' : 'Add User'}</FormDialogSubmitButton>
           </>
         }
       >
-        <form id="add-user-form" onSubmit={handleAddSubmit} className="p-6 space-y-4">
-          <div className="space-y-2">
-            <label className={formFieldLabel}>Name</label>
-            <Input name="name" required placeholder="John Doe" className={formInputClass} />
+        <form
+          id="add-user-form"
+          onSubmit={handleAddSubmit}
+          onInput={(event) => setIsAddFormValid(event.currentTarget.checkValidity())}
+          className="px-6 pt-7 pb-6 space-y-5"
+        >
+          <div className="space-y-1.5">
+            <label htmlFor="add-user-name" className={formFieldLabel}>Name</label>
+            <Input id="add-user-name" name="name" required placeholder="e.g. John Doe" className={formInputClass} />
           </div>
-          <div className="space-y-2">
-            <label className={formFieldLabel}>Email</label>
-            <Input name="email" type="email" required placeholder="john@example.com" className={formInputClass} />
+          <div className="space-y-1.5">
+            <label htmlFor="add-user-email" className={formFieldLabel}>Email Address</label>
+            <Input id="add-user-email" name="email" type="email" required placeholder="e.g. john@example.com" className={formInputClass} />
           </div>
-          <div className="space-y-2">
-            <label className={formFieldLabel}>Role</label>
-            <select name="role" required className={formSelectClass}>
-              <option value="MEMBER">Member</option>
-              <option value="OWNER">Owner</option>
-            </select>
-          </div>
+          <FormRoleSelect id="add-user-role" />
         </form>
       </FormDialog>
 

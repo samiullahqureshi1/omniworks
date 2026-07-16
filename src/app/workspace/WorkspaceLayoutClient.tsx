@@ -17,6 +17,14 @@ import { SecondarySidebar } from '@/components/navigation/SecondarySidebar';
 import { ConversationsSidebarPanel } from '@/components/navigation/ConversationsSidebarPanel';
 import { Header } from '@/components/navigation/Header';
 import { Input } from '@/components/ui/input';
+import {
+  FormDialog,
+  FormDialogCancelButton,
+  FormDialogSubmitButton,
+  FormRoleSelect,
+  formFieldLabel,
+  formInputClass,
+} from '@/components/ui/FormDialog';
 import GlobalCreateProjectModal from '@/components/modals/GlobalCreateProjectModal';
 
 export default function WorkspaceLayoutClient({
@@ -442,88 +450,68 @@ export default function WorkspaceLayoutClient({
 
       </div>
 
-      {/* Invite User Modal */}
-      {isInviteModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-[#151518] rounded-[8px] shadow-2xl border border-slate-200/80 dark:border-white/10 w-full max-w-md overflow-hidden relative">
-            
-            {/* Modal header */}
-            <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 relative">
-              <h2 className="text-[16.5px] font-bold text-slate-900 dark:text-white leading-tight">Invite User</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Send an invitation to join your workspace organization.</p>
-              
-              <button 
-                type="button"
-                onClick={() => setIsInviteModalOpen(false)}
-                className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-250 transition-all p-1 hover:bg-slate-50 dark:hover:bg-white/5 rounded-md cursor-pointer outline-none"
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            {/* Input Form */}
-            <form onSubmit={handleInviteUser} className="flex flex-col">
-              <div className="p-6 space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[12.5px] font-bold text-slate-600 dark:text-slate-350">Name</label>
-                  <Input 
-                    placeholder="e.g. John Doe" 
-                    value={inviteName}
-                    onChange={(e) => setInviteName(e.target.value)}
-                    required
-                    autoFocus
-                    className="h-10 rounded-lg border-slate-200 focus-visible:ring-1 focus-visible:ring-slate-450 dark:border-white/10 dark:bg-transparent text-sm"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[12.5px] font-bold text-slate-600 dark:text-slate-350">Email Address</label>
-                  <Input 
-                    type="email"
-                    placeholder="e.g. john@example.com" 
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    required
-                    className="h-10 rounded-lg border-slate-200 focus-visible:ring-1 focus-visible:ring-slate-450 dark:border-white/10 dark:bg-transparent text-sm"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[12.5px] font-bold text-slate-600 dark:text-slate-350">Role</label>
-                  <select
-                    value={inviteRole}
-                    onChange={(e) => setInviteRole(e.target.value as any)}
-                    className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-450 dark:border-white/10 dark:bg-[#151518] dark:text-white"
-                  >
-                    <option value="MEMBER">Member (Full team access)</option>
-                    <option value="CLIENT">Client (Restricted access)</option>
-                    <option value="OWNER">Owner (Full administrative control)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Action buttons footer */}
-              <div className="px-6 py-4 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] flex justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setIsInviteModalOpen(false)}
-                  className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition-colors outline-none cursor-pointer"
-                  disabled={isInvitingUser}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isInvitingUser || !inviteName.trim() || !inviteEmail.trim()}
-                  className="px-5 py-2 text-sm font-bold rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors shadow-sm disabled:opacity-50 outline-none cursor-pointer"
-                >
-                  {isInvitingUser ? 'Inviting...' : 'Invite'}
-                </button>
-              </div>
-            </form>
+      {/* Invite User Modal opened from the main sidebar */}
+      <FormDialog
+        open={isInviteModalOpen}
+        onOpenChange={setIsInviteModalOpen}
+        title="Invite User"
+        description="Send an invitation to join your workspace organization."
+        footer={
+          <>
+            <FormDialogCancelButton
+              onClick={() => setIsInviteModalOpen(false)}
+              disabled={isInvitingUser}
+            >
+              Cancel
+            </FormDialogCancelButton>
+            <FormDialogSubmitButton
+              type="submit"
+              form="sidebar-invite-user-form"
+              disabled={isInvitingUser || !inviteName.trim() || !inviteEmail.trim()}
+            >
+              {isInvitingUser ? 'Inviting...' : 'Invite'}
+            </FormDialogSubmitButton>
+          </>
+        }
+      >
+        <form
+          id="sidebar-invite-user-form"
+          onSubmit={handleInviteUser}
+          className="px-6 pt-7 pb-6 space-y-5"
+        >
+          <div className="space-y-1.5">
+            <label htmlFor="sidebar-invite-name" className={formFieldLabel}>Name</label>
+            <Input
+              id="sidebar-invite-name"
+              placeholder="e.g. John Doe"
+              value={inviteName}
+              onChange={(e) => setInviteName(e.target.value)}
+              required
+              autoFocus
+              className={formInputClass}
+            />
           </div>
-        </div>
-      )}
+
+          <div className="space-y-1.5">
+            <label htmlFor="sidebar-invite-email" className={formFieldLabel}>Email Address</label>
+            <Input
+              id="sidebar-invite-email"
+              type="email"
+              placeholder="e.g. john@example.com"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              required
+              className={formInputClass}
+            />
+          </div>
+
+          <FormRoleSelect
+            id="sidebar-invite-role"
+            value={inviteRole}
+            onValueChange={setInviteRole}
+          />
+        </form>
+      </FormDialog>
 
       {/* Create Child Organization Modal */}
       {isCreateChildModalOpen && (

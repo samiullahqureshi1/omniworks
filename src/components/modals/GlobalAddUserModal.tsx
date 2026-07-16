@@ -1,15 +1,15 @@
 "use client";
 
-import React, { useTransition } from "react";
+import React, { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import {
   FormDialog,
   FormDialogCancelButton,
+  FormRoleSelect,
   FormDialogSubmitButton,
   formFieldLabel,
   formInputClass,
-  formSelectClass,
 } from "@/components/ui/FormDialog";
 import { toast } from "sonner";
 import { addUserAction } from "@/app/actions/users";
@@ -23,6 +23,12 @@ export default function GlobalAddUserModal({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [isFormValid, setIsFormValid] = useState(false);
+
+  const handleOpenChange = (open: boolean) => {
+    if (!open) setIsFormValid(false);
+    setIsOpen(open);
+  };
 
   const handleAddSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -34,6 +40,7 @@ export default function GlobalAddUserModal({
         toast.error(res.error);
       } else {
         toast.success(res.message || "User added successfully");
+        setIsFormValid(false);
         setIsOpen(false);
         router.refresh();
       }
@@ -43,37 +50,35 @@ export default function GlobalAddUserModal({
   return (
     <FormDialog
       open={isOpen}
-      onOpenChange={setIsOpen}
-      title="Add New User"
-      description="Create a new user account manually. They will receive an email with their credentials."
+      onOpenChange={handleOpenChange}
+      title="Invite User"
+      description="Send an invitation to join your workspace organization."
       footer={
         <>
-          <FormDialogCancelButton onClick={() => setIsOpen(false)} disabled={isPending}>
+          <FormDialogCancelButton onClick={() => handleOpenChange(false)} disabled={isPending}>
             Cancel
           </FormDialogCancelButton>
-          <FormDialogSubmitButton type="submit" form="add-user-form" disabled={isPending}>
-            {isPending ? "Adding..." : "Add User"}
+          <FormDialogSubmitButton type="submit" form="add-user-form" disabled={isPending || !isFormValid}>
+            {isPending ? "Inviting..." : "Invite"}
           </FormDialogSubmitButton>
         </>
       }
     >
-      <form id="add-user-form" onSubmit={handleAddSubmit} className="p-6 space-y-4">
-        <div className="space-y-2">
-          <label className={formFieldLabel}>Name</label>
-          <Input name="name" required placeholder="John Doe" className={formInputClass} />
+      <form
+        id="add-user-form"
+        onSubmit={handleAddSubmit}
+        onInput={(event) => setIsFormValid(event.currentTarget.checkValidity())}
+        className="px-6 pt-7 pb-6 space-y-5"
+      >
+        <div className="space-y-1.5">
+          <label htmlFor="global-add-user-name" className={formFieldLabel}>Name</label>
+          <Input id="global-add-user-name" name="name" required placeholder="e.g. John Doe" className={formInputClass} />
         </div>
-        <div className="space-y-2">
-          <label className={formFieldLabel}>Email</label>
-          <Input name="email" type="email" required placeholder="john@example.com" className={formInputClass} />
+        <div className="space-y-1.5">
+          <label htmlFor="global-add-user-email" className={formFieldLabel}>Email Address</label>
+          <Input id="global-add-user-email" name="email" type="email" required placeholder="e.g. john@example.com" className={formInputClass} />
         </div>
-        <div className="space-y-2">
-          <label className={formFieldLabel}>Role</label>
-          <select name="role" className={formSelectClass}>
-            <option value="MEMBER">Member</option>
-            <option value="CLIENT">Client</option>
-            <option value="OWNER">Owner</option>
-          </select>
-        </div>
+        <FormRoleSelect id="global-add-user-role" />
       </form>
     </FormDialog>
   );

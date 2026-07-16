@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { FormDialog, FormDialogCancelButton, FormDialogSubmitButton, formFieldLabel, formInputClass } from '@/components/ui/FormDialog';
+import { FormDialog, FormDialogCancelButton, FormDialogSubmitButton, FormRoleSelect, formFieldLabel, formInputClass } from '@/components/ui/FormDialog';
 import { toast } from 'sonner';
 import { addUserAction, editUserAction, deactivateUserAction, activateUserAction, resetUserPasswordAction, deleteUserAction } from '@/app/actions/users';
 
@@ -23,6 +23,7 @@ export default function ClientsClient({ initialUsers, currentUser }: { initialUs
 
   // Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isAddFormValid, setIsAddFormValid] = useState(false);
   const [editUser, setEditUser] = useState<any>(null);
   const [resetUser, setResetUser] = useState<any>(null);
   const [deactivateUser, setDeactivateUser] = useState<any>(null);
@@ -49,7 +50,6 @@ export default function ClientsClient({ initialUsers, currentUser }: { initialUs
   const handleAddSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    formData.append('role', 'CLIENT');
 
     startTransition(async () => {
       const res = await addUserAction(formData);
@@ -57,6 +57,7 @@ export default function ClientsClient({ initialUsers, currentUser }: { initialUs
         toast.error(res.error);
       } else {
         toast.success(res.message);
+        setIsAddFormValid(false);
         setIsAddModalOpen(false);
         // Soft refresh the page data
         router.refresh(); 
@@ -276,25 +277,37 @@ export default function ClientsClient({ initialUsers, currentUser }: { initialUs
       {/* Add Client Modal */}
       <FormDialog
         open={isAddModalOpen}
-        onOpenChange={setIsAddModalOpen}
+        onOpenChange={(open) => {
+          if (!open) setIsAddFormValid(false);
+          setIsAddModalOpen(open);
+        }}
         title="Add New Client"
-        description="Create a new client account manually. An email with their credentials will be sent."
+        description="Invite a client to join your workspace organization."
         footer={
           <>
-            <FormDialogCancelButton onClick={() => setIsAddModalOpen(false)} disabled={isPending}>Cancel</FormDialogCancelButton>
-            <FormDialogSubmitButton type="submit" form="add-client-form" disabled={isPending}>{isPending ? 'Adding...' : 'Add Client'}</FormDialogSubmitButton>
+            <FormDialogCancelButton onClick={() => {
+              setIsAddFormValid(false);
+              setIsAddModalOpen(false);
+            }} disabled={isPending}>Cancel</FormDialogCancelButton>
+            <FormDialogSubmitButton type="submit" form="add-client-form" disabled={isPending || !isAddFormValid}>{isPending ? 'Adding...' : 'Add Client'}</FormDialogSubmitButton>
           </>
         }
       >
-        <form id="add-client-form" onSubmit={handleAddSubmit} className="p-6 space-y-4">
-          <div className="space-y-2">
-            <label className={formFieldLabel}>Name</label>
-            <Input name="name" required placeholder="Acme Corp" className={formInputClass} />
+        <form
+          id="add-client-form"
+          onSubmit={handleAddSubmit}
+          onInput={(event) => setIsAddFormValid(event.currentTarget.checkValidity())}
+          className="px-6 pt-7 pb-6 space-y-5"
+        >
+          <div className="space-y-1.5">
+            <label htmlFor="add-client-name" className={formFieldLabel}>Name</label>
+            <Input id="add-client-name" name="name" required placeholder="e.g. Acme Corp" className={formInputClass} />
           </div>
-          <div className="space-y-2">
-            <label className={formFieldLabel}>Email</label>
-            <Input name="email" type="email" required placeholder="contact@acme.com" className={formInputClass} />
+          <div className="space-y-1.5">
+            <label htmlFor="add-client-email" className={formFieldLabel}>Email Address</label>
+            <Input id="add-client-email" name="email" type="email" required placeholder="e.g. contact@acme.com" className={formInputClass} />
           </div>
+          <FormRoleSelect id="add-client-role" defaultValue="CLIENT" />
         </form>
       </FormDialog>
 
