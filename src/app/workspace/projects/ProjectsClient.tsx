@@ -2217,24 +2217,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
     Client
   </label>
 
-  <button
-    type="button"
-    onClick={() => setIsQuickClientOpen(true)}
-    className="
-      mt-1
-      text-[11px]
-      font-semibold
-      text-primary
-      hover:underline
-      flex
-      items-center
-      w-fit
-    "
-  >
-    <Plus size={11} className="mr-1" />
-    Quick Add
-  </button>
-
+ 
 </div>
 
     <DropdownMenu>
@@ -2341,7 +2324,34 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 
         </div>
 
-
+<div
+  className="
+    border-t
+    mt-2
+    pt-2
+  "
+>
+  <button
+    type="button"
+    onClick={() => setIsQuickClientOpen(true)}
+    className="
+      w-full
+      flex
+      items-center
+      gap-2
+      px-3
+      py-2
+      rounded-lg
+      text-sm
+      font-medium
+      hover:bg-slate-100
+      dark:hover:bg-white/5
+    "
+  >
+    <Plus size={14} />
+    Quick Add Client
+  </button>
+</div>
       </DropdownMenuContent>
 
     </DropdownMenu>

@@ -119,12 +119,18 @@ export const secondaryNavigation: Record<string, SecondarySection[]> = {
   ],
   calendar: [
     {
-      title: 'Calendar',
+      title: 'Planner',
       items: [
         { name: 'My Calendar', icon: Calendar, comingSoon: true },
         { name: 'Meetings', icon: Video, comingSoon: true },
         { name: 'Events', icon: Sparkles, comingSoon: true },
         { name: 'Reminders', icon: Timer, comingSoon: true },
+      ],
+    },
+    {
+      title: 'Configuration',
+      items: [
+        { name: 'Booking Availability', href: '/workspace/planner/settings', icon: Settings, exact: true, roles: ['OWNER'] },
       ],
     },
   ],

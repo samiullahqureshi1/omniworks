@@ -41,12 +41,17 @@ model Organization {
   chatGroups    ChatGroup[]
   groupMessages GroupMessage[]
   documents        Document[]
+  availabilitySettings OrganizationSettings?
+  leads            Lead[]
+  meetings         Meeting[]
+  plannerEvents    PlannerEvent[]
 }
 
 enum Role {
   OWNER
   MEMBER
   CLIENT
+  MASTER_ADMIN
 }
 
 enum UserStatus {
@@ -92,6 +97,11 @@ model User {
   groupMessagesSent    GroupMessage[]           @relation("GroupMessageSender")
   groupReadReceipts     GroupMessageReadReceipt[]
   documents             Document[]               @relation("DocumentAuthor")
+  introCallSettings     OrganizationSettings[]   @relation("IntroCallAttendee")
+  convertedFromLeads    Lead[]                   @relation("LeadConvertedUser")
+  meetingsAsAttendee    Meeting[]                @relation("MeetingAttendee")
+  meetingsAsClient      Meeting[]                @relation("MeetingClient")
+  plannerEventsAssigned PlannerEvent[]           @relation("PlannerEventAssignee")
 
   @@unique([email, organizationId])
   @@index([organizationId])
@@ -132,6 +142,7 @@ enum Priority {
 model Project {
   id                  String         @id @default(uuid())
   name                String
+  slug                String?        @unique
   description         String?
   notes               String?
   organizationId      String
@@ -167,6 +178,9 @@ model Project {
   rules           ProjectRule[]
   ruleLogs        RuleLog[]
   documents       Document[]
+  meetings        Meeting[]
+  plannerEvents   PlannerEvent[]
+  convertedLeads  Lead[]           @relation("LeadConvertedProject")
 
   @@index([organizationId])
   @@index([clientId])
@@ -645,6 +659,144 @@ model GroupMessageReadReceipt {
 enum DocumentType {
   DOC
   FILE
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  CONVERTED
+  LOST
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum TranscriptStatus {
+  PENDING
+  AVAILABLE
+  UNAVAILABLE
+  MANUAL
+}
+
+enum PlannerEventType {
+  TASK
+  MILESTONE
+  MEETING
+}
+
+enum PlannerEventVisibility {
+  INTERNAL
+  CLIENT_VISIBLE
+}
+
+model OrganizationSettings {
+  id                         String       @id @default(uuid())
+  organizationId             String       @unique
+  organization               Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workingDays                Int[]        @default([1, 2, 3, 4, 5])
+  workingHoursStart          Int          @default(600)
+  workingHoursEnd            Int          @default(1020)
+  timezone                   String       @default("UTC")
+  slotDurationMinutes        Int          @default(30)
+  blockedDates               DateTime[]   @default([])
+  defaultIntroCallAttendeeId String?
+  defaultIntroCallAttendee   User?        @relation("IntroCallAttendee", fields: [defaultIntroCallAttendeeId], references: [id], onDelete: SetNull)
+  googleRefreshToken         String?
+  googleConnectedEmail       String?
+  createdAt                  DateTime     @default(now())
+  updatedAt                  DateTime     @updatedAt
+}
+
+model Lead {
+  id                 String        @id @default(uuid())
+  organizationId     String
+  organization       Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name               String
+  email              String
+  company            String?
+  note               String?
+  status             LeadStatus    @default(NEW)
+  convertedUserId    String?
+  convertedUser      User?         @relation("LeadConvertedUser", fields: [convertedUserId], references: [id], onDelete: SetNull)
+  convertedProjectId String?
+  convertedProject   Project?      @relation("LeadConvertedProject", fields: [convertedProjectId], references: [id], onDelete: SetNull)
+  meetings           Meeting[]
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+model Meeting {
+  id             String        @id @default(uuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pmId           String
+  pm             User          @relation("MeetingAttendee", fields: [pmId], references: [id], onDelete: Cascade)
+  clientId       String?
+  client         User?         @relation("MeetingClient", fields: [clientId], references: [id], onDelete: SetNull)
+  leadId         String?
+  lead           Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  leadName       String?
+  leadEmail      String?
+  leadCompany    String?
+  leadNote       String?
+  startTime      DateTime
+  endTime        DateTime
+  status         MeetingStatus @default(SCHEDULED)
+  meetLink       String?
+  googleEventId  String?
+  reminderSentAt DateTime?
+  note           MeetingNote?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([pmId])
+  @@index([clientId])
+  @@index([startTime])
+}
+
+model MeetingNote {
+  id               String           @id @default(uuid())
+  meetingId        String           @unique
+  meeting          Meeting          @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  summary          String?
+  keyPoints        Json?
+  actionItems      Json?
+  notes            String?
+  transcriptStatus TranscriptStatus @default(PENDING)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+}
+
+model PlannerEvent {
+  id             String                 @id @default(uuid())
+  organizationId String
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        Project?               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title          String
+  type           PlannerEventType       @default(MILESTONE)
+  startDate      DateTime
+  endDate        DateTime?
+  assignedToId   String?
+  assignedTo     User?                  @relation("PlannerEventAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  visibility     PlannerEventVisibility @default(INTERNAL)
+  status         String                 @default("OPEN")
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([organizationId])
+  @@index([projectId])
 }
 
 model Document {

@@ -10,6 +10,7 @@ import { hashPassword } from '@/lib/auth'; // Ensure this is imported
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import { triggerEventRules } from './rules';
+import { generateUniqueProjectSlug } from '@/lib/slug';
 
 // Quick Client Creation inside project form:
 // Owner can quickly create a Client user directly during project creation/editing.
@@ -135,6 +136,7 @@ export async function quickCreateProjectAction(name: string) {
     const project = await prisma.project.create({
       data: {
         name,
+        slug: await generateUniqueProjectSlug(name),
         organizationId: session.organizationId,
         startDate: new Date(),
         statusId: defaultStatus?.id || null,
@@ -258,6 +260,7 @@ export async function createProjectAction(data: {
           const created = await prisma.project.create({
             data: {
               name: formattedName,
+              slug: await generateUniqueProjectSlug(formattedName),
               description: description || null,
               notes: notes || null,
               organizationId: session.organizationId,
@@ -325,6 +328,7 @@ export async function createProjectAction(data: {
     const project = await prisma.project.create({
       data: {
         name,
+        slug: await generateUniqueProjectSlug(name),
         description: description || null,
         notes: notes || null,
         organizationId: session.organizationId,

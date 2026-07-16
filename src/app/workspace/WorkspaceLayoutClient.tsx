@@ -85,6 +85,7 @@ export default function WorkspaceLayoutClient({
     if (path.startsWith('/workspace/rules')) return 'rules';
     if (path.startsWith('/workspace/teamops')) return 'teams';
     if (path.startsWith('/workspace/conversations')) return 'conversations';
+    if (path.startsWith('/workspace/planner')) return 'calendar';
     return 'home';
   };
 
