@@ -329,7 +329,7 @@ export function RichTextEditor({
     const { $from } = currentEditor.state.selection;
     const textBeforeCursor = $from.parent.textBetween(0, $from.parentOffset, undefined, "\ufffc");
     const slashMatch = textBeforeCursor.match(/(?:^|\s)\/([^\s/]*)$/);
-    const mentionMatch = textBeforeCursor.match(/(?:^|\s)@([^@\n]*)$/);
+    const mentionMatch = textBeforeCursor.match(/(?:^|\s)@([^\s@\n]*)$/);
 
     setSlashQuery(slashMatch ? slashMatch[1] : null);
     setMentionQuery(mentionMatch ? mentionMatch[1] : null);

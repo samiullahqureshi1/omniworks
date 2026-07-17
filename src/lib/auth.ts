@@ -11,7 +11,7 @@ export interface UserSession {
   userId: string;
   email: string;
   name: string;
-  role: 'OWNER' | 'MEMBER' | 'CLIENT';
+  role: 'OWNER' | 'MEMBER' | 'CLIENT' | 'MASTER_ADMIN';
   organizationId: string;
   organizationName: string;
 }
@@ -29,7 +29,7 @@ export async function createSession(user: {
   id: string;
   email: string;
   name: string;
-  role: 'OWNER' | 'MEMBER' | 'CLIENT';
+  role: 'OWNER' | 'MEMBER' | 'CLIENT' | 'MASTER_ADMIN';
   organizationId: string;
 }) {
   const org = await prisma.organization.findUnique({

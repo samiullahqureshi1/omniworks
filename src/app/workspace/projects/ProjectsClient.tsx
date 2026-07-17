@@ -2154,7 +2154,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
           }
         }}>
         <DialogContent
-    className="w-[calc(100%-2rem)] sm:max-w-[820px] h-[78vh] min-h-[560px] max-h-[720px] p-0 flex flex-col overflow-hidden rounded-[8px] sm:rounded-[8px] [&>button]:hidden"
+    className="w-[calc(100%-2rem)] sm:max-w-[860px] h-[82vh] min-h-[580px] max-h-[760px] p-0 flex flex-col overflow-hidden rounded-[8px] sm:rounded-[8px] [&>button]:hidden"
 
     onInteractOutside={(e) => {
       e.preventDefault();
@@ -2190,9 +2190,8 @@ const [isPMOpen, setIsPMOpen] = useState(false);
               className={activeCreateTab === "doc" ? "border-b-0 dark:border-b-0" : undefined}
             />
             {activeCreateTab === "project" ? (
-              <>
-            <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
-              <form onSubmit={handleCreateProject} className="space-y-6 pb-6">
+              <form onSubmit={handleCreateProject} className="flex flex-col flex-1 overflow-hidden">
+                <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar space-y-6">
 
                 {/* Basics */}
               <div className="grid grid-cols-2 gap-4">
@@ -2958,12 +2957,12 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 
                 <Flag
                   size={16}
-                  className={priority.color}
+                  className={priority?.color || "text-slate-400"}
                   fill="currentColor"
                 />
 
                 <span className="text-sm font-medium">
-                  {priority.label}
+                  {priority?.label || "Normal"}
                 </span>
 
               </div>
@@ -3099,10 +3098,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 
 
 </div>
-              </div>
 
-              {/* Timeline */}
-              <div className="grid grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg border">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
                     Start Date <span className="text-destructive">*</span>
@@ -3115,136 +3111,42 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                     onChange={(e) => setFormStartDate(e.target.value)}
                   />
                 </div>
-                <div className="space-y-2 flex flex-col justify-between">
-                  <div className="flex justify-between items-center">
-                    <label className="text-sm font-medium">Due Date</label>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="checkbox"
-                        id="ongoing"
-                        checked={isOngoing}
-                        onChange={(e) => {
-                          setIsOngoing(e.target.checked);
-                          if (e.target.checked) {
-                            setFormEndDate("");
-                          }
-                        }}
-                        disabled={isRepeatEnabled}
-                        className="rounded border-gray-300 text-primary focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                      />
-                      <label
-                        htmlFor="ongoing"
-                        className={`text-xs ${isRepeatEnabled ? 'text-muted-foreground/50 cursor-not-allowed' : 'text-muted-foreground cursor-pointer'}`}
-                      >
-                        Ongoing
-                      </label>
-                    </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Due Date</label>
+                  <Input
+                    name="endDate"
+                    type="date"
+                    required={!isOngoing}
+                    value={formEndDate}
+                    onChange={(e) => setFormEndDate(e.target.value)}
+                    disabled={isOngoing}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div></div>
+                  <div className="flex items-center gap-2 h-[36px]">
+                    <input
+                      type="checkbox"
+                      id="ongoing"
+                      checked={isOngoing}
+                      onChange={(e) => {
+                        setIsOngoing(e.target.checked);
+                        if (e.target.checked) {
+                          setFormEndDate("");
+                        }
+                      }}
+                      disabled={isRepeatEnabled}
+                      className="rounded border-slate-300 text-slate-600 focus:ring-slate-500 h-4 w-4 cursor-pointer"
+                    />
+                    <label htmlFor="ongoing" className="text-[13px] font-medium text-slate-500 dark:text-slate-400 cursor-pointer select-none">
+                      Ongoing
+                    </label>
                   </div>
-                  {isRepeatEnabled && (
-                    <div className="text-[10px] text-amber-600 dark:text-amber-400 -mt-1 mb-1">
-                      * Ongoing is disabled for repeating projects.
-                    </div>
-                  )}
-                  
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button type="button" variant="outline" className="w-full justify-between h-9 rounded-xl border text-slate-700 dark:text-slate-300 px-3 text-sm font-medium flex items-center">
-                        {isOngoing ? (
-                          <span className="text-emerald-600 font-medium flex items-center gap-1.5"><Clock size={12} /> Ongoing</span>
-                        ) : formEndDate ? (
-                          <span>{format(new Date(formEndDate + "T12:00:00"), 'MMM d, yyyy')}</span>
-                        ) : (
-                          <span className="text-slate-400 font-normal">Set due date</span>
-                        )}
-                        <CalendarIcon className="h-4 w-4 text-muted-foreground ml-2 shrink-0" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-auto p-0 flex flex-row bg-white dark:bg-[#1C1C1C] rounded-xl shadow-lg border border-slate-200 dark:border-white/10 z-[9999]" onInteractOutside={(e) => e.stopPropagation()}>
-                      <div className="flex flex-col border-r border-slate-100 dark:border-white/5 w-[140px] py-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            const today = new Date();
-                            setFormEndDate(today.toISOString().split('T')[0]);
-                            setIsOngoing(false);
-                          }}
-                          className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left group"
-                        >
-                          <span className="text-slate-700 dark:text-slate-300 font-medium">Today</span>
-                          <span className="text-[10px] text-slate-400 group-hover:text-slate-500">{format(new Date(), 'EEE')}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            const tomorrow = addDays(new Date(), 1);
-                            setFormEndDate(tomorrow.toISOString().split('T')[0]);
-                            setIsOngoing(false);
-                          }}
-                          className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left group"
-                        >
-                          <span className="text-slate-700 dark:text-slate-300 font-medium">Tomorrow</span>
-                          <span className="text-[10px] text-slate-400 group-hover:text-slate-500">{format(addDays(new Date(), 1), 'EEE')}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            const nextWeek = addWeeks(new Date(), 1);
-                            setFormEndDate(nextWeek.toISOString().split('T')[0]);
-                            setIsOngoing(false);
-                          }}
-                          className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left group"
-                        >
-                          <span className="text-slate-700 dark:text-slate-300 font-medium">Next week</span>
-                          <span className="text-[10px] text-slate-400 group-hover:text-slate-500">{format(addWeeks(new Date(), 1), 'EEE')}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            const twoWeeks = addWeeks(new Date(), 2);
-                            setFormEndDate(twoWeeks.toISOString().split('T')[0]);
-                            setIsOngoing(false);
-                          }}
-                          className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left"
-                        >
-                          <span className="text-slate-700 dark:text-slate-300 font-medium">2 weeks</span>
-                        </button>
-                        
-                        {!isRepeatEnabled && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setIsOngoing(true);
-                              setFormEndDate("");
-                            }}
-                            className="flex justify-between items-center px-4 py-2 hover:bg-slate-50 dark:hover:bg-white/5 text-[13px] font-medium transition-colors text-left text-emerald-600 dark:text-emerald-400"
-                          >
-                            <span className="font-medium">Ongoing</span>
-                            <Clock size={12} className="text-emerald-500" />
-                          </button>
-                        )}
-                      </div>
-                      <div className="p-3">
-                        <Calendar
-                          mode="single"
-                          selected={formEndDate ? new Date(formEndDate + "T12:00:00") : undefined}
-                          onSelect={(date) => {
-                            if (date) {
-                              setFormEndDate(date.toISOString().split('T')[0]);
-                              setIsOngoing(false);
-                            }
-                          }}
-                        />
-                      </div>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
                 </div>
               </div>
-              </div>
+            </div>
 
               <div className="space-y-3 border-t border-slate-200 pt-5 dark:border-white/10">
                 <div>
@@ -3651,35 +3553,35 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                   </div>
                 )}
               </div>
+            </div>
 
-              <DialogFooter className="pt-4 border-t mt-6 sticky bottom-0 bg-background pb-2 flex items-center justify-between">
+            <DialogFooter className="p-4 border-t bg-background shrink-0 flex items-center justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsSaveTemplateOpen(true)}
+                className="text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-900/50 dark:hover:bg-purple-950/20 rounded-[8px]"
+              >
+                Save as Template
+              </Button>
+              <div className="flex gap-2">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setIsSaveTemplateOpen(true)}
-                  className="text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-900/50 dark:hover:bg-purple-950/20"
+                  onClick={() => { setIsCreateOpen(false); setIsEditMode(false); setEditProjectId(null); }}
+                  className="rounded-[8px]"
                 >
-                  Save as Template
+                  Cancel
                 </Button>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => { setIsCreateOpen(false); setIsEditMode(false); setEditProjectId(null); }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={isPending}>
-                    {isPending ? "Saving..." : (isEditMode ? "Save Changes" : "Create Project")}
-                  </Button>
-                </div>
-              </DialogFooter>
-            </form>
-            </div>
-              </>
-            ) : (
-              <ProjectDocumentComposer drafts={draftDocs} onDraftsChange={setDraftDocs} />
-            )}
+                <Button type="submit" disabled={isPending} className="rounded-[8px]">
+                  {isPending ? "Saving..." : (isEditMode ? "Save Changes" : "Create Project")}
+                </Button>
+              </div>
+            </DialogFooter>
+          </form>
+          ) : (
+            <ProjectDocumentComposer drafts={draftDocs} onDraftsChange={setDraftDocs} />
+          )}
 
             {/* Quick Create Client Modal */}
             <Dialog open={isQuickClientOpen} onOpenChange={setIsQuickClientOpen}>
