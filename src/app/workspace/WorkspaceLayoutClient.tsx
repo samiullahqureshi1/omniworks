@@ -31,10 +31,12 @@ export default function WorkspaceLayoutClient({
   children,
   user,
   userOrganizations = [],
+  googleConnected = false,
 }: {
   children: React.ReactNode;
   user: any;
   userOrganizations?: Array<{id: string, name: string, role: string, isChild: boolean}>;
+  googleConnected?: boolean;
 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCreateChildModalOpen, setIsCreateChildModalOpen] = useState(false);
@@ -92,6 +94,10 @@ export default function WorkspaceLayoutClient({
   const [activeMainTab, setActiveMainTab] = useState<string>('home');
   const [activePlaceholder, setActivePlaceholder] = useState<null | { name: string, icon: any }>(null);
   const [isSecondaryCollapsed, setIsSecondaryCollapsed] = useState(false);
+
+  // On the Planner tab, hide the secondary sidebar (and let the page render its
+  // full-width Google-connect onboarding) until the org connects Google.
+  const plannerGate = activeMainTab === 'calendar' && !googleConnected;
 
   const pathname = usePathname();
   const router = useRouter();
@@ -329,6 +335,8 @@ export default function WorkspaceLayoutClient({
                   router.push('/workspace/conversations');
                 } else if (tabId === 'teams') {
                   router.push('/workspace/teamops?tab=dashboard');
+                } else if (tabId === 'calendar') {
+                  router.push('/workspace/planner');
                 }
               }}
               onUpgradeClick={() => toast.info("Premium Upgrade modal is coming soon!")}
@@ -340,11 +348,13 @@ export default function WorkspaceLayoutClient({
 
           {/* Unified Floating Card for Secondary Sidebar & Content Viewport */}
           <div className="flex-1 flex mt-0.5 mb-2 mr-2 ml-1 bg-white dark:bg-[#151518] border border-slate-200/60 dark:border-white/5 rounded-[8px] overflow-hidden shadow-sm h-[calc(100vh-62px)] relative">
-            
-            {/* Desktop Secondary Sidebar (joined inside the card) */}
+
+            {/* Desktop Secondary Sidebar (joined inside the card) — hidden on the
+                Planner tab until the org connects Google Calendar. */}
+            {!plannerGate && (
             <motion.div
               initial={false}
-              animate={{ 
+              animate={{
                 width: isSecondaryCollapsed ? 0 : 245,
                 opacity: isSecondaryCollapsed ? 0 : 1
               }}
@@ -370,11 +380,12 @@ export default function WorkspaceLayoutClient({
                 )}
               </div>
             </motion.div>
+            )}
 
             {/* Main Content Layout Viewport (joined inside the card) */}
             <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-white dark:bg-[#151518]">
               <main className={`flex-1 overflow-y-auto custom-scrollbar relative z-10 ${
-                  activeMainTab === 'conversations' ? 'p-0' : 'px-4 md:px-8 py-6'
+                  activeMainTab === 'conversations' || plannerGate ? 'p-0' : 'px-4 md:px-8 py-6'
                 }`}>
                 {activePlaceholder ? (
                   <PlaceholderView name={activePlaceholder.name} icon={activePlaceholder.icon} />

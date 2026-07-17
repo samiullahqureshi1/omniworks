@@ -88,8 +88,20 @@ export default async function WorkspaceLayout({
     user.role
   );
 
+  // Whether this org has connected Google Calendar (gates the Planner UI).
+  // Uncached so it reflects a fresh connect immediately.
+  const orgSettings = await prisma.organizationSettings.findUnique({
+    where: { organizationId: user.organizationId },
+    select: { googleRefreshToken: true },
+  });
+  const googleConnected = !!orgSettings?.googleRefreshToken;
+
   return (
-    <WorkspaceLayoutClient user={{...user, isPM}} userOrganizations={userOrganizations}>
+    <WorkspaceLayoutClient
+      user={{...user, isPM}}
+      userOrganizations={userOrganizations}
+      googleConnected={googleConnected}
+    >
       {children}
     </WorkspaceLayoutClient>
   );
