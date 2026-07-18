@@ -1,0 +1,520 @@
+.plannerGate {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  min-height: 100%;
+  overflow: hidden;
+  color: #171719;
+  background: #fbfbfc;
+}
+
+.paperGrid {
+  position: absolute;
+  z-index: -1;
+  inset: -24% -12%;
+  opacity: 0.75;
+  transform: rotate(4.7deg);
+  background-image:
+    linear-gradient(to right, transparent calc(100% - 2px), #ececef calc(100% - 2px)),
+    linear-gradient(to bottom, transparent calc(100% - 2px), #ececef calc(100% - 2px));
+  background-size: 29vw 285px;
+}
+
+.hero {
+  position: absolute;
+  z-index: 3;
+  top: clamp(44px, 9vh, 92px);
+  left: clamp(28px, 4vw, 80px);
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(50px, 4.25vw, 86px);
+  font-weight: 780;
+  letter-spacing: -0.055em;
+  line-height: 1.2;
+}
+
+.hero p {
+  margin: clamp(28px, 4.5vh, 55px) 0 0;
+  color: #656568;
+  font-size: clamp(20px, 1.53vw, 31px);
+  font-weight: 450;
+  letter-spacing: -0.02em;
+  line-height: 1.43;
+}
+
+.connectionArea {
+  position: absolute;
+  z-index: 6;
+  left: clamp(28px, 4vw, 80px);
+  bottom: clamp(54px, 21vh, 205px);
+}
+
+.connectionArea > span {
+  display: block;
+  margin-bottom: 16px;
+  color: #747477;
+  font-size: clamp(14px, 1.05vw, 21px);
+  font-weight: 500;
+}
+
+.connectionButtons {
+  display: flex;
+  gap: 12px;
+}
+
+.connectionButtons a,
+.connectionButtons button {
+  display: inline-flex;
+  height: clamp(57px, 7vh, 72px);
+  align-items: center;
+  gap: 14px;
+  padding: 0 clamp(20px, 1.7vw, 32px);
+  border: 1px solid #e1e1e4;
+  border-radius: 17px;
+  outline: none;
+  color: #626266;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 18px rgba(25, 25, 28, 0.11);
+  font: inherit;
+  font-size: clamp(15px, 1.2vw, 24px);
+  font-weight: 540;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.connectionButtons a:hover,
+.connectionButtons button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 13px 24px rgba(25, 25, 28, 0.15);
+}
+
+.connectionButtons a:focus-visible,
+.connectionButtons button:focus-visible,
+.carouselControls button:focus-visible {
+  box-shadow: 0 0 0 3px #fff, 0 0 0 6px #2e8fff;
+}
+
+.connectionArea > small {
+  display: block;
+  margin-top: 12px;
+  color: #8b8b90;
+  font-size: 12px;
+}
+
+.googleIcon {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border: 5px solid transparent;
+  border-top-color: #ea4335;
+  border-right-color: #4285f4;
+  border-bottom-color: #34a853;
+  border-left-color: #fbbc05;
+  border-radius: 50%;
+  transform: rotate(-20deg);
+}
+
+.googleBlue {
+  color: #4285f4;
+  font-size: 0;
+}
+
+.outlookIcon {
+  position: relative;
+  width: 27px;
+  height: 23px;
+}
+
+.outlookTile {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  top: 3px;
+  display: grid;
+  width: 17px;
+  height: 18px;
+  place-items: center;
+  color: #fff;
+  background: #0f6cbd;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.outlookPage {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 19px;
+  height: 22px;
+  border-radius: 1px;
+  background: linear-gradient(#1677ca 50%, #0867b2 50%);
+}
+
+.cardsScene {
+  position: absolute;
+  z-index: 2;
+  top: clamp(36px, 7.8vh, 78px);
+  right: clamp(14px, 4.8vw, 95px);
+  width: min(58vw, 1060px);
+  height: min(69vh, 690px);
+}
+
+.featureCard {
+  position: absolute;
+  overflow: hidden;
+  border: 1px solid #dedee2;
+  border-radius: 33px;
+  background: rgba(255, 255, 255, 0.985);
+  box-shadow: 0 3px 5px rgba(28, 28, 31, 0.08), 0 17px 30px rgba(28, 28, 31, 0.08);
+}
+
+.blueCard {
+  left: 0;
+  top: 0;
+  width: min(39vw, 615px);
+  height: 100%;
+  opacity: 0.76;
+}
+
+.purpleCard {
+  z-index: 2;
+  top: 0;
+  right: 0;
+  width: min(39vw, 615px);
+  height: 100%;
+}
+
+.blueCalendar,
+.purpleCalendar {
+  position: relative;
+  margin: 37px 34px 0;
+  height: 390px;
+  border-radius: 17px;
+}
+
+.blueCalendar {
+  overflow: hidden;
+  border: 2px solid #b9dfff;
+  background: #f6fbff;
+  box-shadow: 0 0 0 6px #e8f5ff;
+}
+
+.blueCalendarTabs {
+  display: flex;
+  height: 48px;
+  border-bottom: 1px solid #c8dcea;
+  color: #557590;
+  background: #fff;
+}
+
+.blueCalendarTabs span,
+.blueCalendarTabs strong {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+}
+
+.blueCalendarTabs strong {
+  margin: 6px;
+  border-radius: 8px;
+  color: #fff;
+  background: #0795ee;
+  box-shadow: 0 0 0 5px #d9efff;
+}
+
+.blueGrid {
+  position: relative;
+  height: 300px;
+  background-image: linear-gradient(#d9e5ee 1px, transparent 1px), linear-gradient(90deg, #d9e5ee 1px, transparent 1px);
+  background-size: 100% 74px, 50% 100%;
+}
+
+.bookMeeting {
+  position: absolute;
+  top: 40px;
+  right: 9px;
+  width: 45%;
+  padding: 7px 0;
+  border: 2px dashed #168fee;
+  border-radius: 10px;
+  color: #168fee;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.blueEvent {
+  position: absolute;
+  right: 8px;
+  width: 47%;
+  border-radius: 7px;
+  color: #406685;
+  background: #b9daf6;
+  font-size: 16px;
+}
+
+.blueEventOne { top: 86px; height: 77px; padding: 10px; }
+.blueEventOne small { display: block; color: #63a6da; }
+.blueEventTwo { top: 169px; height: 36px; padding: 7px 10px; background: #e2dcff; }
+.blueEventThree { top: 212px; height: 38px; padding: 8px 10px; background: #eee8ff; color: #765b91; }
+
+.peopleBar {
+  position: absolute;
+  right: 11px;
+  bottom: 10px;
+  display: flex;
+  gap: 11px;
+  padding: 10px 17px;
+  border: 1px solid #e1e1e3;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 6px 14px rgba(28, 28, 31, 0.15);
+}
+
+.avatar {
+  display: grid;
+  width: 39px;
+  height: 39px;
+  place-items: center;
+  border: 4px solid #d8f1ff;
+  border-radius: 50%;
+  background: #fee4b7;
+  font-size: 23px;
+}
+
+.faceTwo { background: #cdb59c; border-color: #dedbff; }
+.faceThree { background: #ffcf9f; border-color: #fff0d5; }
+.faceFour { background: #d5e2e4; }
+
+.purpleCalendar {
+  border: 2px solid #f1d6f1;
+  background: #fff8ff;
+  box-shadow: 0 0 0 6px #fff0ff;
+}
+
+.taskSummary {
+  display: flex;
+  height: 98px;
+  align-items: center;
+  margin: 10px;
+  border: 1px solid #dddde0;
+  border-radius: 15px;
+  background: #fff;
+}
+
+.rowNumber {
+  width: 55px;
+  color: #77777b;
+  text-align: center;
+  font-size: 17px;
+}
+
+.taskSummary strong {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 19px;
+}
+
+.taskSummary strong i {
+  width: 18px;
+  height: 18px;
+  border: 3px solid #ba48cb;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 3px #fff;
+  background: #ba48cb;
+}
+
+.taskSummary p {
+  display: flex;
+  gap: 18px;
+  margin: 9px 0 0;
+  color: #6e6e73;
+  font-size: 16px;
+}
+
+.taskSummary p b { color: #bd29da; font-weight: 600; }
+
+.scheduleGrid {
+  position: absolute;
+  inset: 108px 0 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 83px 43px 83px;
+  border-top: 1px solid #edd6ed;
+  background-image: linear-gradient(#edd6ed 1px, transparent 1px), linear-gradient(90deg, #edd6ed 1px, transparent 1px);
+  background-size: 100% 83px, 50% 100%;
+}
+
+.purpleEvent,
+.slot,
+.stackSlot {
+  position: relative;
+  margin: 3px 5px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.purpleEvent {
+  display: flex;
+  flex-direction: column;
+  padding: 7px 10px;
+  color: #68406f;
+  background: #f2d1f1;
+  font-size: 16px;
+}
+
+.purpleEvent b { white-space: nowrap; font-size: 17px; }
+.feedback { border-left: 4px solid #bd36cf; }
+.review { grid-row: span 2; }
+.lunch { border-left: 4px solid #bd36cf; padding-top: 6px; }
+
+.slot {
+  padding: 5px 7px;
+  border: 2px dashed #db69ea;
+  color: #cb4add;
+  background: #fff;
+}
+
+.slot > span { font-size: 15px; }
+.slot > small { position: absolute; right: 5px; bottom: 2px; font-weight: 700; }
+
+.taskPill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #c72edb;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.taskPillShort { font-size: 14px; }
+
+.stackSlot {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 8px;
+}
+
+.squadSync {
+  overflow: hidden;
+  padding: 4px 7px;
+  border-left: 4px solid #ba38ca;
+  border-radius: 4px;
+  color: #623b68;
+  background: #efd1ee;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cardCopy {
+  padding: 31px 35px;
+}
+
+.cardCopy h3 {
+  margin: 0;
+  color: #202023;
+  font-size: clamp(22px, 1.55vw, 31px);
+  font-weight: 760;
+  letter-spacing: -0.035em;
+}
+
+.cardCopy p {
+  margin: 10px 0 0;
+  color: #858589;
+  font-size: clamp(17px, 1.34vw, 27px);
+  line-height: 1.4;
+}
+
+.carouselControls {
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  bottom: clamp(17px, 7vh, 70px);
+  display: flex;
+  transform: translateX(-50%);
+  overflow: hidden;
+  border: 1px solid #dedee1;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 3px 7px rgba(20, 20, 23, 0.12);
+}
+
+.carouselControls button {
+  display: grid;
+  width: 52px;
+  height: 51px;
+  place-items: center;
+  border: 0;
+  color: #6f6f73;
+  background: #fff;
+  cursor: pointer;
+}
+
+.carouselControls button:hover { color: #171719; background: #f5f5f6; }
+.carouselControls svg { width: 25px; height: 25px; }
+
+@media (max-width: 1200px) {
+  .cardsScene { right: 20px; width: 58vw; }
+  .blueCard, .purpleCard { width: 44vw; }
+  .blueCalendar, .purpleCalendar { margin-left: 25px; margin-right: 25px; }
+  .hero h1 { font-size: clamp(48px, 5vw, 64px); }
+  .hero p { font-size: 20px; }
+  .connectionButtons a, .connectionButtons button { font-size: 16px; padding: 0 20px; }
+}
+
+@media (max-width: 900px) {
+  .plannerGate { min-height: 980px; overflow-y: auto; }
+  .paperGrid { background-size: 330px 230px; }
+  .hero { position: relative; top: auto; left: auto; padding: 56px 30px 0; }
+  .hero h1 { font-size: clamp(45px, 10vw, 72px); }
+  .hero p { font-size: clamp(18px, 3.8vw, 25px); }
+  .desktopBreak { display: none; }
+  .cardsScene { position: relative; top: auto; right: auto; width: 100%; height: 515px; margin-top: 54px; }
+  .blueCard { display: none; }
+  .purpleCard { left: 50%; right: auto; width: min(88vw, 560px); height: 600px; transform: translateX(-50%); }
+  .connectionArea { left: 30px; right: 30px; bottom: 24px; }
+  .connectionButtons { flex-wrap: wrap; }
+  .connectionButtons a, .connectionButtons button { height: 58px; flex: 1; justify-content: center; }
+  .carouselControls { bottom: 142px; }
+}
+
+@media (max-width: 560px) {
+  .plannerGate { min-height: 915px; }
+  .hero { padding: 38px 22px 0; }
+  .hero h1 { font-size: 45px; line-height: 1.08; }
+  .hero p { margin-top: 24px; font-size: 18px; }
+  .cardsScene { height: 445px; margin-top: 42px; }
+  .purpleCard { width: calc(100% - 30px); height: 520px; border-radius: 24px; }
+  .blueCalendar, .purpleCalendar { height: 320px; margin: 24px 17px 0; }
+  .taskSummary { height: 78px; }
+  .rowNumber { width: 35px; }
+  .taskSummary strong { font-size: 15px; }
+  .taskSummary p { gap: 9px; font-size: 12px; }
+  .scheduleGrid { inset: 88px 0 0; grid-template-rows: 64px 36px 64px; background-size: 100% 64px, 50% 100%; }
+  .purpleEvent { padding: 4px 6px; font-size: 12px; }
+  .purpleEvent b { font-size: 12px; }
+  .taskPill, .taskPillShort { font-size: 11px; }
+  .slot > span, .squadSync { font-size: 11px; }
+  .cardCopy { padding: 23px 22px; }
+  .cardCopy h3 { font-size: 22px; }
+  .cardCopy p { font-size: 17px; }
+  .connectionArea { left: 20px; right: 20px; }
+  .connectionButtons { gap: 8px; }
+  .connectionButtons a, .connectionButtons button { width: 100%; flex: auto; font-size: 15px; }
+  .carouselControls { bottom: 146px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connectionButtons a,
+  .connectionButtons button { transition: none; }
+}

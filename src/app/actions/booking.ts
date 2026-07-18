@@ -129,12 +129,18 @@ export async function getLeadSlotsAction(orgParam: string, days = 14) {
   const attendeeId = settings.defaultIntroCallAttendeeId || org.ownerUserId;
   if (!attendeeId) return { error: 'No intro-call host is configured.' };
 
+  const attendee = await prisma.user.findUnique({
+    where: { id: attendeeId },
+    select: { name: true },
+  });
+
   const busy = await attendeeBusyIntervals(attendeeId);
   const days_ = generateAvailableSlots(toAvailability(settings), { days, busy });
 
   return {
     success: true,
     orgName: org.name,
+    attendeeName: attendee?.name || null,
     timezone: settings.timezone,
     slotDurationMinutes: settings.slotDurationMinutes,
     days: days_,

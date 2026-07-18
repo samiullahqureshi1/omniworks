@@ -3,6 +3,7 @@
   import React, { useState, useTransition, useEffect } from "react";
   import { createPortal } from "react-dom";
   import * as DialogPrimitive from "@radix-ui/react-dialog";
+import * as PopoverPrimitive from "@radix-ui/react-popover";
   import { useSearchParams, useRouter } from "next/navigation";
   import Link from "next/link";
   import { Button } from "@/components/ui/button";
@@ -58,6 +59,16 @@
     RefreshCw,
     Paperclip,
     Bell,
+    PhoneCall,
+    Zap,
+    Brain,
+    UserPlus,
+    Layers,
+    GitBranch,
+    SlidersHorizontal,
+    Filter,
+    User,
+    Box,
   } from "lucide-react";
   import {
     Table,
@@ -850,6 +861,9 @@
     // Search & Filters
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("ALL");
+    const [pmFilter, setPmFilter] = useState("");
+    const [startDateFilter, setStartDateFilter] = useState("");
+    const [endDateFilter, setEndDateFilter] = useState("");
 const [isPMOpen, setIsPMOpen] = useState(false);
     // Modal States
     const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -922,7 +936,9 @@ const [isPMOpen, setIsPMOpen] = useState(false);
       { name: string; type: string; value: any; options?: string[] }[]
     >([]);
     const [description, setDescription] = useState("");
-    const [viewMode, setViewMode] = useState<"TABLE" | "KANBAN" | "LIST">("TABLE");
+    const [viewMode, setViewMode] = useState<"TABLE" | "KANBAN" | "LIST">("KANBAN");
+    const [groupByField, setGroupByField] = useState<"Status" | "Assignee" | "Priority" | "Due date" | "Task Type" | "start date">("Status");
+    const [groupByOrder, setGroupByOrder] = useState<"Ascending" | "Descending">("Descending");
 
     const [hiddenColumns, setHiddenColumns] = useState<string[]>([]);
     useEffect(() => {
@@ -978,6 +994,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
     const [showAttachmentsView, setShowAttachmentsView] = useState(false);
     const [submitMode, setSubmitMode] = useState<"STANDARD" | "OPEN_NEW" | "DUPLICATE">("STANDARD");
     const formRef = React.useRef<HTMLFormElement>(null);
+    const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
     // Template Management States
     const [isTemplateSelectOpen, setIsTemplateSelectOpen] = useState(false);
@@ -1264,6 +1281,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
     };
 
     const handleOpenCreateProject = () => {
+      setFormErrors({});
       if (defaultTemplateId) {
         const defaultTemplate = templates.find((t) => t.id === defaultTemplateId);
         if (defaultTemplate) {
@@ -1325,6 +1343,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
     );
 
     const openCreateModalForStatus = (statusId: string) => {
+      setFormErrors({});
       if (defaultTemplateId) {
         const defaultTemplate = templates.find((t) => t.id === defaultTemplateId);
         if (defaultTemplate) {
@@ -1428,14 +1447,71 @@ const [isPMOpen, setIsPMOpen] = useState(false);
       }
     }, [projects, hiddenColumns]);
 
-    // Filtered Projects
     const filteredProjects = projects.filter((p) => {
       const matchesSearch = p.name
         .toLowerCase()
         .includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === "ALL" || p.status?.name === statusFilter || p.status?.id === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesPm = !pmFilter || p.projectManagerId === pmFilter;
+      
+      let matchesStartDate = true;
+      if (startDateFilter) {
+        if (p.startDate) {
+          matchesStartDate = new Date(p.startDate) >= new Date(startDateFilter);
+        } else {
+          matchesStartDate = false;
+        }
+      }
+
+      let matchesEndDate = true;
+      if (endDateFilter) {
+        if (p.endDate) {
+          matchesEndDate = new Date(p.endDate) <= new Date(endDateFilter);
+        } else {
+          matchesEndDate = false;
+        }
+      }
+
+      return matchesSearch && matchesStatus && matchesPm && matchesStartDate && matchesEndDate;
     });
+
+    const sortedProjects = React.useMemo(() => {
+      const projectsCopy = [...filteredProjects];
+      projectsCopy.sort((a, b) => {
+        let valA: any = "";
+        let valB: any = "";
+
+        if (groupByField === "Status") {
+          valA = a.status?.order ?? 0;
+          valB = b.status?.order ?? 0;
+        } else if (groupByField === "Assignee") {
+          valA = a.projectManager?.name ?? "";
+          valB = b.projectManager?.name ?? "";
+        } else if (groupByField === "Priority") {
+          const priorityWeight = { LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
+          valA = priorityWeight[a.priority as keyof typeof priorityWeight] ?? 0;
+          valB = priorityWeight[b.priority as keyof typeof priorityWeight] ?? 0;
+        } else if (groupByField === "Due date") {
+          valA = a.endDate ? new Date(a.endDate).getTime() : 0;
+          valB = b.endDate ? new Date(b.endDate).getTime() : 0;
+        } else if (groupByField === "start date") {
+          valA = a.startDate ? new Date(a.startDate).getTime() : 0;
+          valB = b.startDate ? new Date(b.startDate).getTime() : 0;
+        }
+
+        if (typeof valA === "string" && typeof valB === "string") {
+          return groupByOrder === "Ascending" 
+            ? valA.localeCompare(valB) 
+            : valB.localeCompare(valA);
+        } else {
+          if (valA === valB) return 0;
+          return groupByOrder === "Ascending" 
+            ? (valA > valB ? 1 : -1) 
+            : (valA < valB ? 1 : -1);
+        }
+      });
+      return projectsCopy;
+    }, [filteredProjects, groupByField, groupByOrder]);
 
     const getStatusColor = (status: string) => {
       switch (status) {
@@ -1622,6 +1698,28 @@ const [isPMOpen, setIsPMOpen] = useState(false);
     const handleCreateProject = async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
 
+      const errors: Record<string, string> = {};
+      if (!formName.trim()) {
+        errors.name = "Project name is required";
+      }
+      if (!formStartDate) {
+        errors.startDate = "Start date is required";
+      }
+      if (!isOngoing && !formEndDate) {
+        errors.endDate = "Due date is required";
+      }
+      if (!formAllocatedHours) {
+        errors.allocatedHours = "Allocated hours is required";
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setFormErrors(errors);
+        toast.error("Please fill in all mandatory fields.");
+        return;
+      }
+
+      setFormErrors({});
+
       if (isRepeatEnabled && (!formEndDate || isOngoing)) {
         toast.error("An End Date is required to schedule repeated projects.");
         return;
@@ -1774,153 +1872,313 @@ const [isPMOpen, setIsPMOpen] = useState(false);
       });
     };
 
+    const getFieldIcon = (field: typeof groupByField, className?: string) => {
+      const size = 14;
+      switch (field) {
+        case "Status":
+          return <CircleDot size={size} className={className} />;
+        case "Assignee":
+          return <User size={size} className={className} />;
+        case "Priority":
+          return <Flag size={size} className={className} />;
+        case "Due date":
+          return <CalendarIcon size={size} className={className} />;
+        case "Task Type":
+          return <Box size={size} className={className} />;
+        case "start date":
+          return <CalendarIcon size={size} className={className} />;
+      }
+    };
+
     return (
-      <div className="space-y-6 animate-in fade-in duration-500">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
-              <FolderKanban className="text-primary" size={28} />
-              Projects
-            </h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Manage your organization's projects and team assignments.
-            </p>
+      <div className="space-y-3 animate-in fade-in duration-500">
+      {/* Header Container that stretches to touch the sidebar */}
+      <div className="-mx-4 md:-mx-8 -mt-6 border-b border-slate-200 dark:border-white/10 bg-white dark:bg-[#151518] z-20">
+        {/* Top Header Bar */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-3 pb-1 px-4 md:px-8">
+          {/* Breadcrumb Left */}
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+            <span className="flex items-center justify-center w-5 h-5 rounded bg-blue-600 text-white font-bold text-[10px]">P</span>
+            <span className="text-slate-900 dark:text-white font-bold text-base">Project Space</span>
+            <Star size={14} className="text-slate-400 hover:text-yellow-500 cursor-pointer ml-1" />
           </div>
-
-          {currentUser.role === "OWNER" && (
-            <div className="flex items-center -space-x-px w-full sm:w-auto shadow-md rounded-xl overflow-hidden">
-              <Button
-                onClick={handleOpenCreateProject}
-                className="rounded-r-none h-10 px-4 flex-1 sm:flex-initial"
-              >
-                <Plus className="mr-2 h-4 w-4" /> New Project
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button className="rounded-l-none border-l border-white/20 px-2.5 h-10 flex-none">
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1.5 z-50">
-                  <DropdownMenuItem
-                    onClick={handleOpenCreateProject}
-                    className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
-                  >
-                    Create New Project
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setIsRepeatEnabled(false);
-                      setIsTemplateSelectOpen(true);
-                    }}
-                    className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
-                  >
-                    Use Existing Template
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setIsRepeatEnabled(true);
-                      setIsOngoing(false);
-                      setFormName("");
-                      setFormClientId("");
-                      setFormPMId("");
-                      setFormStatusId("");
-                      setFormPriority("MEDIUM");
-                      setFormStartDate("");
-                      setFormEndDate("");
-                      setFormBudget("");
-                      setFormAllocatedHours("");
-                      setFormNotes("");
-                      setDescription("");
-                      setProjectTasks([]);
-                      setCustomFields([]);
-                      setIsCreateOpen(true);
-                    }}
-                    className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
-                  >
-                    Create Repeated Project
-                  </DropdownMenuItem>
-
-                  {pinnedTemplates.length > 0 && (
-                    <>
-                      <DropdownMenuSeparator className="my-1 border-t border-black/5 dark:border-white/10" />
-                      <div className="px-3 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider select-none">
-                        Pinned Templates
-                      </div>
-                      {pinnedTemplates.map((template) => (
-                        <DropdownMenuItem
-                          key={template.id}
-                          onClick={() => handleUseTemplate(template)}
-                          className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted flex items-center gap-2"
-                        >
-                          <Pin className="h-3.5 w-3.5 fill-purple-600 text-purple-600 dark:fill-purple-400 dark:text-purple-400 rotate-45 shrink-0" />
-                          <span className="truncate">{template.name}</span>
-                        </DropdownMenuItem>
-                      ))}
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          )}
         </div>
 
-        {/* Filters & Views */}
-        <div className="flex flex-col sm:flex-row justify-between gap-4 p-1">
-          <div className="relative w-full sm:max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search projects..."
-              className="pl-9 bg-background shadow-sm"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        {/* Tabs Bar: Kanban, Table, List */}
+        <div className="flex items-center gap-1 px-4 md:px-8 mt-0.5">
+          <button
+            type="button"
+            onClick={() => handleSetViewMode("KANBAN")}
+            className={`flex items-center gap-1.5 pl-0 pr-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer ${
+              viewMode === "KANBAN"
+                ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
+                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
+            }`}
+          >
+            <LayoutGrid size={14} /> Board
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSetViewMode("TABLE")}
+            className={`flex items-center gap-1.5 px-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer ${
+              viewMode === "TABLE"
+                ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
+                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
+            }`}
+          >
+            <TableIcon size={14} /> Table
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSetViewMode("LIST")}
+            className={`flex items-center gap-1.5 px-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer ${
+              viewMode === "LIST"
+                ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
+                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
+            }`}
+          >
+            <ListIcon size={14} /> List
+          </button>
+        </div>
+      </div>
+
+        {/* Sub-toolbar / Filter bar */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 py-1">
+          {/* Left Sub-Toolbar actions */}
+          <div className="flex items-center gap-2">
+            <PopoverPrimitive.Root>
+              <PopoverPrimitive.Trigger asChild>
+                <button type="button" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400 text-xs font-semibold border border-blue-100 dark:border-blue-900/50 cursor-pointer transition-all hover:bg-blue-100/50">
+                  <Layers size={12} />
+                  <span>Group: {groupByField}</span>
+                </button>
+              </PopoverPrimitive.Trigger>
+              <PopoverPrimitive.Portal>
+                <PopoverPrimitive.Content align="start" sideOffset={6} className="z-50 w-auto bg-white dark:bg-[#1a1a1a] rounded-[8px] border border-slate-200 dark:border-white/10 shadow-lg p-3 outline-none animate-in fade-in-0 zoom-in-95 duration-100">
+                  <div className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1.5 uppercase tracking-wider">Group by</div>
+                  
+                  <div className="flex items-center gap-2">
+                    {/* Group By Field Selector Dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" className="flex items-center justify-between gap-1.5 px-3 py-1.5 border border-slate-200 dark:border-white/10 rounded-[8px] text-sm bg-transparent hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer min-w-[140px] text-slate-700 dark:text-slate-200 text-left outline-none font-medium">
+                          <span className="flex items-center gap-1.5">
+                            {getFieldIcon(groupByField, "text-slate-500")}
+                            {groupByField}
+                          </span>
+                          <ChevronDown size={14} className="text-slate-400" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-48 bg-white dark:bg-[#1a1a1a] rounded-[8px] border border-slate-200 dark:border-white/10 shadow-md p-1 z-[60]">
+                        {(["Status", "Assignee", "Priority", "Due date", "Task Type", "start date"] as const).map((field) => (
+                          <DropdownMenuItem
+                            key={field}
+                            onClick={() => setGroupByField(field)}
+                            className="flex items-center justify-between px-2 py-1.5 text-xs rounded-[4px] hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer text-slate-700 dark:text-slate-200"
+                          >
+                            <span className="flex items-center gap-2">
+                              {getFieldIcon(field, "text-slate-400")}
+                              {field}
+                            </span>
+                            {groupByField === field && <Check size={12} className="text-slate-500" />}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* Sorting Order Selector Dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" className="flex items-center justify-between gap-1.5 px-3 py-1.5 border border-slate-200 dark:border-white/10 rounded-[8px] text-sm bg-transparent hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer min-w-[110px] text-slate-700 dark:text-slate-200 text-left outline-none font-medium">
+                          <span>{groupByOrder}</span>
+                          <ChevronDown size={14} className="text-slate-400" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-32 bg-white dark:bg-[#1a1a1a] rounded-[8px] border border-slate-200 dark:border-white/10 shadow-md p-1 z-[60]">
+                        {(["Ascending", "Descending"] as const).map((order) => (
+                          <DropdownMenuItem
+                            key={order}
+                            onClick={() => setGroupByOrder(order)}
+                            className="flex items-center justify-between px-2 py-1.5 text-xs rounded-[4px] hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer text-slate-700 dark:text-slate-200"
+                          >
+                            <span>{order}</span>
+                            {groupByOrder === order && <Check size={12} className="text-slate-500" />}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* Reset Button (Trash Icon) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGroupByField("Status");
+                        setGroupByOrder("Descending");
+                      }}
+                      title="Reset Grouping"
+                      className="p-2 rounded-[8px] text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer transition-colors border border-slate-200 dark:border-white/10 outline-none flex items-center justify-center h-[34px] w-[34px]"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </PopoverPrimitive.Content>
+              </PopoverPrimitive.Portal>
+            </PopoverPrimitive.Root>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex bg-muted/50 p-1 rounded-xl shadow-sm border">
-              <button
-                onClick={() => handleSetViewMode("TABLE")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  viewMode === "TABLE"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <TableIcon size={14} /> Table
-              </button>
-              <button
-                onClick={() => handleSetViewMode("KANBAN")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  viewMode === "KANBAN"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <LayoutGrid size={14} /> Kanban
-              </button>
-              <button
-                onClick={() => handleSetViewMode("LIST")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  viewMode === "LIST"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <ListIcon size={14} /> List
-              </button>
-            </div>
-            
-            <select
-              className="flex h-9 rounded-xl border bg-background px-3 text-sm shadow-sm focus:ring-1 focus:ring-ring min-w-[140px]"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="ALL">All Statuses</option>
-              {projectStatuses.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+
+          {/* Right Sub-Toolbar Actions: Filter, Settings, Add Button */}
+          <div className="flex items-center gap-3 ml-auto sm:ml-0">
+            {/* Filter Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer transition-colors">
+                  <Filter size={12} />
+                  <span>Filter</span>
+                  {(pmFilter || startDateFilter || endDateFilter) && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400 animate-pulse" />
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80 p-4 bg-white dark:bg-[#1a1a1a] rounded-[8px] border border-slate-200 dark:border-white/10 shadow-lg z-50">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b pb-2 border-slate-100 dark:border-white/5">
+                    <h4 className="font-semibold text-sm">Filters</h4>
+                    {(pmFilter || startDateFilter || endDateFilter) && (
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          setPmFilter("");
+                          setStartDateFilter("");
+                          setEndDateFilter("");
+                        }}
+                        className="text-xs text-blue-600 hover:text-blue-500 font-medium cursor-pointer"
+                      >
+                        Clear all
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* User base filter */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-500">Project Manager</label>
+                    <select
+                      value={pmFilter}
+                      onChange={(e) => setPmFilter(e.target.value)}
+                      className="w-full h-8 text-xs bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-[8px] px-2 text-slate-700 dark:text-slate-300 outline-none"
+                    >
+                      <option value="">All Managers</option>
+                      {members.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Start Date filter */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-500">Start Date</label>
+                    <input
+                      type="date"
+                      value={startDateFilter}
+                      onChange={(e) => setStartDateFilter(e.target.value)}
+                      className="w-full h-8 text-xs bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-[8px] px-2 text-slate-700 dark:text-slate-300 outline-none"
+                    />
+                  </div>
+
+                  {/* End Date filter */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-500">End Date</label>
+                    <input
+                      type="date"
+                      value={endDateFilter}
+                      onChange={(e) => setEndDateFilter(e.target.value)}
+                      className="w-full h-8 text-xs bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-[8px] px-2 text-slate-700 dark:text-slate-300 outline-none"
+                    />
+                  </div>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Add Project Split Button */}
+            {currentUser.role === "OWNER" && (
+              <div className="flex items-center rounded-xl overflow-hidden bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 h-8 shadow-sm">
+                <button
+                  type="button"
+                  onClick={handleOpenCreateProject}
+                  className="bg-transparent hover:bg-transparent shadow-none border-0 text-white dark:text-slate-900 font-semibold text-xs px-3 h-full rounded-none pr-2.5 border-r border-white/10 dark:border-black/10 cursor-pointer"
+                >
+                  <Plus className="inline mr-1 h-3.5 w-3.5" /> Add Project
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="bg-transparent hover:bg-white/10 dark:hover:bg-black/5 text-white dark:text-slate-900 px-2 h-full flex items-center justify-center transition-colors border-0 outline-none cursor-pointer"
+                    >
+                      <ChevronDown size={12} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1.5 z-50">
+                    <DropdownMenuItem
+                      onClick={handleOpenCreateProject}
+                      className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
+                    >
+                      Create New Project
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setIsRepeatEnabled(false);
+                        setIsTemplateSelectOpen(true);
+                      }}
+                      className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
+                    >
+                      Use Existing Template
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setIsRepeatEnabled(true);
+                        setIsOngoing(false);
+                        setFormName("");
+                        setFormClientId("");
+                        setFormPMId("");
+                        setFormStatusId("");
+                        setFormPriority("MEDIUM");
+                        setFormStartDate("");
+                        setFormEndDate("");
+                        setFormBudget("");
+                        setFormAllocatedHours("");
+                        setFormNotes("");
+                        setDescription("");
+                        setProjectTasks([]);
+                        setCustomFields([]);
+                        setIsCreateOpen(true);
+                      }}
+                      className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
+                    >
+                      Create Repeated Project
+                    </DropdownMenuItem>
+
+                    {pinnedTemplates.length > 0 && (
+                      <>
+                        <DropdownMenuSeparator className="my-1 border-t border-black/5 dark:border-white/10" />
+                        <div className="px-3 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider select-none">
+                          Pinned Templates
+                        </div>
+                        {pinnedTemplates.map((template) => (
+                          <DropdownMenuItem
+                            key={template.id}
+                            onClick={() => handleUseTemplate(template)}
+                            className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted flex items-center gap-2"
+                          >
+                            <Pin className="h-3.5 w-3.5 fill-purple-600 text-purple-600 dark:fill-purple-400 dark:text-purple-400 rotate-45 shrink-0" />
+                            <span className="truncate">{template.name}</span>
+                          </DropdownMenuItem>
+                        ))}
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1967,7 +2225,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProjects.length === 0 ? (
+              {sortedProjects.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={6}
@@ -1980,7 +2238,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredProjects.map((p: any, index: number) => (
+                sortedProjects.map((p: any, index: number) => (
                   <TableRow
                     key={p.id}
                     className="group hover:bg-slate-50/50 dark:hover:bg-white/5 transition-colors border-b border-slate-100 dark:border-white/5 bg-white dark:bg-transparent"
@@ -2049,7 +2307,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
             <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar h-[calc(100vh-220px)] animate-in fade-in zoom-in-95 duration-200">
               <SortableContext items={projectStatuses.map((s: any) => s.id)} strategy={horizontalListSortingStrategy}>
                 {projectStatuses.map((status) => {
-                  const statusProjects = filteredProjects.filter(p => p.statusId === status.id);
+                  const statusProjects = sortedProjects.filter(p => p.statusId === status.id);
                   return (
                     <KanbanColumn 
                       key={status.id} 
@@ -2097,13 +2355,13 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 
         {viewMode === "LIST" && (
           <div className="flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
-            {filteredProjects.length === 0 ? (
+            {sortedProjects.length === 0 ? (
               <div className="h-48 flex flex-col items-center justify-center space-y-3 bg-background rounded-xl border border-dashed">
                 <FolderKanban size={40} className="opacity-20" />
                 <p className="text-muted-foreground text-sm">No projects found.</p>
               </div>
             ) : (
-              filteredProjects.map(p => (
+              sortedProjects.map(p => (
                 <div key={p.id} className="bg-background border rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row gap-5 items-start sm:items-center relative overflow-hidden group">
                   <div className="absolute left-0 top-0 w-1.5 h-full" style={{ backgroundColor: getPriorityColor(p.priority).includes("red") ? "#ef4444" : getPriorityColor(p.priority).includes("orange") ? "#f97316" : getPriorityColor(p.priority).includes("blue") ? "#3b82f6" : "#cbd5e1" }} />
                   
@@ -2234,7 +2492,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
               className={activeCreateTab === "doc" ? "border-b-0 dark:border-b-0" : undefined}
             />
             {activeCreateTab === "project" ? (
-              <form ref={formRef} onSubmit={handleCreateProject} className="flex flex-col flex-1 overflow-hidden">
+              <form ref={formRef} onSubmit={handleCreateProject} noValidate className="flex flex-col flex-1 overflow-hidden">
                 <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar space-y-6">
 
                 {/* Basics */}
@@ -2245,9 +2503,21 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                     required
                     placeholder="Name this Project..."
                     value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
+                    onChange={(e) => {
+                      setFormName(e.target.value);
+                      if (formErrors.name) {
+                        setFormErrors(prev => {
+                          const next = { ...prev };
+                          delete next.name;
+                          return next;
+                        });
+                      }
+                    }}
                     className="w-full border-0 bg-transparent px-0 text-[25px] font-medium tracking-[-0.02em] text-slate-900 outline-none placeholder:text-slate-400 dark:text-white dark:placeholder:text-slate-500"
                   />
+                  {formErrors.name && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{formErrors.name}</p>
+                  )}
                 </div>
               </div>
 
@@ -3152,20 +3422,44 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                     type="date"
                     required
                     value={formStartDate}
-                    onChange={(e) => setFormStartDate(e.target.value)}
+                    onChange={(e) => {
+                      setFormStartDate(e.target.value);
+                      if (formErrors.startDate) {
+                        setFormErrors(prev => {
+                          const next = { ...prev };
+                          delete next.startDate;
+                          return next;
+                        });
+                      }
+                    }}
                   />
+                  {formErrors.startDate && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{formErrors.startDate}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Due Date</label>
+                  <label className="text-sm font-medium">Due Date {!isOngoing && <span className="text-destructive">*</span>}</label>
                   <Input
                     name="endDate"
                     type="date"
                     required={!isOngoing}
                     value={formEndDate}
-                    onChange={(e) => setFormEndDate(e.target.value)}
+                    onChange={(e) => {
+                      setFormEndDate(e.target.value);
+                      if (formErrors.endDate) {
+                        setFormErrors(prev => {
+                          const next = { ...prev };
+                          delete next.endDate;
+                          return next;
+                        });
+                      }
+                    }}
                     disabled={isOngoing}
                   />
+                  {formErrors.endDate && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{formErrors.endDate}</p>
+                  )}
                 </div>
 
                 <div className="!flex items-center gap-6 h-[36px] col-span-1">
@@ -3178,6 +3472,13 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                         setIsOngoing(e.target.checked);
                         if (e.target.checked) {
                           setFormEndDate("");
+                          if (formErrors.endDate) {
+                            setFormErrors(prev => {
+                              const next = { ...prev };
+                              delete next.endDate;
+                              return next;
+                            });
+                          }
                         }
                       }}
                       disabled={isRepeatEnabled}
@@ -3222,16 +3523,28 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">project allocated hour</label>
+                  <label className="text-sm font-medium">project allocated hour <span className="text-destructive">*</span></label>
                   <input
                     type="number"
                     name="totalAllocatedHours"
                     required
                     placeholder="e.g. 120"
                     value={formAllocatedHours}
-                    onChange={(e) => setFormAllocatedHours(e.target.value)}
+                    onChange={(e) => {
+                      setFormAllocatedHours(e.target.value);
+                      if (formErrors.allocatedHours) {
+                        setFormErrors(prev => {
+                          const next = { ...prev };
+                          delete next.allocatedHours;
+                          return next;
+                        });
+                      }
+                    }}
                     className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none placeholder:text-slate-400/80"
                   />
+                  {formErrors.allocatedHours && (
+                    <p className="text-xs text-red-500 mt-1 font-medium">{formErrors.allocatedHours}</p>
+                  )}
                 </div>
 
                 {isRepeatEnabled && (

@@ -10,7 +10,8 @@ import {
   ArrowLeft, Calendar, Clock, MoreHorizontal, Settings, 
   LayoutDashboard, CheckSquare, Users, Timer, Activity,
   Briefcase, MessageSquare, GripVertical, Plus, ShieldAlert,
-  Search, Check, X, Hash, Trash2, Repeat, ChevronDown, Award, UserCheck, CalendarDays, Globe, Mail, Phone, Type
+  Search, Check, X, Hash, Trash2, Repeat, ChevronDown, Award, UserCheck, CalendarDays, Globe, Mail, Phone, Type,
+  FolderKanban, Star, PhoneCall, Sparkles, Zap, Brain, UserPlus
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -450,13 +451,33 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
   };
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in duration-500 max-w-7xl mx-auto w-full">
+    <div className="flex flex-col gap-4 animate-in fade-in duration-500 max-w-7xl mx-auto w-full">
+      {/* Header Container that stretches to touch the sidebar */}
+      <div className="-mx-4 md:-mx-8 -mt-6 border-b border-slate-200 dark:border-white/10 bg-white dark:bg-[#151518] z-20">
+        {/* Top Header Bar */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-6 pb-2 px-4 md:px-8">
+          {/* Breadcrumb Left */}
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+            <span className="flex items-center justify-center w-5 h-5 rounded bg-blue-600 text-white font-bold text-[10px]">P</span>
+            <Link href="/workspace/projects" className="hover:text-slate-800 dark:hover:text-white transition-colors">
+              Project Space
+            </Link>
+            <span className="text-slate-300 dark:text-white/20">/</span>
+            <div className="flex items-center gap-1.5 text-slate-900 dark:text-white font-bold text-base">
+              <FolderKanban size={16} className="text-primary" />
+              <span>{project.name}</span>
+              <ChevronDown size={14} className="text-slate-400 cursor-pointer" />
+            </div>
+            <Star size={14} className="text-slate-400 hover:text-yellow-500 cursor-pointer ml-1" />
+          </div>
+        </div>
+      </div>
       
-      {/* Header */}
+      {/* Header Card */}
       <div className="relative flex flex-col gap-4 overflow-hidden bg-background p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm transition-all hover:shadow-md">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-blue-500/5 pointer-events-none" />
         <div className="relative z-10">
-        <Link href="/workspace/projects" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 w-fit transition-colors">
+        <Link href="/workspace/projects" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 w-fit transition-colors mb-2">
           <ArrowLeft size={14} /> Back to Projects
         </Link>
         <div className="flex justify-between items-start">

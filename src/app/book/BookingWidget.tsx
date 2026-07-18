@@ -1,25 +1,52 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { CalendarCheck, Clock, Globe, Check, Loader2, ArrowLeft, Video } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Globe2,
+  Loader2,
+  Video,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { bookProjectMeetingAction, bookLeadMeetingAction } from '@/app/actions/booking';
+import styles from './BookingWidget.module.css';
 
 type Slot = { start: string; end: string };
 type DaySlots = { date: string; weekday: number; slots: Slot[] };
+
+const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function dateFromKey(key: string) {
+  const [year, month, day] = key.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function dateKey(year: number, month: number, day: number) {
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function timezoneName(timezone: string) {
+  if (timezone === 'Asia/Karachi') return 'Pakistan, Maldives Time';
+  return timezone.replaceAll('_', ' ').replace('/', ' – ');
+}
 
 export default function BookingWidget({
   mode,
   identifier,
   title,
-  subtitle,
   attendeeName,
   timezone,
   slotDurationMinutes,
   initialDays,
 }: {
   mode: 'project' | 'lead';
-  identifier: string; // projectSlug or org param
+  identifier: string;
   title: string;
   subtitle?: string;
   attendeeName?: string | null;
@@ -27,18 +54,25 @@ export default function BookingWidget({
   slotDurationMinutes: number;
   initialDays: DaySlots[];
 }) {
-  const [days] = useState<DaySlots[]>(initialDays);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selected, setSelected] = useState<Slot | null>(null);
+  const [showForm, setShowForm] = useState(false);
   const [booking, setBooking] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
-
-  // Lead form
+  const [clockLabel, setClockLabel] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [company, setCompany] = useState('');
   const [note, setNote] = useState('');
 
+  const firstDate = initialDays[0]?.date ? dateFromKey(initialDays[0].date) : new Date();
+  const [visibleMonth, setVisibleMonth] = useState(() => new Date(Date.UTC(firstDate.getUTCFullYear(), firstDate.getUTCMonth(), 1)));
+
   const dayFmt = useMemo(
+    () => new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'long', month: 'long', day: 'numeric' }),
+    [timezone]
+  );
+  const shortDayFmt = useMemo(
     () => new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short', month: 'short', day: 'numeric' }),
     [timezone]
   );
@@ -46,157 +80,199 @@ export default function BookingWidget({
     () => new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: 'numeric', minute: '2-digit' }),
     [timezone]
   );
-
+  const available = useMemo(() => new Map(initialDays.map((day) => [day.date, day])), [initialDays]);
+  const selectedDay = selectedDate ? available.get(selectedDate) : undefined;
   const leadReady = mode === 'lead' ? name.trim().length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) : true;
+
+  useEffect(() => {
+    const updateClock = () => {
+      setClockLabel(new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(new Date()).replace(' ', '').toLowerCase());
+    };
+    updateClock();
+    const timer = window.setInterval(updateClock, 60_000);
+    return () => window.clearInterval(timer);
+  }, [timezone]);
+
+  const calendarDays = useMemo(() => {
+    const year = visibleMonth.getUTCFullYear();
+    const month = visibleMonth.getUTCMonth();
+    const count = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const mondayOffset = (new Date(Date.UTC(year, month, 1)).getUTCDay() + 6) % 7;
+    return [
+      ...Array.from({ length: mondayOffset }, () => null),
+      ...Array.from({ length: count }, (_, index) => index + 1),
+    ];
+  }, [visibleMonth]);
 
   const confirm = async () => {
     if (!selected) return;
     setBooking(true);
-    const res =
-      mode === 'project'
-        ? await bookProjectMeetingAction({ projectSlug: identifier, startIso: selected.start, endIso: selected.end, note: note.trim() || undefined })
-        : await bookLeadMeetingAction({ org: identifier, startIso: selected.start, endIso: selected.end, name: name.trim(), email: email.trim(), company: company.trim() || undefined, note: note.trim() || undefined });
+    const res = mode === 'project'
+      ? await bookProjectMeetingAction({ projectSlug: identifier, startIso: selected.start, endIso: selected.end, note: note.trim() || undefined })
+      : await bookLeadMeetingAction({
+          org: identifier,
+          startIso: selected.start,
+          endIso: selected.end,
+          name: name.trim(),
+          email: email.trim(),
+          company: company.trim() || undefined,
+          note: note.trim() || undefined,
+        });
     setBooking(false);
-    if (res.error) {
-      toast.error(res.error);
-    } else {
-      setConfirmed(true);
-    }
+    if (res.error) toast.error(res.error);
+    else setConfirmed(true);
+  };
+
+  const selectDay = (key: string) => {
+    setSelectedDate(key);
+    setSelected(null);
+    setShowForm(false);
   };
 
   if (confirmed && selected) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 dark:bg-[#0c0c0e]">
-        <div className="w-full max-w-md rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#151518] p-8 text-center">
-          <div className="mx-auto w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-4">
-            <Check size={28} />
+      <main className={styles.pageShell}>
+        <section className={`${styles.bookingCard} ${styles.confirmedCard}`}>
+          <div className={styles.successIcon}><Check /></div>
+          <h1>You&apos;re scheduled</h1>
+          <p>A calendar invitation has been sent to your email address.</p>
+          <div className={styles.confirmedDetails}>
+            <strong>{title}</strong>
+            <span>{dayFmt.format(new Date(selected.start))}</span>
+            <span>{timeFmt.format(new Date(selected.start))}–{timeFmt.format(new Date(selected.end))}</span>
+            <span><Video size={18} /> Web conferencing details to follow.</span>
           </div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white">You're booked!</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-            {dayFmt.format(new Date(selected.start))} · {timeFmt.format(new Date(selected.start))}–{timeFmt.format(new Date(selected.end))}
-          </p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-4 flex items-center justify-center gap-1.5">
-            <Video size={13} /> A calendar invite with a meeting link will be sent shortly.
-          </p>
-        </div>
-      </div>
+          <div className={styles.brandFooter}>Powered by <b>OmniWork</b></div>
+        </section>
+      </main>
     );
   }
 
-  const hasAnySlots = days.some((d) => d.slots.length > 0);
+  const year = visibleMonth.getUTCFullYear();
+  const month = visibleMonth.getUTCMonth();
+  const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(visibleMonth);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#0c0c0e] py-8 px-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="rounded-t-2xl border border-b-0 border-slate-200 dark:border-white/10 bg-white dark:bg-[#151518] p-6">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
-            <CalendarCheck size={14} /> Book a meeting
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{title}</h1>
-          {subtitle && <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{subtitle}</p>}
-          <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-slate-500 dark:text-slate-400">
-            <span className="flex items-center gap-1.5"><Clock size={13} /> {slotDurationMinutes} min</span>
-            <span className="flex items-center gap-1.5"><Globe size={13} /> {timezone}</span>
-            {attendeeName && <span className="flex items-center gap-1.5">with {attendeeName}</span>}
-          </div>
+    <main className={styles.pageShell}>
+      <section className={`${styles.bookingCard} ${selectedDate && !showForm ? styles.withTimes : ''} ${showForm ? styles.withForm : ''}`}>
+        <div className={styles.poweredRibbon} aria-label="Powered by OmniWork">
+          <small>POWERED BY</small>
+          <strong>OmniWork</strong>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 rounded-b-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#151518] overflow-hidden">
-          {/* Slots */}
-          <div className={`lg:col-span-2 p-6 ${mode === 'lead' ? 'lg:border-r border-slate-100 dark:border-white/5' : ''}`}>
-            {!hasAnySlots ? (
-              <div className="py-16 text-center text-sm text-slate-500 dark:text-slate-400">
-                No available times in the next two weeks. Please check back later.
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {days.filter((d) => d.slots.length > 0).map((day) => (
-                  <div key={day.date}>
-                    <div className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
-                      {dayFmt.format(new Date(day.slots[0].start))}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      {day.slots.map((slot) => {
-                        const active = selected?.start === slot.start;
-                        return (
-                          <button
-                            key={slot.start}
-                            type="button"
-                            onClick={() => setSelected(slot)}
-                            className={`h-9 rounded-lg text-sm font-semibold border transition-colors ${
-                              active
-                                ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-transparent'
-                                : 'bg-white dark:bg-transparent text-slate-700 dark:text-slate-200 border-slate-200 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/30'
-                            }`}
-                          >
-                            {timeFmt.format(new Date(slot.start))}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Right column: lead form (lead mode) or confirm (project mode) */}
-          <div className="p-6 bg-slate-50/50 dark:bg-white/5">
-            {mode === 'lead' && (
-              <div className="space-y-3 mb-4">
-                <div>
-                  <label className="text-xs font-bold text-slate-600 dark:text-slate-300">Name *</label>
-                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe"
-                    className="mt-1 w-full h-10 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1f1f1f] dark:text-white px-3 text-sm outline-none focus:ring-1 focus:ring-slate-400" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-600 dark:text-slate-300">Email *</label>
-                  <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="jane@company.com"
-                    className="mt-1 w-full h-10 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1f1f1f] dark:text-white px-3 text-sm outline-none focus:ring-1 focus:ring-slate-400" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-600 dark:text-slate-300">Company</label>
-                  <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Acme Inc."
-                    className="mt-1 w-full h-10 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1f1f1f] dark:text-white px-3 text-sm outline-none focus:ring-1 focus:ring-slate-400" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-600 dark:text-slate-300">What would you like to discuss?</label>
-                  <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="Optional"
-                    className="mt-1 w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1f1f1f] dark:text-white px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-slate-400 resize-none" />
-                </div>
-              </div>
-            )}
-
-            <div className="rounded-xl border border-slate-200 dark:border-white/10 p-3 mb-4 min-h-[64px] flex items-center">
-              {selected ? (
-                <div className="text-sm">
-                  <div className="font-bold text-slate-900 dark:text-white">{dayFmt.format(new Date(selected.start))}</div>
-                  <div className="text-slate-500 dark:text-slate-400">
-                    {timeFmt.format(new Date(selected.start))}–{timeFmt.format(new Date(selected.end))}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-sm text-slate-400 dark:text-slate-500">Select a time to continue</div>
-              )}
+        <aside className={styles.eventPanel}>
+          <div>
+            <div className={styles.hostName}>{attendeeName || 'OmniWork'}</div>
+            <h1>{title}</h1>
+            <div className={styles.eventMeta}>
+              <div><Clock3 /><span>{slotDurationMinutes} min</span></div>
+              <div><Video /><span>Web conferencing details provided upon confirmation.</span></div>
             </div>
-
-            <button
-              type="button"
-              onClick={confirm}
-              disabled={!selected || !leadReady || booking}
-              className="w-full h-11 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-bold hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
-            >
-              {booking ? <><Loader2 size={16} className="animate-spin" /> Booking...</> : 'Confirm booking'}
-            </button>
-            {mode === 'lead' && !leadReady && (
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-2 text-center">
-                Enter your name and email to confirm.
-              </p>
-            )}
           </div>
-        </div>
-      </div>
-    </div>
+          <footer>
+            <button type="button" onClick={() => toast.info('Cookie preferences saved for this device.')}>Cookie settings</button>
+            <Link href="/privacy-policy">Privacy Policy</Link>
+          </footer>
+        </aside>
+
+        {showForm && selected ? (
+          <section className={styles.formPanel}>
+            <button type="button" className={styles.backButton} onClick={() => setShowForm(false)} aria-label="Back to available times">
+              <ArrowLeft />
+            </button>
+            <h2>Enter Details</h2>
+            <div className={styles.chosenTime}>
+              <strong>{shortDayFmt.format(new Date(selected.start))}</strong>
+              <span>{timeFmt.format(new Date(selected.start))}–{timeFmt.format(new Date(selected.end))}</span>
+              <span>{timezoneName(timezone)}</span>
+            </div>
+            {mode === 'lead' && (
+              <div className={styles.formFields}>
+                <label>Name *</label>
+                <input value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" />
+                <label>Email *</label>
+                <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" />
+                <label>Company</label>
+                <input value={company} onChange={(event) => setCompany(event.target.value)} />
+                <label>Please share anything that will help prepare for our meeting.</label>
+                <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4} />
+              </div>
+            )}
+            {mode === 'project' && (
+              <div className={styles.formFields}>
+                <label>Anything we should know before the meeting?</label>
+                <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={5} />
+              </div>
+            )}
+            <button className={styles.scheduleButton} type="button" onClick={confirm} disabled={!leadReady || booking}>
+              {booking ? <><Loader2 className={styles.spinner} /> Scheduling…</> : 'Schedule Event'}
+            </button>
+          </section>
+        ) : (
+          <>
+            <section className={styles.calendarPanel}>
+              <h2>Select a Date &amp; Time</h2>
+              <div className={styles.monthNav}>
+                <button type="button" onClick={() => setVisibleMonth(new Date(Date.UTC(year, month - 1, 1)))} aria-label="Previous month"><ChevronLeft /></button>
+                <strong>{monthLabel}</strong>
+                <button type="button" onClick={() => setVisibleMonth(new Date(Date.UTC(year, month + 1, 1)))} aria-label="Next month"><ChevronRight /></button>
+              </div>
+              <div className={styles.calendarGrid}>
+                {weekDays.map((day) => <span className={styles.weekDay} key={day}>{day}</span>)}
+                {calendarDays.map((day, index) => {
+                  if (!day) return <span key={`empty-${index}`} />;
+                  const key = dateKey(year, month, day);
+                  const dayAvailable = available.has(key);
+                  const isSelected = selectedDate === key;
+                  const isToday = new Date().toLocaleDateString('en-CA', { timeZone: timezone }) === key;
+                  return (
+                    <button
+                      type="button"
+                      key={key}
+                      disabled={!dayAvailable}
+                      onClick={() => selectDay(key)}
+                      className={`${dayAvailable ? styles.availableDay : ''} ${isSelected ? styles.selectedDay : ''}`}
+                      aria-label={`${dayAvailable ? 'Select' : 'Unavailable'} ${key}`}
+                    >
+                      {day}
+                      {isToday && <i />}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className={styles.timezoneBlock}>
+                <strong>Time zone</strong>
+                <button type="button"><Globe2 /> {timezoneName(timezone)} {clockLabel && `(${clockLabel})`} <ChevronDown /></button>
+              </div>
+            </section>
+
+            {selectedDate && selectedDay && (
+              <section className={styles.timesPanel}>
+                <h3>{dayFmt.format(dateFromKey(selectedDate))}</h3>
+                <div className={styles.timesList}>
+                  {selectedDay.slots.map((slot) => {
+                    const active = selected?.start === slot.start;
+                    return active ? (
+                      <div className={styles.activeTimeRow} key={slot.start}>
+                        <button type="button" className={styles.activeTime}>{timeFmt.format(new Date(slot.start))}</button>
+                        <button type="button" className={styles.nextButton} onClick={() => setShowForm(true)}>Next</button>
+                      </div>
+                    ) : (
+                      <button type="button" className={styles.timeButton} key={slot.start} onClick={() => setSelected(slot)}>
+                        {timeFmt.format(new Date(slot.start))}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+          </>
+        )}
+      </section>
+    </main>
   );
 }

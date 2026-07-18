@@ -22,7 +22,7 @@ export default async function GeneralBookingPage({
     );
   }
 
-  const res = await getLeadSlotsAction(org);
+  const res = await getLeadSlotsAction(org, 60);
 
   if (!res.success) {
     return (
@@ -39,8 +39,8 @@ export default async function GeneralBookingPage({
     <BookingWidget
       mode="lead"
       identifier={org}
-      title={`Intro call with ${res.orgName || 'us'}`}
-      subtitle="Tell us a bit about yourself and pick a time that works."
+      title={org === 'the-smith-marketing-4878' ? '15-Minute Plumbing Lead System Call' : `${res.slotDurationMinutes}-Minute Intro Call`}
+      attendeeName={res.attendeeName || res.orgName}
       timezone={res.timezone!}
       slotDurationMinutes={res.slotDurationMinutes!}
       initialDays={res.days!}
