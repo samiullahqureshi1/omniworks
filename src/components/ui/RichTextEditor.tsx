@@ -324,6 +324,21 @@ export function RichTextEditor({
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [bannerInsertRange, setBannerInsertRange] = useState<{ from: number; to: number } | null>(null);
+  const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
+  const [selectedBannerIndex, setSelectedBannerIndex] = useState(0);
+
+  useEffect(() => {
+    setSelectedCommandIndex(0);
+  }, [slashQuery]);
+
+  useEffect(() => {
+    setSelectedMentionIndex(0);
+  }, [mentionQuery]);
+
+  useEffect(() => {
+    setSelectedBannerIndex(0);
+  }, [bannerInsertRange]);
 
   const syncTriggerMenus = (currentEditor: any) => {
     const { $from } = currentEditor.state.selection;
@@ -362,6 +377,112 @@ export function RichTextEditor({
           : plain
             ? `prose prose-sm dark:prose-invert min-h-[180px] w-full border-0 bg-transparent px-0 py-1 text-[16px] shadow-none focus-visible:outline-none focus:outline-none ${editableBlockClasses}`
             : `prose prose-sm dark:prose-invert min-h-[180px] w-full rounded-[8px] border border-slate-200 bg-slate-50/60 px-4 py-5 text-[15px] shadow-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 focus:outline-none dark:border-white/10 dark:bg-white/[0.03] ${editableBlockClasses}`,
+      },
+      handleKeyDown(view, event) {
+        if (slashQuery !== null) {
+          if (event.key === "ArrowDown") {
+            setSelectedCommandIndex((prev) => {
+              const next = prev + 2;
+              if (next < allVisibleCommands.length) return next;
+              const nextRow = prev + 1;
+              if (nextRow < allVisibleCommands.length) return nextRow;
+              return 0;
+            });
+            return true;
+          }
+          if (event.key === "ArrowUp") {
+            setSelectedCommandIndex((prev) => {
+              const prevRow = prev - 2;
+              if (prevRow >= 0) return prevRow;
+              const prevItem = prev - 1;
+              if (prevItem >= 0) return prevItem;
+              return allVisibleCommands.length - 1;
+            });
+            return true;
+          }
+          if (event.key === "ArrowRight") {
+            setSelectedCommandIndex((prev) => (prev + 1) % allVisibleCommands.length);
+            return true;
+          }
+          if (event.key === "ArrowLeft") {
+            setSelectedCommandIndex((prev) => (prev - 1 + allVisibleCommands.length) % allVisibleCommands.length);
+            return true;
+          }
+          if (event.key === "Enter") {
+            if (allVisibleCommands[selectedCommandIndex]) {
+              runCommand(allVisibleCommands[selectedCommandIndex].command);
+              return true;
+            }
+          }
+          if (event.key === "Escape") {
+            setSlashQuery(null);
+            return true;
+          }
+        }
+
+        if (bannerInsertRange !== null) {
+          if (event.key === "ArrowDown") {
+            setSelectedBannerIndex((prev) => {
+              const next = prev + 2;
+              if (next < bannerColors.length) return next;
+              const nextRow = prev + 1;
+              if (nextRow < bannerColors.length) return nextRow;
+              return 0;
+            });
+            return true;
+          }
+          if (event.key === "ArrowUp") {
+            setSelectedBannerIndex((prev) => {
+              const prevRow = prev - 2;
+              if (prevRow >= 0) return prevRow;
+              const prevItem = prev - 1;
+              if (prevItem >= 0) return prevItem;
+              return bannerColors.length - 1;
+            });
+            return true;
+          }
+          if (event.key === "ArrowRight") {
+            setSelectedBannerIndex((prev) => (prev + 1) % bannerColors.length);
+            return true;
+          }
+          if (event.key === "ArrowLeft") {
+            setSelectedBannerIndex((prev) => (prev - 1 + bannerColors.length) % bannerColors.length);
+            return true;
+          }
+          if (event.key === "Enter") {
+            if (bannerColors[selectedBannerIndex]) {
+              insertBanner(bannerColors[selectedBannerIndex].value);
+              return true;
+            }
+          }
+          if (event.key === "Escape") {
+            setBannerInsertRange(null);
+            return true;
+          }
+        }
+
+        if (mentionQuery !== null && people !== undefined) {
+          if (event.key === "ArrowDown") {
+            setSelectedMentionIndex((prev) => (prev + 1 < filteredPeople.length ? prev + 1 : 0));
+            return true;
+          }
+          if (event.key === "ArrowUp") {
+            setSelectedMentionIndex((prev) => (prev - 1 >= 0 ? prev - 1 : filteredPeople.length - 1));
+            return true;
+          }
+          if (event.key === "Enter") {
+            if (filteredPeople[selectedMentionIndex]) {
+              insertMention(filteredPeople[selectedMentionIndex]);
+              return true;
+            }
+          }
+          if (event.key === "Escape") {
+            setMentionQuery(null);
+            return true;
+          }
+        }
+
+        return false;
       },
     },
     onUpdate: ({ editor: currentEditor }) => {
@@ -481,16 +602,25 @@ export function RichTextEditor({
   const visibleTextCommands = textCommands.filter((item) =>
     item.label.toLowerCase().includes(normalizedSlashQuery),
   );
+  const allVisibleCommands = [
+    ...visibleSuggestionCommands,
+    ...visibleTextCommands
+  ];
 
-  const renderCommandButton = (item: (typeof textCommands)[number]) => {
+  const renderCommandButton = (item: (typeof textCommands)[number], globalIndex: number) => {
     const Icon = item.icon;
+    const isSelected = globalIndex === selectedCommandIndex;
     return (
       <button
         key={`${item.command}-${item.label}`}
         type="button"
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => runCommand(item.command)}
-        className="flex w-full items-center gap-3 rounded-[8px] px-2 py-2 text-left text-[14px] text-slate-800 transition-colors hover:bg-slate-100 focus-visible:bg-slate-100 focus-visible:outline-none dark:text-slate-100 dark:hover:bg-white/10 dark:focus-visible:bg-white/10"
+        className={`flex w-full items-center gap-3 rounded-[8px] px-2 py-2 text-left text-[14px] text-slate-800 transition-colors focus-visible:outline-none dark:text-slate-100 ${
+          isSelected
+            ? "bg-slate-100 dark:bg-white/10 ring-1 ring-slate-300 dark:ring-white/20 font-medium"
+            : "hover:bg-slate-50 dark:hover:bg-white/5"
+        }`}
       >
         <span className="flex size-8 shrink-0 items-center justify-center rounded-[8px] border border-slate-200 bg-slate-50 text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
           <Icon className="size-4" strokeWidth={1.8} />
@@ -567,20 +697,27 @@ export function RichTextEditor({
             </button>
           </div>
           <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-            {bannerColors.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => insertBanner(item.value)}
-                className="flex items-center gap-3 rounded-[8px] px-2 py-2.5 text-left text-sm text-slate-800 hover:bg-slate-100 focus-visible:bg-slate-100 focus-visible:outline-none dark:text-slate-100 dark:hover:bg-white/10"
-              >
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-[8px] border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/5">
-                  <Bookmark className="size-4" fill={item.swatch} color={item.swatch} />
-                </span>
-                <span>{item.label}</span>
-              </button>
-            ))}
+            {bannerColors.map((item, idx) => {
+              const isSelected = idx === selectedBannerIndex;
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => insertBanner(item.value)}
+                  className={`flex items-center gap-3 rounded-[8px] px-2 py-2.5 text-left text-sm text-slate-800 transition-colors focus-visible:outline-none dark:text-slate-100 ${
+                    isSelected
+                      ? "bg-slate-100 dark:bg-white/10 ring-1 ring-slate-300 dark:ring-white/20 font-medium"
+                      : "hover:bg-slate-50 dark:hover:bg-white/5"
+                  }`}
+                >
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-[8px] border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/5">
+                    <Bookmark className="size-4" fill={item.swatch} color={item.swatch} />
+                  </span>
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -593,7 +730,7 @@ export function RichTextEditor({
                 Suggestions
               </p>
               <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-2">
-                {visibleSuggestionCommands.map(renderCommandButton)}
+                {visibleSuggestionCommands.map((item, idx) => renderCommandButton(item, idx))}
               </div>
             </div>
           )}
@@ -603,7 +740,7 @@ export function RichTextEditor({
                 Text
               </p>
               <div className="grid grid-cols-1 gap-0.5 sm:grid-cols-2">
-                {visibleTextCommands.map(renderCommandButton)}
+                {visibleTextCommands.map((item, idx) => renderCommandButton(item, visibleSuggestionCommands.length + idx))}
               </div>
             </div>
           )}
@@ -625,20 +762,25 @@ export function RichTextEditor({
               <p className="px-2 py-5 text-center text-sm text-slate-500">No members found</p>
             ) : (
               <div className="space-y-1">
-                {filteredPeople.map((person) => {
+                {filteredPeople.map((person, idx) => {
                   const initials = person.name
                     .split(" ")
                     .map((part) => part[0])
                     .join("")
                     .slice(0, 2)
                     .toUpperCase();
+                  const isSelected = idx === selectedMentionIndex;
                   return (
                     <button
                       key={person.id}
                       type="button"
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => insertMention(person)}
-                      className="flex w-full items-center gap-3 rounded-[8px] px-2 py-2 text-left transition-colors hover:bg-slate-100 focus-visible:bg-slate-100 focus-visible:outline-none dark:hover:bg-white/10 dark:focus-visible:bg-white/10"
+                      className={`flex w-full items-center gap-3 rounded-[8px] px-2 py-2 text-left transition-colors focus-visible:outline-none ${
+                        isSelected
+                          ? "bg-slate-100 dark:bg-white/10 ring-1 ring-slate-300 dark:ring-white/20 font-medium"
+                          : "hover:bg-slate-50 dark:hover:bg-white/5"
+                      }`}
                     >
                       <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-semibold text-white">
                         {initials}

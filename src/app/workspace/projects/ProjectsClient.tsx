@@ -53,6 +53,11 @@
     Phone,
     Smile,
     EyeOff,
+    Wand2,
+    Save,
+    RefreshCw,
+    Paperclip,
+    Bell,
   } from "lucide-react";
   import {
     Table,
@@ -616,10 +621,8 @@
               filteredStatuses.map((s: any) => (
                 <DropdownMenuItem 
                   key={s.id}
-                  onSelect={(e) => {
-                    e.preventDefault(); // Don't close immediately if you want smooth animation or standard behavior, but here we DO want it to close immediately
+                  onSelect={() => {
                     handleUpdateStatus(s.id);
-                    setIsOpen(false);
                   }}
                   className={`flex items-center justify-between text-[13px] font-medium cursor-pointer py-2 px-2.5 rounded-lg mb-0.5 transition-colors ${project.statusId === s.id ? 'bg-slate-50 dark:bg-white/5' : 'hover:bg-slate-50 dark:hover:bg-white/5'}`}
                 >
@@ -965,6 +968,16 @@ const [isPMOpen, setIsPMOpen] = useState(false);
     const [isRepeatEnabled, setIsRepeatEnabled] = useState(false);
     const [repeatFrequency, setRepeatFrequency] = useState<"DAILY" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY">("DAILY");
     const [repeatTime, setRepeatTime] = useState("09:00");
+    const [showEmptyFields, setShowEmptyFields] = useState(false);
+    const [editingFieldIndex, setEditingFieldIndex] = useState<number | null>(null);
+    const [editingFieldName, setEditingFieldName] = useState("");
+    const [editingFieldType, setEditingFieldType] = useState("");
+    const [pinnedFieldNames, setPinnedFieldNames] = useState<string[]>([]);
+    const [attachments, setAttachments] = useState<string[]>([]);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const [showAttachmentsView, setShowAttachmentsView] = useState(false);
+    const [submitMode, setSubmitMode] = useState<"STANDARD" | "OPEN_NEW" | "DUPLICATE">("STANDARD");
+    const formRef = React.useRef<HTMLFormElement>(null);
 
     // Template Management States
     const [isTemplateSelectOpen, setIsTemplateSelectOpen] = useState(false);
@@ -1662,29 +1675,60 @@ const [isPMOpen, setIsPMOpen] = useState(false);
             await persistDraftDocs(targetProjectId);
           }
           toast.success(isEditMode ? "Project updated successfully" : "Project created successfully");
-          setIsCreateOpen(false);
-          setActiveCreateTab("project");
-          setDraftDocs([]);
-          setIsEditMode(false);
-          setEditProjectId(null);
-          setProjectTasks([]);
-          setCustomFields([]);
-          setFormName("");
-          setFormClientId("");
-          setFormPMId("");
-          setFormStatusId("");
-          setFormPriority("MEDIUM");
-          setFormStartDate("");
-          setFormEndDate("");
-          setFormBudget("");
-          setFormAllocatedHours("");
-          setFormNotes("");
-          setDescription("");
-          setIsRepeatEnabled(false);
-          setRepeatFrequency("DAILY");
-          setRepeatTime("09:00");
-          setAttachedRuleIds([]);
-          setFormAssigneeIds([]);
+          if (submitMode === "STANDARD") {
+            setIsCreateOpen(false);
+            setActiveCreateTab("project");
+            setDraftDocs([]);
+            setIsEditMode(false);
+            setEditProjectId(null);
+            setProjectTasks([]);
+            setCustomFields([]);
+            setFormName("");
+            setFormClientId("");
+            setFormPMId("");
+            setFormStatusId("");
+            setFormPriority("MEDIUM");
+            setFormStartDate("");
+            setFormEndDate("");
+            setFormBudget("");
+            setFormAllocatedHours("");
+            setFormNotes("");
+            setDescription("");
+            setIsRepeatEnabled(false);
+            setRepeatFrequency("DAILY");
+            setRepeatTime("09:00");
+            setAttachedRuleIds([]);
+            setFormAssigneeIds([]);
+            setAttachments([]);
+          } else if (submitMode === "OPEN_NEW") {
+            setActiveCreateTab("project");
+            setDraftDocs([]);
+            setIsEditMode(false);
+            setEditProjectId(null);
+            setProjectTasks([]);
+            setCustomFields([]);
+            setFormName("");
+            setFormClientId("");
+            setFormPMId("");
+            setFormStatusId("");
+            setFormPriority("MEDIUM");
+            setFormStartDate("");
+            setFormEndDate("");
+            setFormBudget("");
+            setFormAllocatedHours("");
+            setFormNotes("");
+            setDescription("");
+            setIsRepeatEnabled(false);
+            setRepeatFrequency("DAILY");
+            setRepeatTime("09:00");
+            setAttachedRuleIds([]);
+            setFormAssigneeIds([]);
+            setAttachments([]);
+            setSubmitMode("STANDARD");
+          } else if (submitMode === "DUPLICATE") {
+            setFormName(`Copy of ${formName}`);
+            setSubmitMode("STANDARD");
+          }
           router.refresh();
         }
       });
@@ -2154,7 +2198,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
           }
         }}>
         <DialogContent
-    className="w-[calc(100%-2rem)] sm:max-w-[860px] h-[82vh] min-h-[580px] max-h-[760px] p-0 flex flex-col overflow-hidden rounded-[8px] sm:rounded-[8px] [&>button]:hidden"
+    className="w-[calc(100%-2rem)] sm:max-w-[1000px] h-[82vh] min-h-[580px] max-h-[760px] p-0 flex flex-col overflow-hidden rounded-[8px] sm:rounded-[8px] [&>button]:hidden"
 
     onInteractOutside={(e) => {
       e.preventDefault();
@@ -2190,7 +2234,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
               className={activeCreateTab === "doc" ? "border-b-0 dark:border-b-0" : undefined}
             />
             {activeCreateTab === "project" ? (
-              <form onSubmit={handleCreateProject} className="flex flex-col flex-1 overflow-hidden">
+              <form ref={formRef} onSubmit={handleCreateProject} className="flex flex-col flex-1 overflow-hidden">
                 <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar space-y-6">
 
                 {/* Basics */}
@@ -2207,7 +2251,12 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                 </div>
               </div>
 
-              <div className="project-properties-grid">
+              <style>{`
+                .custom-properties-grid > .grid > div {
+                  grid-template-columns: 160px minmax(0, 1fr) !important;
+                }
+              `}</style>
+              <div className="project-properties-grid custom-properties-grid">
               <div className="grid grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg border">
            <div className="space-y-2">
  <div className="flex flex-col">
@@ -2296,8 +2345,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
           {clients.map((client)=>(
             <DropdownMenuItem
               key={client.id}
-              onSelect={(e)=>{
-                e.preventDefault();
+              onSelect={() => {
                 setFormClientId(client.id);
               }}
               className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer"
@@ -2450,10 +2498,8 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 
         <DropdownMenuItem
   key={m.id}
-  onSelect={(e) => {
-    e.preventDefault();
+  onSelect={() => {
     setFormPMId(m.id);
-    setIsPMOpen(false);
   }}
   className="
     flex
@@ -2832,8 +2878,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 
             key={status.id}
 
-            onSelect={(e)=>{
-              e.preventDefault();
+            onSelect={() => {
               setFormStatusId(status.id);
             }}
 
@@ -3037,8 +3082,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
           <DropdownMenuItem
             key={item.value}
 
-            onSelect={(e)=>{
-              e.preventDefault();
+            onSelect={() => {
               setFormPriority(item.value);
             }}
 
@@ -3124,9 +3168,8 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <div></div>
-                  <div className="flex items-center gap-2 h-[36px]">
+                <div className="!flex items-center gap-6 h-[36px] col-span-1">
+                  <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       id="ongoing"
@@ -3144,440 +3187,515 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                       Ongoing
                     </label>
                   </div>
-                </div>
-              </div>
-            </div>
 
-              <div className="space-y-3 border-t border-slate-200 pt-5 dark:border-white/10">
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Description</h3>
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Add context, type “/” for blocks, or “@” to mention a teammate.</p>
-                </div>
-                <ProjectDescriptionEditor
-                  content={description}
-                  onChange={setDescription}
-                  placeholder="Add description, or write with AI"
-                  people={members}
-                  plain
-                />
-              </div>
-
-              {/* Repeat Settings */}
-              <div className="space-y-4 bg-gradient-to-r from-purple-500/5 to-indigo-500/5 dark:from-purple-950/10 dark:to-indigo-950/10 p-5 rounded-2xl border border-purple-100/80 dark:border-purple-900/20 shadow-sm transition-all duration-300">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <label className="text-sm font-semibold text-foreground flex items-center gap-2">
-                      <Repeat className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                      Repeat Project
-                    </label>
-                    <p className="text-xs text-muted-foreground">
-                      Automatically create duplicate projects based on frequency.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={isRepeatEnabled}
-                    onClick={() => {
-                      const newVal = !isRepeatEnabled;
-                      setIsRepeatEnabled(newVal);
-                      if (newVal) {
-                        setIsOngoing(false);
-                      }
-                    }}
-                    className={`${
-                      isRepeatEnabled ? "bg-purple-600" : "bg-zinc-200 dark:bg-zinc-800"
-                    } relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2`}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`${
-                        isRepeatEnabled ? "translate-x-5" : "translate-x-0"
-                      } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out`}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="repeat-project-checkbox"
+                      checked={isRepeatEnabled}
+                      onChange={(e) => {
+                        const newVal = e.target.checked;
+                        setIsRepeatEnabled(newVal);
+                        if (newVal) {
+                          setIsOngoing(false);
+                        }
+                      }}
+                      className="rounded border-slate-300 text-slate-600 focus:ring-slate-500 h-4 w-4 cursor-pointer"
                     />
-                  </button>
+                    <label htmlFor="repeat-project-checkbox" className="text-[13px] font-medium text-slate-500 dark:text-slate-400 cursor-pointer select-none">
+                      Make this project repeat
+                    </label>
+                  </div>
                 </div>
 
-                {isRepeatEnabled && (
-                  <div className="grid grid-cols-2 gap-4 pt-4 border-t border-purple-100/50 dark:border-purple-900/20 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-muted-foreground tracking-wide uppercase">Repeat Frequency</label>
-                      <div className="relative">
-                        <select
-                          value={repeatFrequency}
-                          onChange={(e) => setRepeatFrequency(e.target.value as any)}
-                          className="flex h-10 w-full appearance-none rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 cursor-pointer pr-10"
-                        >
-                          <option value="DAILY">Daily</option>
-                            <option value="WEEKLY">Weekly</option>
-                            <option value="MONTHLY">Monthly</option>
-                            <option value="QUARTERLY">Quarterly</option>
-                            <option value="YEARLY">Yearly</option>
-                        </select>
-                        <ChevronDown className="absolute right-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
-                      </div>
-                    </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-muted-foreground tracking-wide uppercase">Repeat Time</label>
-                        <div className="relative">
-                          <input
-                            type="time"
-                            value={repeatTime}
-                            onChange={(e) => setRepeatTime(e.target.value)}
-                            className="flex h-10 w-full appearance-none rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 cursor-pointer"
-                          />
-                        </div>
-                      </div>
-
-                  </div>
-                )}
-              </div>
-
-              {/* Resources */}
-              <div className="grid grid-cols-2 gap-4">
+                {/* Row 5: project budget | project allocated hour */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Project Budget ($){" "}
-                    <span className="text-xs text-muted-foreground font-normal">
-                      (Optional)
-                    </span>
-                  </label>
-                  <NumberStepper
+                  <label className="text-sm font-medium">project budget</label>
+                  <input
+                    type="number"
                     name="projectBudget"
-                    step={1}
-                    min={0}
-                    placeholder="e.g. 5000"
+                    placeholder="e-g 5000"
                     value={formBudget}
                     onChange={(e) => setFormBudget(e.target.value)}
+                    className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none placeholder:text-slate-400/80"
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Total Allocated Hours{" "}
-                    <span className="text-destructive">*</span>
-                  </label>
-                  <NumberStepper
+                  <label className="text-sm font-medium">project allocated hour</label>
+                  <input
+                    type="number"
                     name="totalAllocatedHours"
-                    step={0.1}
-                    min={0}
                     required
                     placeholder="e.g. 120"
                     value={formAllocatedHours}
                     onChange={(e) => setFormAllocatedHours(e.target.value)}
+                    className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none placeholder:text-slate-400/80"
                   />
                 </div>
+
+                {isRepeatEnabled && (
+                  <>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">repeat frequency</label>
+                      <div className="relative">
+                        <select
+                          value={repeatFrequency}
+                          onChange={(e) => setRepeatFrequency(e.target.value as any)}
+                          className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none appearance-none cursor-pointer pr-8"
+                        >
+                          <option value="DAILY">Daily</option>
+                          <option value="WEEKLY">Weekly</option>
+                          <option value="MONTHLY">Monthly</option>
+                          <option value="QUARTERLY">Quarterly</option>
+                          <option value="YEARLY">Yearly</option>
+                        </select>
+                        <ChevronDown className="absolute right-3 top-2.5 h-4 w-4 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">repeat time</label>
+                      <input
+                        type="time"
+                        value={repeatTime}
+                        onChange={(e) => setRepeatTime(e.target.value)}
+                        className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none cursor-pointer"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
+            </div>
+
+            <div className="space-y-3 pt-5">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Description</h3>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Add context, type “/” for blocks, or “@” to mention a teammate.</p>
+              </div>
+              <ProjectDescriptionEditor
+                content={description}
+                onChange={setDescription}
+                placeholder="Add description, or write with AI"
+                people={members}
+                plain
+              />
+            </div>
+
+
 
 
 
               {/* Custom Fields */}
               <div className="space-y-3 pt-2">
-                <div className="flex justify-between items-center">
-                  <label className="text-sm font-medium flex items-center gap-1.5">
-                    Custom Fields{" "}
-                    <span className="text-xs text-muted-foreground font-normal">
-                      (Optional)
-                    </span>
-                  </label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setFieldsDrawerTarget("FORM");
-                      setFieldsTab("create_new");
-                      setIsFieldsDrawerOpen(true);
-                    }}
-                    className="h-8 px-3 text-[13px] bg-white dark:bg-[#252525] border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-slate-700 dark:text-slate-300 shadow-sm rounded-lg"
-                  >
-                    <Plus className="mr-1.5 h-3.5 w-3.5 text-slate-400" /> Add Field
-                  </Button>
-                </div>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Fields</h3>
 
-                {customFields.length > 0 && (
-                  <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
-                    {customFields.map((field, index) => {
-                      const getIconForType = (type: string) => {
-                        switch (type) {
-                          case 'number': return <Hash size={14} className="text-slate-400" />;
-                          case 'url':
-                          case 'website': return <Globe size={14} className="text-slate-400" />;
-                          case 'email': return <Mail size={14} className="text-slate-400" />;
-                          case 'phone': return <Phone size={14} className="text-slate-400" />;
-                          case 'dropdown': return <Tags size={14} className="text-slate-400" />;
-                          case 'checkboxes': return <CheckSquare size={14} className="text-slate-400" />;
-                          case 'date': return <CircleDashed size={14} className="text-slate-400" />;
-                          default: return <Type size={14} className="text-slate-400" />;
-                        }
-                      };
+                {(() => {
+                  const isEmpty = (val: any) => {
+                    return val === undefined || val === null || val === "" || val === false || (Array.isArray(val) && val.length === 0);
+                  };
+                  const visibleFields = showEmptyFields
+                    ? customFields
+                    : customFields.filter(f => !isEmpty(f.value) || pinnedFieldNames.includes(f.name));
 
-                      const renderFieldValueInput = () => {
-                        const updateValue = (val: any) => {
-                          const newFields = [...customFields];
-                          newFields[index].value = val;
-                          setCustomFields(newFields);
-                        };
-                        
-                        const commonClasses = "h-full w-full border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-4 bg-transparent text-[14px] text-slate-700 dark:text-slate-300 rounded-none shadow-none outline-none appearance-none";
-                        
-                        switch(field.type) {
-                          case 'text area':
-                            return <textarea value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} py-2.5 resize-none custom-scrollbar`} />;
-                          case 'checkbox':
-                            return <div className="flex items-center h-full px-4"><input type="checkbox" checked={!!field.value} onChange={e => updateValue(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" /></div>;
-                          case 'dropdown':
-                            return (
-                              <select value={field.value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer`}>
-                                <option value="" disabled>Select an option</option>
-                                {(field.options || []).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
-                              </select>
-                            );
-                          case 'labels':
-                            const currentValues = Array.isArray(field.value) ? field.value : [];
-                            return (
-                              <div className="flex items-center flex-wrap gap-1.5 h-full px-4 py-1 overflow-y-auto custom-scrollbar">
-                                {currentValues.map((v: string) => (
-                                  <span key={v} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[12px] font-medium bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300">
-                                    {v}
-                                    <button type="button" onClick={() => updateValue(currentValues.filter(val => val !== v))} className="text-slate-400 hover:text-red-500"><X size={10} /></button>
-                                  </span>
-                                ))}
-                                <select 
-                                  value="" 
-                                  onChange={e => {
-                                      if (e.target.value && !currentValues.includes(e.target.value)) {
-                                        updateValue([...currentValues, e.target.value]);
-                                      }
-                                  }}
-                                  className="bg-transparent text-[12px] text-slate-500 outline-none cursor-pointer"
-                                >
-                                  <option value="" disabled>+ Add label</option>
-                                  {(field.options || []).filter((o: string) => !currentValues.includes(o)).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
-                                </select>
-                              </div>
-                            );
-                          case 'number':
-                            return <NumberStepper value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="0" min={0} step={1} className={commonClasses} />;
-                          case 'date':
-                            return <Input type="date" value={field.value || ''} onChange={e => updateValue(e.target.value)} className={commonClasses} />;
-                          case 'website':
-                          case 'url':
-                            return <Input type="url" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="https://..." className={commonClasses} />;
-                          case 'phone':
-                            return <Input type="tel" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="+1..." className={commonClasses} />;
-                          case 'email':
-                            return <Input type="email" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="email@example.com" className={commonClasses} />;
-                          default:
-                            return <Input type="text" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
-                        }
-                      };
+                  const getIconForType = (type: string) => {
+                    switch (type) {
+                      case 'number': return <Hash size={14} className="text-slate-400" />;
+                      case 'url':
+                      case 'website': return <Globe size={14} className="text-slate-400" />;
+                      case 'email': return <Mail size={14} className="text-slate-400" />;
+                      case 'phone': return <Phone size={14} className="text-slate-400" />;
+                      case 'dropdown': return <Tags size={14} className="text-slate-400" />;
+                      case 'checkboxes': return <CheckSquare size={14} className="text-slate-400" />;
+                      case 'date': return <CircleDashed size={14} className="text-slate-400" />;
+                      default: return <Type size={14} className="text-slate-400" />;
+                    }
+                  };
 
-                      return (
-                        <div
-                          key={index}
-                          className={`flex items-stretch w-full border border-slate-200 dark:border-white/10 rounded-md overflow-hidden group transition-all ${field.type === 'text area' ? 'h-[80px]' : field.type === 'labels' ? 'min-h-[42px]' : 'h-[42px]'}`}
-                        >
-                          {/* Left Side: Field info */}
-                          <div className="flex items-center gap-2 px-3 py-2 min-w-[150px] w-1/3 border-r border-slate-200 dark:border-white/10 bg-[#FAFAFA] dark:bg-[#1A1A1A] relative">
-                            {getIconForType(field.type)}
-                            <Input
-                              value={field.name}
-                              onChange={(e) => {
-                                const newFields = [...customFields];
-                                newFields[index].name = e.target.value;
-                                setCustomFields(newFields);
+                  const renderFieldValueInput = (field: any, index: number) => {
+                    const updateValue = (val: any) => {
+                      const newFields = [...customFields];
+                      newFields[index].value = val;
+                      setCustomFields(newFields);
+                    };
+                    
+                    const commonClasses = "h-[36px] w-full border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 bg-transparent text-[13px] text-slate-700 dark:text-slate-300 rounded-none shadow-none outline-none appearance-none placeholder:text-slate-400/80";
+                    
+                    switch(field.type) {
+                      case 'text area':
+                        return <textarea value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} py-2 resize-none custom-scrollbar h-[36px]`} />;
+                      case 'checkbox':
+                        return <div className="flex items-center h-[36px] px-3"><input type="checkbox" checked={!!field.value} onChange={e => updateValue(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" /></div>;
+                      case 'dropdown':
+                        return (
+                          <select value={field.value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer`}>
+                            <option value="">—</option>
+                            {(field.options || []).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                          </select>
+                        );
+                      case 'labels':
+                        const currentValues = Array.isArray(field.value) ? field.value : [];
+                        return (
+                          <div className="flex items-center flex-wrap gap-1.5 h-[36px] px-3 overflow-y-auto custom-scrollbar">
+                            {currentValues.map((v: string) => (
+                              <span key={v} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300">
+                                {v}
+                                <button type="button" onClick={() => updateValue(currentValues.filter((val: string) => val !== v))} className="text-slate-400 hover:text-red-500"><X size={10} /></button>
+                              </span>
+                            ))}
+                            <select 
+                              value="" 
+                              onChange={e => {
+                                  if (e.target.value && !currentValues.includes(e.target.value)) {
+                                    updateValue([...currentValues, e.target.value]);
+                                  }
                               }}
-                              className="h-7 text-[14px] bg-transparent border-0 focus-visible:ring-1 focus-visible:ring-slate-300 px-1 font-medium text-slate-700 dark:text-slate-300 w-full shadow-none"
-                            />
-                            
-                            <div className="absolute right-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-[#FAFAFA] dark:bg-[#1A1A1A] pl-1">
-                              <button type="button" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
-                                <EyeOff size={14} />
-                              </button>
-                              <button type="button" className="border border-slate-200 dark:border-white/10 rounded p-[3px] text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-all bg-white dark:bg-[#252525] shadow-sm">
-                                <Settings size={13} />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Right Side: Value */}
-                          <div className="flex-1 relative bg-white dark:bg-[#252525]">
-                            {renderFieldValueInput()}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setCustomFields(
-                                  customFields.filter((_, i) => i !== index)
-                                )
-                              }
-                              className="absolute right-2 top-2 border border-slate-200 dark:border-white/10 rounded p-[3px] text-slate-500 hover:text-destructive hover:bg-slate-50 dark:hover:bg-white/5 transition-all bg-white dark:bg-[#252525] opacity-0 group-hover:opacity-100 shadow-sm z-10"
+                              className="bg-transparent text-[11px] text-slate-500 outline-none cursor-pointer"
                             >
-                              <X size={13} />
-                            </button>
+                              <option value="" disabled>+ Add label</option>
+                              {(field.options || []).filter((o: string) => !currentValues.includes(o)).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                            </select>
+                          </div>
+                        );
+                      case 'number':
+                        return <input type="number" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+                      case 'date':
+                        return <input type="date" value={field.value || ''} onChange={e => updateValue(e.target.value)} className={commonClasses} />;
+                      case 'website':
+                      case 'url':
+                        return <input type="url" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+                      case 'phone':
+                        return <input type="tel" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+                      case 'email':
+                        return <input type="email" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+                      default:
+                        return <input type="text" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+                    }
+                  };
+
+                  return (
+                    <div className="space-y-4">
+                      {visibleFields.length > 0 && (
+                        <div className="custom-properties-grid pt-1">
+                          <div className="grid grid-cols-2 gap-y-0 border-y border-slate-100 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
+                            {visibleFields.map((field) => {
+                              const index = customFields.findIndex(f => f.name === field.name);
+                              const isPinned = pinnedFieldNames.includes(field.name);
+                              return (
+                                <div key={field.name} className="col-span-2 grid min-h-[44px] items-center relative group">
+                                  <div className="flex items-center gap-1.5 text-[13px] font-medium text-slate-500 dark:text-slate-400 pl-1">
+                                    {getIconForType(field.type)}
+                                    <span>{field.name}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setPinnedFieldNames(prev =>
+                                          prev.includes(field.name)
+                                            ? prev.filter(name => name !== field.name)
+                                            : [...prev, field.name]
+                                        );
+                                      }}
+                                      className={`${isPinned ? 'opacity-100 text-slate-800 dark:text-slate-200' : 'opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'} transition-opacity ml-1.5 flex items-center cursor-pointer`}
+                                      title={isPinned ? "Unpin field" : "Pin field"}
+                                    >
+                                      <Pin size={13} className={isPinned ? "fill-current" : ""} />
+                                    </button>
+                                  </div>
+                                  <div className="flex items-center justify-between w-full gap-2">
+                                    <div className="flex items-center gap-2 flex-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingFieldIndex(index);
+                                          setEditingFieldName(field.name);
+                                          setEditingFieldType(field.type);
+                                        }}
+                                        className="border border-slate-200 dark:border-white/10 rounded-[8px] p-1.5 text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5 transition-opacity flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 cursor-pointer"
+                                      >
+                                        <Settings size={14} />
+                                      </button>
+                                      {renderFieldValueInput(field, index)}
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setCustomFields(
+                                          customFields.filter((_, i) => i !== index)
+                                        )
+                                      }
+                                      className="border border-slate-200 dark:border-white/10 rounded-[8px] p-1.5 text-slate-400 hover:text-destructive hover:bg-slate-50 dark:hover:bg-white/5 transition-opacity flex items-center justify-center shrink-0 opacity-0 group-hover:opacity-100 cursor-pointer"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                      )}
 
-              {/* Project Tasks */}
-              <div className="space-y-3 pt-2">
-                <div className="flex justify-between items-center">
-                  <label className="text-sm font-medium">
-                    Initial Tasks{" "}
-                    <span className="text-xs text-muted-foreground font-normal">
-                      (Optional)
-                    </span>
-                  </label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setProjectTasks([
-                        ...projectTasks,
-                        {
-                          id: Math.random().toString(),
-                          title: "",
-                          description: "",
-                          status: "",
-                          priority: "MEDIUM",
-                          assigneeId: "",
-                        },
-                      ])
-                    }
-                    className="h-8 text-xs"
-                  >
-                    <Plus className="mr-1 h-3 w-3" /> Add Task
-                  </Button>
-                </div>
-
-                {projectTasks.length > 0 && (
-                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
-                    {projectTasks.map((task, index) => (
-                      <div
-                        key={task.id}
-                        className="p-3 border rounded-xl bg-muted/20 space-y-3 relative group"
-                      >
+                      <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() =>
-                            setProjectTasks(
-                              projectTasks.filter((t) => t.id !== task.id),
-                            )
-                          }
-                          className="absolute right-2 top-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => setShowEmptyFields(!showEmptyFields)}
+                          className="h-[32px] px-3 text-[13px] font-medium bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-slate-700 dark:text-slate-300 rounded-[8px] outline-none flex items-center justify-center"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          {showEmptyFields ? "Hide empty fields" : "Show custom fields"}
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFieldsDrawerTarget("FORM");
+                            setFieldsTab("create_new");
+                            setIsFieldsDrawerOpen(true);
+                          }}
+                          className="h-[32px] px-3 text-[13px] font-medium bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-slate-700 dark:text-slate-300 rounded-[8px] outline-none flex items-center justify-center gap-1.5"
+                        >
+                          <Plus className="h-3.5 w-3.5 text-slate-400" /> Create new field
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
 
-                        <div className="space-y-1.5 pr-6">
-                          <Input
-                            placeholder="Task Title *"
-                            value={task.title}
-                            onChange={(e) => {
-                              const newTasks = [...projectTasks];
-                              newTasks[index].title = e.target.value;
-                              setProjectTasks(newTasks);
-                            }}
-                            className="h-8 text-sm bg-background"
-                            required
-                          />
+              {/* Attachments Section */}
+              {attachments.length > 0 && (
+                <div className="space-y-2 pt-4">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Attachments</h3>
+                  <div className="border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden bg-background">
+                    {attachments.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02]">
+                        <div className="flex items-center gap-2">
+                          <Check className="h-4 w-4 text-emerald-500 shrink-0" />
+                          <span className="text-[13px] text-slate-700 dark:text-slate-300 font-medium truncate max-w-[400px]">
+                            {file}
+                          </span>
                         </div>
-
-                        <div className="space-y-1.5">
-                          <Input
-                            placeholder="Description (Optional)"
-                            value={task.description}
-                            onChange={(e) => {
-                              const newTasks = [...projectTasks];
-                              newTasks[index].description = e.target.value;
-                              setProjectTasks(newTasks);
-                            }}
-                            className="h-8 text-sm bg-background"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2">
-                          <select
-                            value={task.status}
-                            onChange={(e) => {
-                              const newTasks = [...projectTasks];
-                              newTasks[index].status = e.target.value;
-                              setProjectTasks(newTasks);
-                            }}
-                            className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
-                          >
-                            <option value="">No Status</option>
-                            {taskStatuses.map((ts) => (
-                              <option key={ts.id} value={ts.id}>{ts.name}</option>
-                            ))}
-                          </select>
-
-                          <select
-                            value={task.priority}
-                            onChange={(e) => {
-                              const newTasks = [...projectTasks];
-                              newTasks[index].priority = e.target.value as any;
-                              setProjectTasks(newTasks);
-                            }}
-                            className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
-                          >
-                            <option value="LOW">Low</option>
-                            <option value="MEDIUM">Medium</option>
-                            <option value="HIGH">High</option>
-                            <option value="CRITICAL">Critical</option>
-                          </select>
-
-                          <select
-                            value={task.assigneeId}
-                            onChange={(e) => {
-                              const newTasks = [...projectTasks];
-                              newTasks[index].assigneeId = e.target.value;
-                              setProjectTasks(newTasks);
-                            }}
-                            className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
-                          >
-                            <option value="">Unassigned</option>
-                            {members.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}
+                          className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
                       </div>
                     ))}
+                    <div 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-4 flex items-center justify-center border-dashed border-2 border-slate-100 dark:border-white/5 hover:bg-slate-50/50 dark:hover:bg-white/[0.02] cursor-pointer transition-colors"
+                    >
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        Drag and drop files to attach or <span className="underline font-medium text-slate-700 dark:text-slate-300">browse</span>
+                      </span>
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) {
+                    const newFiles = Array.from(e.target.files).map(f => f.name);
+                    setAttachments(prev => [...prev, ...newFiles]);
+                  }
+                }}
+                multiple
+              />
+
+              {/* Edit Field Modal */}
+              <Dialog open={editingFieldIndex !== null} onOpenChange={(open) => { if (!open) setEditingFieldIndex(null); }}>
+                <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1c1c1c] shadow-lg [&>button]:hidden">
+                  {/* Popover Header */}
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-white/5">
+                    <div className="flex items-center gap-1.5 text-sm font-medium text-slate-800 dark:text-slate-200">
+                      <span className="capitalize">{editingFieldType}</span>
+                      <ChevronDown size={14} className="text-slate-400" />
+                    </div>
+                    <button type="button" className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400">
+                      <Settings size={14} />
+                      <span>Advanced</span>
+                    </button>
+                  </div>
+
+                  {/* Popover Body */}
+                  <div className="p-4 space-y-4">
+                    {/* Field Name */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Field name *</label>
+                      <div className="relative flex items-center">
+                        <Smile size={16} className="absolute left-3 text-slate-400" />
+                        <input
+                          type="text"
+                          required
+                          value={editingFieldName}
+                          onChange={(e) => setEditingFieldName(e.target.value)}
+                          className="w-full h-10 pl-9 pr-3 text-sm bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg outline-none focus:ring-2 focus:ring-[#ffad0d] focus:border-transparent text-slate-800 dark:text-white font-medium"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Fill Method */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Fill method</label>
+                      <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 dark:bg-white/5 rounded-lg">
+                        <button
+                          type="button"
+                          className="h-8 text-xs font-medium rounded-md bg-white dark:bg-zinc-800 text-slate-800 dark:text-white shadow-sm flex items-center justify-center"
+                        >
+                          Manual fill
+                        </button>
+                        <button
+                          type="button"
+                          className="h-8 text-xs font-medium rounded-md text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1 hover:bg-white/50 dark:hover:bg-white/5"
+                        >
+                          <Sparkles size={12} className="text-purple-500" />
+                          <span>Fill with AI</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Popover Footer */}
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (editingFieldIndex !== null) {
+                          setCustomFields(customFields.filter((_, i) => i !== editingFieldIndex));
+                          setEditingFieldIndex(null);
+                        }
+                      }}
+                      className="h-9 w-9 flex items-center justify-center rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-950/40 text-red-500 transition-colors"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingFieldIndex(null)}
+                        className="h-9 px-4 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (editingFieldIndex !== null && editingFieldName.trim()) {
+                            const newFields = [...customFields];
+                            newFields[editingFieldIndex].name = editingFieldName;
+                            setCustomFields(newFields);
+                            setEditingFieldIndex(null);
+                          }
+                        }}
+                        className="h-9 px-4 text-sm font-medium bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 rounded-lg transition-colors"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+
             </div>
 
-            <DialogFooter className="p-4 border-t bg-background shrink-0 flex items-center justify-between">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsSaveTemplateOpen(true)}
-                className="text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-900/50 dark:hover:bg-purple-950/20 rounded-[8px]"
-              >
-                Save as Template
-              </Button>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => { setIsCreateOpen(false); setIsEditMode(false); setEditProjectId(null); }}
-                  className="rounded-[8px]"
+            <div className="p-4 border-t bg-background shrink-0 flex items-center justify-between">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="text-slate-700 border-slate-200 hover:bg-slate-50 dark:text-slate-300 dark:border-white/10 dark:hover:bg-white/5 rounded-[8px] flex items-center gap-1.5 h-9"
+                  >
+                    <Wand2 size={15} className="text-slate-400" />
+                    <span>Templates</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-[240px] rounded-xl shadow-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1c1c1c] p-1.5 z-[9999]">
+                  <DropdownMenuItem onClick={() => { setIsTemplateSelectOpen(true); }} className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer">
+                    <Wand2 size={15} className="text-slate-500" />
+                    <span>Use Template</span>
+                  </DropdownMenuItem>
+                  <div className="h-[1px] bg-slate-100 dark:bg-white/5 my-1" />
+                  <DropdownMenuItem onClick={() => { setIsSaveTemplateOpen(true); }} className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer">
+                    <Save size={15} className="text-slate-500" />
+                    <span>Save as template</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setIsTemplateSelectOpen(true); }} className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer">
+                    <RefreshCw size={15} className="text-slate-500" />
+                    <span>Update existing template</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <div className="flex items-center gap-4">
+                {/* Attachment Icon */}
+                <button 
+                  type="button" 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
                 >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isPending} className="rounded-[8px]">
-                  {isPending ? "Saving..." : (isEditMode ? "Save Changes" : "Create Project")}
-                </Button>
+                  <Paperclip size={18} />
+                </button>
+
+                {/* Bell Notification Icon with Badge */}
+                <button type="button" className="flex items-center gap-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                  <Bell size={18} />
+                  <span className="text-[13px] font-semibold text-slate-500 dark:text-slate-400">1</span>
+                </button>
+
+                {/* Split Create Project Button */}
+                <div className="flex items-center rounded-[8px] overflow-hidden bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 h-9 shadow-sm">
+                  <Button
+                    type="submit"
+                    disabled={isPending}
+                    onClick={() => setSubmitMode("STANDARD")}
+                    className="bg-transparent hover:bg-transparent shadow-none border-0 text-white font-medium text-sm px-4 h-full rounded-none pr-3 border-r border-white/10"
+                  >
+                    {isPending ? "Saving..." : (isEditMode ? "Save Changes" : "Create Project")}
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="bg-transparent hover:bg-white/10 text-white px-2.5 h-full flex items-center justify-center transition-colors border-0 outline-none"
+                      >
+                        <ChevronDown size={14} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[180px] rounded-xl shadow-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1c1c1c] p-1.5 z-[9999]">
+                      <DropdownMenuItem 
+                        onClick={() => {
+                          setSubmitMode("OPEN_NEW");
+                          setTimeout(() => {
+                            formRef.current?.requestSubmit();
+                          }, 0);
+                        }}
+                        className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer"
+                      >
+                        <span>Create and Open</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => {
+                          setSubmitMode("DUPLICATE");
+                          setTimeout(() => {
+                            formRef.current?.requestSubmit();
+                          }, 0);
+                        }}
+                        className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer"
+                      >
+                        <span>Create and Duplicate</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
-            </DialogFooter>
+            </div>
           </form>
           ) : (
             <ProjectDocumentComposer drafts={draftDocs} onDraftsChange={setDraftDocs} />
