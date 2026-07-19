@@ -3,7 +3,56 @@
 import { prisma } from '@/lib/db';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
+import { cookies } from 'next/headers';
 import { hashPassword, verifyPassword, createSession, destroySession, getSession } from '@/lib/auth';
+
+/**
+ * Create the session for a freshly authenticated user, but restore the org they
+ * last switched to (persisted in the `omniwork_last_org` cookie) when they still
+ * have access to it:
+ *   - member/shared org  -> re-issue the session as that org's user identity
+ *   - child/owned org     -> base identity + active-org override cookie
+ * Falls back to the user's own org.
+ */
+async function establishSessionWithLastOrg(baseUser: {
+  id: string; email: string; name: string; role: any; organizationId: string;
+}) {
+  const cookieStore = await cookies();
+  const lastOrg = cookieStore.get('omniwork_last_org')?.value;
+
+  if (lastOrg && lastOrg !== baseUser.organizationId) {
+    const membership = await prisma.user.findFirst({
+      where: { email: baseUser.email, organizationId: lastOrg, status: 'ACTIVE' },
+      select: { id: true, email: true, name: true, role: true, organizationId: true },
+    });
+    if (membership) {
+      await createSession(membership);
+      cookieStore.delete('omniwork_active_org');
+      return;
+    }
+
+    const child = await prisma.organization.findFirst({
+      where: {
+        id: lastOrg,
+        OR: [{ ownerUserId: baseUser.id }, { parentOrganizationId: baseUser.organizationId }],
+      },
+      select: { id: true },
+    });
+    if (child) {
+      await createSession(baseUser);
+      cookieStore.set('omniwork_active_org', lastOrg, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 7,
+        path: '/',
+      });
+      return;
+    }
+  }
+
+  await createSession(baseUser);
+}
 
 export async function signupAction(formData: FormData) {
   try {
@@ -118,7 +167,7 @@ export async function loginAction(formData: FormData) {
       return { requiresTwoFactor: true, userId: user.id };
     }
 
-    await createSession(user);
+    await establishSessionWithLastOrg(user);
 
     return { success: true };
   } catch (error: any) {
@@ -149,7 +198,7 @@ export async function verifyTwoFactorLoginAction(userId: string, token: string) 
       return { error: 'Invalid verification code' };
     }
 
-    await createSession(user);
+    await establishSessionWithLastOrg(user);
     return { success: true };
   } catch (error: any) {
     return { error: error.message || 'Failed to verify 2FA' };
