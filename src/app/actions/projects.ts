@@ -683,6 +683,33 @@ export async function deleteProjectTemplateAction(templateId: string) {
   }
 }
 
+export async function updateProjectTemplateAction(templateId: string, config: any) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== 'OWNER') {
+      return { error: 'Unauthorized: Only Owners can update project templates.' };
+    }
+
+    if (!templateId || !config) {
+      return { error: 'Template ID and configuration details are required.' };
+    }
+
+    const template = await prisma.projectTemplate.update({
+      where: {
+        id: templateId,
+        organizationId: session.organizationId,
+      },
+      data: {
+        config: config,
+      },
+    });
+
+    return { success: true, template };
+  } catch (error: any) {
+    return { error: error.message || 'Failed to update project template.' };
+  }
+}
+
 // Tasks Actions moved to actions/tasks.ts
 
 export async function updateProjectDueDateAction(projectId: string, endDate: string | null, isOngoing?: boolean) {

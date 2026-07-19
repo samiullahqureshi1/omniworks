@@ -12,6 +12,9 @@ export const GOOGLE_SCOPES = [
   'openid',
   'email',
   'https://www.googleapis.com/auth/calendar.events',
+  // Read Meet conference records + transcripts (Phase 4). Only yields data on
+  // Google Workspace Business Standard+; harmless (unused) on personal Gmail.
+  'https://www.googleapis.com/auth/meetings.space.readonly',
 ];
 
 export function googleConfigured(): boolean {
@@ -61,7 +64,7 @@ export async function fetchGoogleEmail(accessToken: string): Promise<string | nu
   }
 }
 
-async function getAccessTokenFromRefresh(refreshToken: string): Promise<string> {
+export async function getAccessTokenFromRefresh(refreshToken: string): Promise<string> {
   const client = getOAuthClient();
   client.setCredentials({ refresh_token: refreshToken });
   const { token } = await client.getAccessToken();

@@ -15,6 +15,10 @@ export default async function PlannerPage() {
   });
   const connected = !!settings?.googleRefreshToken;
 
+  if (connected) {
+    redirect('/workspace/planner/calendar');
+  }
+
   if (!connected) {
     return <PlannerConnectGate isOwner={session.role === 'OWNER'} />;
   }

@@ -121,10 +121,10 @@ export const secondaryNavigation: Record<string, SecondarySection[]> = {
     {
       title: 'Planner',
       items: [
-        { name: 'My Calendar', icon: Calendar, comingSoon: true },
-        { name: 'Meetings', icon: Video, comingSoon: true },
-        { name: 'Events', icon: Sparkles, comingSoon: true },
-        { name: 'Reminders', icon: Timer, comingSoon: true },
+        { name: 'My Calendar', href: '/workspace/planner/calendar', icon: Calendar, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
+        { name: 'Meetings', href: '/workspace/planner/meetings', icon: Video, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
+        { name: 'Events', href: '/workspace/planner/events', icon: Sparkles, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
+        { name: 'Reminders', href: '/workspace/planner/reminders', icon: Timer, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
       ],
     },
     {

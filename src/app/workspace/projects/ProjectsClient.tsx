@@ -69,6 +69,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
     Filter,
     User,
     Box,
+    Folder,
   } from "lucide-react";
   import {
     Table,
@@ -105,6 +106,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
     createProjectTemplateAction,
     getProjectTemplatesAction,
     deleteProjectTemplateAction,
+    updateProjectTemplateAction,
     updateProjectDueDateAction,
     updateProjectPriorityAction,
     updateProjectCustomFieldsAction,
@@ -998,6 +1000,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 
     // Template Management States
     const [isTemplateSelectOpen, setIsTemplateSelectOpen] = useState(false);
+    const [templateModalMode, setTemplateModalMode] = useState<'USE' | 'UPDATE'>('USE');
     const [templates, setTemplates] = useState<any[]>([]);
     const [templateSearchQuery, setTemplateSearchQuery] = useState("");
     const [pinnedTemplateIds, setPinnedTemplateIds] = useState<string[]>([]);
@@ -1160,6 +1163,48 @@ const [isPMOpen, setIsPMOpen] = useState(false);
           toast.success("Template saved successfully");
           setIsSaveTemplateOpen(false);
           setTemplateName("");
+        }
+      });
+    };
+
+    const handleUpdateTemplate = async (template: any) => {
+      const config = {
+        name: formName,
+        clientId: formClientId || undefined,
+        projectManagerId: formPMId || undefined,
+        statusId: formStatusId || undefined,
+        priority: formPriority,
+        startDate: formStartDate,
+        endDate: formEndDate,
+        isOngoing,
+        projectBudget: formBudget ? Number(formBudget) : undefined,
+        totalAllocatedHours: formAllocatedHours ? Number(formAllocatedHours) : undefined,
+        notes: formNotes,
+        description: description,
+        customFields,
+        tasks: projectTasks.map((t) => ({
+          title: t.title,
+          description: t.description,
+          priority: t.priority,
+          statusId: t.status || undefined,
+          assigneeIds: t.assigneeId ? [t.assigneeId] : [],
+        })),
+        attachedRuleIds,
+        isRepeatEnabled,
+        repeatFrequency,
+        repeatTime,
+      };
+
+      startTransition(async () => {
+        const res = await updateProjectTemplateAction(template.id, config);
+        if (res.error) {
+          toast.error(res.error);
+        } else {
+          toast.success("Template updated successfully");
+          setTemplates((prev) =>
+            prev.map((t) => (t.id === template.id ? { ...t, config } : t))
+          );
+          setIsTemplateSelectOpen(false);
         }
       });
     };
@@ -1897,11 +1942,17 @@ const [isPMOpen, setIsPMOpen] = useState(false);
         {/* Top Header Bar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-3 pb-1 px-4 md:px-8">
           {/* Breadcrumb Left */}
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
-            <span className="flex items-center justify-center w-5 h-5 rounded bg-blue-600 text-white font-bold text-[10px]">P</span>
-            <span className="text-slate-900 dark:text-white font-bold text-base">Project Space</span>
-            <Star size={14} className="text-slate-400 hover:text-yellow-500 cursor-pointer ml-1" />
-          </div>
+       <div className="flex items-center gap-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+  <span className="flex items-center justify-center w-5 h-5 rounded bg-blue-600 text-white">
+    <Folder size={12} />
+  </span>
+
+  <span className="text-slate-900 dark:text-white font-semibold text-base">
+    Project Space
+  </span>
+
+  <Star size={14} className="text-slate-400 hover:text-yellow-500 cursor-pointer ml-1" />
+</div>
         </div>
 
         {/* Tabs Bar: Kanban, Table, List */}
@@ -3930,7 +3981,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-[240px] rounded-xl shadow-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1c1c1c] p-1.5 z-[9999]">
-                  <DropdownMenuItem onClick={() => { setIsTemplateSelectOpen(true); }} className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer">
+                  <DropdownMenuItem onClick={() => { setTemplateModalMode('USE'); setIsTemplateSelectOpen(true); }} className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer">
                     <Wand2 size={15} className="text-slate-500" />
                     <span>Use Template</span>
                   </DropdownMenuItem>
@@ -3939,7 +3990,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                     <Save size={15} className="text-slate-500" />
                     <span>Save as template</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { setIsTemplateSelectOpen(true); }} className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer">
+                  <DropdownMenuItem onClick={() => { setTemplateModalMode('UPDATE'); setIsTemplateSelectOpen(true); }} className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer">
                     <RefreshCw size={15} className="text-slate-500" />
                     <span>Update existing template</span>
                   </DropdownMenuItem>
@@ -3954,12 +4005,6 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                   className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
                 >
                   <Paperclip size={18} />
-                </button>
-
-                {/* Bell Notification Icon with Badge */}
-                <button type="button" className="flex items-center gap-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
-                  <Bell size={18} />
-                  <span className="text-[13px] font-semibold text-slate-500 dark:text-slate-400">1</span>
                 </button>
 
                 {/* Split Create Project Button */}
@@ -4060,48 +4105,66 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 
         {/* Save Template Name Modal */}
         <Dialog open={isSaveTemplateOpen} onOpenChange={setIsSaveTemplateOpen}>
-          <DialogContent className="sm:max-w-[400px] bg-background border-border">
-            <DialogHeader>
-              <DialogTitle>Save as Template</DialogTitle>
-              <DialogDescription>
-                Enter a name for this template. This will save the project structure, custom fields, and task template.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSaveTemplate} className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Template Name</label>
-                <Input
-                  value={templateName}
-                  onChange={(e) => setTemplateName(e.target.value)}
-                  required
-                  placeholder="e.g. Website Development Template"
-                />
+          <DialogContent className="sm:max-w-[450px] bg-white dark:bg-[#151518] border border-slate-200/80 dark:border-white/10 p-0 sm:!rounded-[8px] !rounded-[8px] shadow-2xl overflow-hidden [&>button]:hidden">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] relative shrink-0">
+              <h2 className="text-[16.5px] font-bold text-slate-900 dark:text-white leading-tight">Save as Template</h2>
+              <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">
+                Enter a name for this template.
+              </p>
+              <DialogPrimitive.Close className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-250 dark:hover:bg-zinc-700 transition-all rounded-full p-1.5 cursor-pointer outline-none flex items-center justify-center h-7 w-7">
+                <X size={14} />
+              </DialogPrimitive.Close>
+            </div>
+            <form onSubmit={handleSaveTemplate} className="flex flex-col">
+              <div className="p-6 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[12.5px] font-bold text-slate-600 dark:text-slate-350">Template Name</label>
+                  <Input
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                    required
+                    placeholder="e.g. Website Development Template"
+                    className="h-10 !rounded-[8px] border-slate-200 focus-visible:ring-1 focus-visible:ring-slate-450 dark:border-white/10 dark:bg-transparent"
+                  />
+                </div>
               </div>
-              <DialogFooter className="pt-4">
-                <Button
+              <div className="px-6 py-4 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] flex justify-end gap-2.5">
+                <button
                   type="button"
-                  variant="outline"
                   onClick={() => setIsSaveTemplateOpen(false)}
+                  className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 !rounded-[8px] transition-colors outline-none cursor-pointer"
+                  disabled={isPending}
                 >
                   Cancel
-                </Button>
-                <Button type="submit" disabled={isPending}>
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPending || !templateName.trim()}
+                  className="px-5 py-2 text-sm font-bold !rounded-[8px] bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors shadow-sm disabled:opacity-50 outline-none cursor-pointer"
+                >
                   {isPending ? "Saving..." : "Save Template"}
-                </Button>
-              </DialogFooter>
+                </button>
+              </div>
             </form>
           </DialogContent>
         </Dialog>
 
         {/* Template Selection Modal */}
         <Dialog open={isTemplateSelectOpen} onOpenChange={setIsTemplateSelectOpen}>
-          <DialogContent className="sm:max-w-[850px] h-[80vh] flex flex-col overflow-hidden bg-background border-border p-0 rounded-2xl shadow-xl">
-            <DialogHeader className="px-6 py-5 border-b shrink-0 bg-slate-50/50 dark:bg-zinc-900/50 z-10 sticky top-0">
-              <DialogTitle className="text-xl font-extrabold tracking-tight">Select a Template</DialogTitle>
-              <DialogDescription className="text-xs mt-1 text-muted-foreground">
-                Choose one of your saved custom configurations. You can set any template as default using the star icon.
-              </DialogDescription>
-            </DialogHeader>
+          <DialogContent className="sm:max-w-[850px] h-[80vh] flex flex-col overflow-hidden bg-white dark:bg-[#151518] border border-slate-200/80 dark:border-white/10 p-0 sm:!rounded-[8px] !rounded-[8px] shadow-2xl [&>button]:hidden">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] relative shrink-0">
+              <h2 className="text-[16.5px] font-bold text-slate-900 dark:text-white leading-tight">
+                {templateModalMode === 'UPDATE' ? 'Update Existing Template' : 'Select a Template'}
+              </h2>
+              <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">
+                {templateModalMode === 'UPDATE'
+                  ? 'Choose an existing template to overwrite with current project configuration.'
+                  : 'Choose one of your saved custom configurations. You can set any template as default using the star icon.'}
+              </p>
+              <DialogPrimitive.Close className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-250 dark:hover:bg-zinc-700 transition-all rounded-full p-1.5 cursor-pointer outline-none flex items-center justify-center h-7 w-7">
+                <X size={14} />
+              </DialogPrimitive.Close>
+            </div>
 
             {/* Search bar inside modal */}
             <div className="px-6 pt-4 shrink-0">
@@ -4111,7 +4174,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                   placeholder="Search templates by name..."
                   value={templateSearchQuery}
                   onChange={(e) => setTemplateSearchQuery(e.target.value)}
-                  className="pl-9 h-10 rounded-xl border bg-background text-sm shadow-sm"
+                  className="pl-9 h-10 !rounded-[8px] border bg-background text-sm shadow-sm"
                 />
               </div>
             </div>
@@ -4122,7 +4185,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                   <span className="text-sm text-muted-foreground animate-pulse font-medium">Loading templates...</span>
                 </div>
               ) : templates.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-48 border border-dashed rounded-2xl p-6 text-center">
+                <div className="flex flex-col items-center justify-center h-48 border border-dashed rounded-lg p-6 text-center">
                   <FolderKanban className="h-8 w-8 text-muted-foreground mb-2" />
                   <h3 className="font-semibold text-sm">No templates saved yet</h3>
                   <p className="text-xs text-muted-foreground mt-1 max-w-[280px]">
@@ -4135,7 +4198,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 
                 if (filtered.length === 0) {
                   return (
-                    <div className="text-center py-16 text-sm text-muted-foreground font-medium italic border border-dashed rounded-2xl p-8">
+                    <div className="text-center py-16 text-sm text-muted-foreground font-medium italic border border-dashed rounded-lg p-8">
                       No templates match "{templateSearchQuery}"
                     </div>
                   );
@@ -4160,7 +4223,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                       return (
                         <div
                           key={template.id}
-                          className={`border rounded-2xl p-4.5 bg-slate-50/40 dark:bg-zinc-900/20 hover:shadow-md transition-all duration-300 flex flex-col justify-between group relative animate-in fade-in duration-200 ${
+                          className={`border rounded-lg p-4.5 bg-slate-50/40 dark:bg-zinc-900/20 hover:shadow-md transition-all duration-300 flex flex-col justify-between group relative animate-in fade-in duration-200 ${
                             isDefault 
                               ? 'border-amber-400 dark:border-amber-600 bg-amber-50/5 dark:bg-amber-950/5 shadow-sm' 
                               : 'border-slate-200/60 dark:border-zinc-800/80 hover:border-purple-400'
@@ -4220,17 +4283,19 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                             </p>
                           </div>
 
-                          <Button
+                          <button
                             type="button"
-                            onClick={() => handleUseTemplate(template)}
-                            className={`w-full text-xs font-semibold h-9 rounded-xl shadow-sm transition-all duration-200 ${
-                              isDefault
-                                ? 'bg-amber-500 hover:bg-amber-600 text-white'
-                                : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white'
-                            }`}
+                            onClick={() => {
+                              if (templateModalMode === 'UPDATE') {
+                                handleUpdateTemplate(template);
+                              } else {
+                                handleUseTemplate(template);
+                              }
+                            }}
+                            className="w-full text-xs font-bold h-9 !rounded-[8px] shadow-sm transition-colors cursor-pointer bg-slate-900 hover:bg-slate-800 dark:bg-white text-white dark:text-slate-900 dark:hover:bg-slate-100"
                           >
-                            Use Template
-                          </Button>
+                            {templateModalMode === 'UPDATE' ? 'Update Template' : 'Use Template'}
+                          </button>
                         </div>
                       );
                     })}
@@ -4239,16 +4304,15 @@ const [isPMOpen, setIsPMOpen] = useState(false);
               })()}
             </div>
 
-            <DialogFooter className="px-6 py-4 border-t shrink-0 bg-slate-50/50 dark:bg-zinc-900/50 sticky bottom-0 z-10">
-              <Button
+            <div className="px-6 py-4 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] flex justify-end gap-2.5 shrink-0">
+              <button
                 type="button"
-                variant="outline"
                 onClick={() => setIsTemplateSelectOpen(false)}
-                className="rounded-xl shadow-sm text-xs font-bold"
+                className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 !rounded-[8px] transition-colors outline-none cursor-pointer"
               >
                 Close
-              </Button>
-            </DialogFooter>
+              </button>
+            </div>
           </DialogContent>
         </Dialog>
 

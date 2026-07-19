@@ -37,6 +37,7 @@ export function MainSidebar({
     home: '/workspace',
     teams: '/workspace/teamops?tab=dashboard',
     conversations: '/workspace/conversations',
+    calendar: '/workspace/planner',
   };
 
   const activeMainIconTab = ['rules', 'meeting', 'more'].includes(activeTab) ? 'more' : activeTab;
