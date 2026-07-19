@@ -17,7 +17,7 @@ import { DocumentsPanel, DraftDocument } from "@/components/documents/DocumentsP
 import { createDocumentAction } from "@/app/actions/documents";
 import { Badge } from "@/components/ui/badge";
 import {
-  Plus, Trash2, Hash, Globe, Mail, Phone, Tags, CheckSquare, CircleDashed, Type, EyeOff, Settings, X, ChevronDown, AlignLeft, Sparkles, Smile, List as ListIcon, Calendar as CalendarIcon, PlusSquare, Wand2, Save, RefreshCw, Search, Repeat, Star, Paperclip
+  Plus, Trash2, Hash, Globe, Mail, Phone, Tags, CheckSquare, CircleDashed, Type, EyeOff, Settings, X, ChevronDown, AlignLeft, Sparkles, Smile, List as ListIcon, Calendar as CalendarIcon, PlusSquare, Wand2, Save, RefreshCw, Search, Repeat, Star, Paperclip, Check
 } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { toast } from "sonner";
@@ -161,6 +161,20 @@ export default function TaskFormModal({
   const [newOptionInput, setNewOptionInput] = useState("");
   const [activeTaskIndexForFields, setActiveTaskIndexForFields] = useState<number | null>(null);
   const [fieldsSearchTerm, setFieldsSearchTerm] = useState("");
+
+  // Per-task popover open states for Status / Priority / Assignee
+  const [openStatusIdx, setOpenStatusIdx] = useState<number | null>(null);
+  const [openPriorityIdx, setOpenPriorityIdx] = useState<number | null>(null);
+  const [openAssigneeIdx, setOpenAssigneeIdx] = useState<number | null>(null);
+  const [statusSearch, setStatusSearch] = useState("");
+
+  // Priority config
+  const PRIORITY_OPTIONS = [
+    { value: "CRITICAL", label: "Urgent",  color: "#ef4444", emoji: "🚩" },
+    { value: "HIGH",     label: "High",    color: "#f59e0b", emoji: "🏳️" },
+    { value: "MEDIUM",   label: "Normal",  color: "#3b82f6", emoji: "🚩" },
+    { value: "LOW",      label: "Low",     color: "#94a3b8", emoji: "🏳️" },
+  ] as const;
 
   // Tabbed header (Task | Doc) + attached documents
   const [activeTab, setActiveTab] = useState<"task" | "doc">("task");
@@ -763,32 +777,125 @@ export default function TaskFormModal({
                               {!isClient && (
                                 <div className="space-y-2">
                                   <label className="text-sm font-medium">Status</label>
-                                  <select
-                                    value={tInput.statusId}
-                                    onChange={(e) => updateTaskInput(index, "statusId", e.target.value)}
-                                    className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none cursor-pointer"
+                                  <DropdownMenu
+                                    open={openStatusIdx === index}
+                                    onOpenChange={(open) => {
+                                      setOpenStatusIdx(open ? index : null);
+                                      if (open) setStatusSearch("");
+                                    }}
                                   >
-                                    <option value="">No Status</option>
-                                    {taskStatuses.map((s) => (
-                                      <option key={s.id} value={s.id}>{s.name}</option>
-                                    ))}
-                                  </select>
+                                    <DropdownMenuTrigger asChild>
+                                      <button
+                                        type="button"
+                                        className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 rounded-[8px] px-3 flex items-center gap-2 text-[13px] text-left cursor-pointer hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                                      >
+                                        {tInput.statusId ? (() => {
+                                          const st = taskStatuses.find(s => s.id === tInput.statusId);
+                                          return st ? (
+                                            <>
+                                              <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-dashed shrink-0" style={{ borderColor: st.color || '#94a3b8' }} />
+                                              <span className="text-slate-800 dark:text-slate-200 truncate">{st.name}</span>
+                                            </>
+                                          ) : <span className="text-slate-400">Select status...</span>;
+                                        })() : <span className="text-slate-400">Select status...</span>}
+                                        <ChevronDown size={14} className="ml-auto text-slate-400 shrink-0" />
+                                      </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent
+                                      align="start"
+                                      sideOffset={4}
+                                      className="w-[240px] rounded-2xl shadow-xl border border-slate-100 dark:border-white/10 bg-white dark:bg-[#1c1c1c] p-2 z-[9999]"
+                                      onInteractOutside={(e) => e.stopPropagation()}
+                                    >
+                                      {/* Search */}
+                                      <div className="px-2 pb-2">
+                                        <input
+                                          autoFocus
+                                          placeholder="Search..."
+                                          value={statusSearch}
+                                          onChange={e => setStatusSearch(e.target.value)}
+                                          className="w-full h-9 px-3 rounded-xl bg-slate-100 dark:bg-white/5 text-sm outline-none placeholder:text-slate-400 text-slate-700 dark:text-slate-300"
+                                        />
+                                      </div>
+                                      {/* No Status option */}
+                                      <DropdownMenuItem
+                                        onSelect={() => { updateTaskInput(index, "statusId", ""); setOpenStatusIdx(null); }}
+                                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-white/5"
+                                      >
+                                        <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-dashed border-slate-300 shrink-0" />
+                                        <span className="text-[13.5px] text-slate-500">No Status</span>
+                                        {!tInput.statusId && <Check size={14} className="ml-auto text-slate-400" />}
+                                      </DropdownMenuItem>
+                                      {taskStatuses
+                                        .filter(s => !statusSearch || s.name.toLowerCase().includes(statusSearch.toLowerCase()))
+                                        .map((s) => (
+                                        <DropdownMenuItem
+                                          key={s.id}
+                                          onSelect={() => { updateTaskInput(index, "statusId", s.id); setOpenStatusIdx(null); }}
+                                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-white/5 ${
+                                            tInput.statusId === s.id ? "bg-slate-50 dark:bg-white/5" : ""
+                                          }`}
+                                        >
+                                          <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-dashed shrink-0" style={{ borderColor: s.color || '#94a3b8' }} />
+                                          <span className="text-[13.5px] font-medium text-slate-800 dark:text-slate-200">{s.name}</span>
+                                          {tInput.statusId === s.id && <Check size={14} className="ml-auto text-slate-500" />}
+                                        </DropdownMenuItem>
+                                      ))}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 </div>
                               )}
 
                               {/* Priority */}
                               <div className="space-y-2">
                                 <label className="text-sm font-medium">Priority</label>
-                                <select
-                                  value={tInput.priority}
-                                  onChange={(e) => updateTaskInput(index, "priority", e.target.value)}
-                                  className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none cursor-pointer"
+                                <DropdownMenu
+                                  open={openPriorityIdx === index}
+                                  onOpenChange={(open) => setOpenPriorityIdx(open ? index : null)}
                                 >
-                                  <option value="LOW">Low</option>
-                                  <option value="MEDIUM">Medium</option>
-                                  <option value="HIGH">High</option>
-                                  <option value="CRITICAL">Critical</option>
-                                </select>
+                                  <DropdownMenuTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 rounded-[8px] px-3 flex items-center gap-2 text-[13px] cursor-pointer hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                                    >
+                                      {(() => {
+                                        const p = PRIORITY_OPTIONS.find(o => o.value === tInput.priority) || PRIORITY_OPTIONS[2];
+                                        return (
+                                          <>
+                                            <span style={{ color: p.color }} className="text-base leading-none">
+                                              {p.value === 'MEDIUM' || p.value === 'CRITICAL' ? '🚩' : '🏳️'}
+                                            </span>
+                                            <span className="text-slate-800 dark:text-slate-200 font-medium">{p.label}</span>
+                                          </>
+                                        );
+                                      })()}
+                                      <ChevronDown size={14} className="ml-auto text-slate-400 shrink-0" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent
+                                    align="start"
+                                    sideOffset={4}
+                                    className="w-[220px] rounded-2xl shadow-xl border border-slate-100 dark:border-white/10 bg-white dark:bg-[#1c1c1c] p-2 z-[9999]"
+                                    onInteractOutside={(e) => e.stopPropagation()}
+                                  >
+                                    <p className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Priority</p>
+                                    {PRIORITY_OPTIONS.map((opt) => (
+                                      <DropdownMenuItem
+                                        key={opt.value}
+                                        onSelect={() => { updateTaskInput(index, "priority", opt.value); setOpenPriorityIdx(null); }}
+                                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-white/5 ${
+                                          tInput.priority === opt.value ? "bg-slate-50 dark:bg-white/5" : ""
+                                        }`}
+                                      >
+                                        <span style={{ color: opt.color }} className="text-xl leading-none">
+                                          {opt.value === 'MEDIUM' || opt.value === 'CRITICAL' ? '🚩' : '🏳️'}
+                                        </span>
+                                        <span className="text-[14px] font-medium text-slate-800 dark:text-slate-200">{opt.label}</span>
+                                        {tInput.priority === opt.value && <Check size={14} className="ml-auto text-slate-500" />}
+                                      </DropdownMenuItem>
+                                    ))}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </div>
 
                               {/* Due Date */}
@@ -898,23 +1005,70 @@ export default function TaskFormModal({
                               {!isClient && (
                                 <div className="space-y-2">
                                   <label className="text-sm font-medium">Assignee</label>
-                                  <div
-                                    className="w-full min-h-[36px] bg-slate-50 dark:bg-white/5 rounded-[8px] px-3 py-2 text-[13px] cursor-pointer hover:bg-slate-100 dark:hover:bg-white/10 transition-colors flex flex-wrap gap-1.5 items-center"
-                                    onClick={() => setActiveTaskAssigneeIndex(index)}
+                                  <DropdownMenu
+                                    open={openAssigneeIdx === index}
+                                    onOpenChange={(open) => setOpenAssigneeIdx(open ? index : null)}
                                   >
-                                    {tInput.assignees.length === 0 ? (
-                                      <span className="text-slate-400/80">Assign team members...</span>
-                                    ) : (
-                                      tInput.assignees.map((id) => {
-                                        const u = users.find((user) => user.id === id);
-                                        return u ? (
-                                          <Badge key={id} variant="secondary" className="font-normal !rounded-[6px] text-[11px]">
-                                            {u.name}
-                                          </Badge>
-                                        ) : null;
-                                      })
-                                    )}
-                                  </div>
+                                    <DropdownMenuTrigger asChild>
+                                      <button
+                                        type="button"
+                                        className="w-full min-h-[36px] bg-slate-50 dark:bg-white/5 border-0 rounded-[8px] px-3 py-2 flex flex-wrap gap-1.5 items-center text-[13px] cursor-pointer hover:bg-slate-100 dark:hover:bg-white/10 transition-colors text-left"
+                                      >
+                                        {tInput.assignees.length === 0 ? (
+                                          <span className="text-slate-400">Assign users...</span>
+                                        ) : (
+                                          tInput.assignees.map((id) => {
+                                            const u = users.find(usr => usr.id === id);
+                                            return u ? (
+                                              <Badge key={id} variant="secondary" className="font-normal !rounded-[6px] text-[11px]">
+                                                {u.name}
+                                              </Badge>
+                                            ) : null;
+                                          })
+                                        )}
+                                        <ChevronDown size={14} className="ml-auto text-slate-400 shrink-0" />
+                                      </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent
+                                      align="start"
+                                      sideOffset={4}
+                                      className="w-[280px] rounded-2xl shadow-xl border border-slate-100 dark:border-white/10 bg-white dark:bg-[#1c1c1c] p-2 z-[9999] max-h-[320px] overflow-y-auto custom-scrollbar"
+                                      onInteractOutside={(e) => e.stopPropagation()}
+                                    >
+                                      {users.filter(u => u.role !== 'CLIENT' && u.status === 'ACTIVE').length === 0 ? (
+                                        <div className="py-4 text-center text-sm text-slate-400">No team members found</div>
+                                      ) : (
+                                        users.filter(u => u.role !== 'CLIENT' && u.status === 'ACTIVE').map((u) => {
+                                          const isSelected = tInput.assignees.includes(u.id);
+                                          return (
+                                            <DropdownMenuItem
+                                              key={u.id}
+                                              onSelect={(e) => {
+                                                e.preventDefault();
+                                                const newList = isSelected
+                                                  ? tInput.assignees.filter(id => id !== u.id)
+                                                  : [...tInput.assignees, u.id];
+                                                updateTaskInput(index, "assignees", newList);
+                                              }}
+                                              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-white/5 ${
+                                                isSelected ? "bg-slate-50 dark:bg-white/5" : ""
+                                              }`}
+                                            >
+                                              {/* Avatar */}
+                                              <div className="h-8 w-8 rounded-full bg-slate-500 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                                                {u.name?.substring(0, 2).toUpperCase()}
+                                              </div>
+                                              <div className="flex flex-col min-w-0">
+                                                <span className="text-[13.5px] font-semibold text-slate-800 dark:text-slate-200 truncate">{u.name}</span>
+                                                <span className="text-[11px] text-slate-400 truncate">{u.email}</span>
+                                              </div>
+                                              {isSelected && <Check size={14} className="ml-auto text-slate-500 shrink-0" />}
+                                            </DropdownMenuItem>
+                                          );
+                                        })
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 </div>
                               )}
 
