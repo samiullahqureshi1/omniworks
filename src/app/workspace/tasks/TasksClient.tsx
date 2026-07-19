@@ -21,7 +21,7 @@ import { List as ListIcon2 } from 'lucide-react';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Edit, Trash2, Repeat, TrendingUp, Hourglass, ChevronRight, Star, Filter, Layers } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, Repeat, TrendingUp, Hourglass, ChevronRight, Star, Filter, Layers, Pin } from 'lucide-react';
 import { deleteTaskAction, updateTaskAction, getTaskTemplatesAction, deleteTaskTemplateAction, createTaskStatusAction, updateTaskStatusAction, deleteTaskStatusAction } from '@/app/actions/tasks';
 import { getTaskHiddenColumnsAction, setTaskHiddenColumnsAction } from '@/app/actions/settings';
 import { toast } from 'sonner';
@@ -139,7 +139,7 @@ function TableCustomFieldCell({ task, col, setTasks, tasks, currentUser }: any) 
   }
 }
 
-function TableTaskNameCell({ task, setTasks, currentUser }: any) {
+function TableTaskNameCell({ task, setTasks, currentUser, openEdit }: any) {
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(task.title);
   const [isPending, startTransition] = React.useTransition();
@@ -194,7 +194,12 @@ function TableTaskNameCell({ task, setTasks, currentUser }: any) {
 
   return (
     <div 
-      className={`flex items-center h-full min-h-[40px] px-3 text-[13px] font-medium text-slate-800 dark:text-slate-200 ${isEditable ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5' : ''}`}
+      className={`flex items-center h-full min-h-[40px] px-3 text-[13px] font-medium text-slate-800 dark:text-slate-200 cursor-pointer hover:bg-slate-50/50 dark:hover:bg-white/5`}
+      onClick={() => {
+        if (!isEditable && openEdit) {
+          openEdit(task);
+        }
+      }}
       onDoubleClick={() => {
         if (isEditable) setIsEditing(true);
       }}
@@ -643,6 +648,10 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
       style={style}
       {...(isDraggingOverlay ? {} : attributes)}
       {...(isDraggingOverlay ? {} : listeners)}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        if (openEdit) openEdit(task);
+      }}
       className={`bg-background border border-border/40 rounded-xl p-4 shadow-sm hover:shadow-lg hover:border-primary/30 transition-all duration-300 group flex flex-col gap-3 cursor-grab active:cursor-grabbing relative overflow-hidden ${isDragging ? 'opacity-40' : ''} ${isDraggingOverlay ? 'cursor-grabbing shadow-2xl scale-105' : ''}`}
     >
       <div className="absolute top-0 left-0 w-[4px] h-full transition-all duration-300 group-hover:w-[6px]" style={{ backgroundColor: priorityHex }} />
@@ -666,6 +675,22 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEdit(task); }} className="cursor-pointer">
                 <Edit className="w-4 h-4 mr-2" /> Edit Task
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const savedPinned = localStorage.getItem("omniwork_pinned_tasks");
+                  const pinnedIds: string[] = savedPinned ? JSON.parse(savedPinned) : [];
+                  const isPinned = pinnedIds.includes(task.id);
+                  const next = isPinned ? pinnedIds.filter(id => id !== task.id) : [...pinnedIds, task.id];
+                  localStorage.setItem("omniwork_pinned_tasks", JSON.stringify(next));
+                  window.dispatchEvent(new Event('omniwork_tasks_pinned_changed'));
+                  toast.success(isPinned ? "Task unpinned" : "Task pinned to sidebar");
+                }}
+              >
+                <Pin className="w-4 h-4 mr-2" />
+                {typeof window !== 'undefined' && (JSON.parse(localStorage.getItem("omniwork_pinned_tasks") || "[]")).includes(task.id) ? "Unpin Task" : "Pin Task"}
               </DropdownMenuItem>
               {(currentUser.role === 'OWNER' || task.project?.projectManagerId === currentUser.userId) && (
                 <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={(e) => { e.stopPropagation(); handleDelete(task.id); }}>
@@ -714,7 +739,7 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
   );
 }
 
-function KanbanColumn({ status, title, count, taskStatuses, children, onAddTask, currentUser, handleDeleteStage, handleRenameStage }: any) {
+function KanbanColumn({ status, title, count, taskStatuses, children, onAddTask, canAddTask = true, currentUser, handleDeleteStage, handleRenameStage }: any) {
   const { setNodeRef, attributes, listeners, transform, transition, isDragging, isOver } = useSortable({
     id: status,
     data: { type: "COLUMN", status }
@@ -814,13 +839,15 @@ function KanbanColumn({ status, title, count, taskStatuses, children, onAddTask,
         )}
       </div>
       
-      <button 
-        onClick={onAddTask}
-        className="flex items-center gap-2 px-2 py-1.5 mb-3 text-sm font-medium transition-colors hover:opacity-80 rounded-md hover:bg-black/5 dark:hover:bg-white/5"
-        style={{ color: statusColor }}
-      >
-        <Plus size={16} /> Add Task
-      </button>
+      {canAddTask && (
+        <button
+          onClick={onAddTask}
+          className="flex items-center gap-2 px-2 py-1.5 mb-3 text-sm font-medium transition-colors hover:opacity-80 rounded-md hover:bg-black/5 dark:hover:bg-white/5"
+          style={{ color: statusColor }}
+        >
+          <Plus size={16} /> Add Task
+        </button>
+      )}
 
       <div className="flex flex-col gap-2.5 overflow-y-auto custom-scrollbar pr-1 flex-1 pb-2">
         {children}
@@ -1084,6 +1111,20 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
     }).catch(console.error);
   }, []);
 
+  // ── Auto-open task details from query param (?taskId=...)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && tasks.length > 0) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const taskIdParam = urlParams.get('taskId');
+      if (taskIdParam) {
+        const foundTask = tasks.find(t => t.id === taskIdParam);
+        if (foundTask) {
+          openEdit(foundTask);
+        }
+      }
+    }
+  }, [tasks]);
+
   const hideColumn = (colName: string) => {
     if (hiddenColumns.includes(colName)) return;
     const next = [...hiddenColumns, colName];
@@ -1168,8 +1209,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
 
   const isClient = currentUser.role === 'CLIENT';
   const canCreateTask = currentUser.role === 'OWNER' ||
-    (currentUser.role === 'MEMBER' && projects.some((p: any) => p.projectManagerId === currentUser.userId)) ||
-    isClient;
+    (currentUser.role === 'MEMBER' && projects.some((p: any) => p.projectManagerId === currentUser.userId));
   const canManageStatuses = currentUser.role === 'OWNER';
 
   const availableUsers = (isClient
@@ -1662,13 +1702,15 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                   </TableHead>
                 ))}
                 <TableHead className="w-[60px] text-center border-l border-slate-100 dark:border-white/5">
-                  <button
-                    onClick={() => { setFieldsTab(currentUser?.role === 'OWNER' ? 'create_new' : 'add_existing'); setIsFieldsDrawerOpen(true); }}
-                    className="p-1 hover:bg-slate-100 dark:hover:bg-white/5 rounded text-slate-400 transition-colors"
-                    title="Add custom field"
-                  >
-                    <Plus size={16} className="mx-auto" />
-                  </button>
+                  {currentUser.role === 'OWNER' && (
+                    <button
+                      onClick={() => { setFieldsTab('create_new'); setIsFieldsDrawerOpen(true); }}
+                      className="p-1 hover:bg-slate-100 dark:hover:bg-white/5 rounded text-slate-400 transition-colors"
+                      title="Add custom field"
+                    >
+                      <Plus size={16} className="mx-auto" />
+                    </button>
+                  )}
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -1686,7 +1728,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                       {index + 1}
                     </TableCell>
                     <TableCell className="border-l border-slate-100 dark:border-white/5 p-0">
-                      <TableTaskNameCell task={task} setTasks={setTasks} currentUser={currentUser} />
+                      <TableTaskNameCell task={task} setTasks={setTasks} currentUser={currentUser} openEdit={openEdit} />
                     </TableCell>
                     <TableCell className="border-l border-slate-100 dark:border-white/5">
                       <div className="text-sm font-medium hover:underline cursor-pointer" onClick={() => router.push(`/workspace/projects/${task.projectId}`)}>
@@ -1726,6 +1768,20 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => openEdit(task)}><Edit className="w-4 h-4 mr-2" /> Edit Task</DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                const savedPinned = localStorage.getItem("omniwork_pinned_tasks");
+                                const pinnedIds: string[] = savedPinned ? JSON.parse(savedPinned) : [];
+                                const isPinned = pinnedIds.includes(task.id);
+                                const next = isPinned ? pinnedIds.filter(id => id !== task.id) : [...pinnedIds, task.id];
+                                localStorage.setItem("omniwork_pinned_tasks", JSON.stringify(next));
+                                window.dispatchEvent(new Event('omniwork_tasks_pinned_changed'));
+                                toast.success(isPinned ? "Task unpinned" : "Task pinned to sidebar");
+                              }}
+                            >
+                              <Pin className="w-4 h-4 mr-2" />
+                              {typeof window !== 'undefined' && (JSON.parse(localStorage.getItem("omniwork_pinned_tasks") || "[]")).includes(task.id) ? "Unpin Task" : "Pin Task"}
+                            </DropdownMenuItem>
                             {(currentUser.role === 'OWNER' || task.project.projectManagerId === currentUser.userId) && (
                               <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(task.id)}>
                                 <Trash2 className="w-4 h-4 mr-2" /> Delete Task
@@ -1760,6 +1816,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                       setEditingTask({ statusId: status.id });
                       setIsCreateOpen(true);
                     }}
+                    canAddTask={canCreateTask}
                     currentUser={currentUser}
                     handleDeleteStage={handleDeleteStage}
                     handleRenameStage={handleRenameStage}

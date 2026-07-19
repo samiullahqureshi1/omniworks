@@ -611,7 +611,7 @@ export default function TaskFormModal({
             onClose={() => onOpenChange(false)}
             onMinimize={() => setMinimized((m) => !m)}
             rightSlot={
-              selectedProject && projectTotalHours > 0 && (
+              !isLimitedEdit && selectedProject && projectTotalHours > 0 && (
                 <div className="hidden sm:flex flex-col text-right text-[11px] leading-tight text-slate-500 dark:text-slate-400 font-semibold mr-3">
                   <div>Project Total Hours: <span className="text-slate-900 dark:text-white font-bold">{projectTotalHours}h</span></div>
                   <div>Allocated to Tasks: <span className="text-slate-900 dark:text-white font-bold">{alreadyAllocated + draftHours}h</span></div>
@@ -663,48 +663,172 @@ export default function TaskFormModal({
                     </div>
                   )}
 
-                  {/* If Member is doing a limited edit */}
                   {isLimitedEdit ? (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="col-span-2 p-3 bg-muted/50 dark:bg-[#19191c] rounded-[8px] border border-slate-100 dark:border-white/5 text-sm">
-                        <strong>Task:</strong> {task.title}
-                        <br />
-                        <span className="text-muted-foreground">
-                          {task.description}
-                        </span>
+                    <>
+                      <div className="project-properties-grid">
+                        <div className="grid grid-cols-2 gap-x-8 gap-y-1">
+                          {/* Project */}
+                          <div className="space-y-2 opacity-60">
+                            <label className="text-sm font-medium">Project</label>
+                            <div className="flex h-[36px] w-full rounded-[8px] bg-slate-50 dark:bg-white/5 px-3 items-center text-[13px] text-slate-700 dark:text-slate-350">
+                              {task.project?.name || "No Project"}
+                            </div>
+                          </div>
+
+                          {/* Task Title */}
+                          <div className="space-y-2 opacity-60">
+                            <label className="text-sm font-medium">Task Title</label>
+                            <div className="flex h-[36px] w-full rounded-[8px] bg-slate-50 dark:bg-white/5 px-3 items-center text-[13px] text-slate-700 dark:text-slate-350 truncate">
+                              {task.title}
+                            </div>
+                          </div>
+
+                          {/* Status */}
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Status</label>
+                            <DropdownMenu
+                              open={openStatusIdx === 0}
+                              onOpenChange={(open) => {
+                                setOpenStatusIdx(open ? 0 : null);
+                                if (open) setStatusSearch("");
+                              }}
+                            >
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 rounded-[8px] px-3 flex items-center gap-2 text-[13px] text-left cursor-pointer hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                                >
+                                  {tasksInput[0].statusId ? (() => {
+                                    const st = taskStatuses.find(s => s.id === tasksInput[0].statusId);
+                                    return st ? (
+                                      <>
+                                        <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-dashed shrink-0" style={{ borderColor: st.color || '#94a3b8' }} />
+                                        <span className="text-slate-800 dark:text-slate-200 truncate">{st.name}</span>
+                                      </>
+                                    ) : <span className="text-slate-400">Select status...</span>;
+                                  })() : <span className="text-slate-400">Select status...</span>}
+                                  <ChevronDown size={14} className="ml-auto text-slate-400 shrink-0" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent
+                                align="start"
+                                sideOffset={4}
+                                className="w-[240px] rounded-2xl shadow-xl border border-slate-100 dark:border-white/10 bg-white dark:bg-[#1c1c1c] p-2 z-[9999]"
+                                onInteractOutside={(e) => e.stopPropagation()}
+                              >
+                                <div className="px-2 pb-2">
+                                  <input
+                                    autoFocus
+                                    placeholder="Search..."
+                                    value={statusSearch}
+                                    onChange={e => setStatusSearch(e.target.value)}
+                                    className="w-full h-9 px-3 rounded-xl bg-slate-100 dark:bg-white/5 text-sm outline-none placeholder:text-slate-400 text-slate-700 dark:text-slate-300"
+                                  />
+                                </div>
+                                <DropdownMenuItem
+                                  onSelect={() => { updateTaskInput(0, "statusId", ""); setOpenStatusIdx(null); }}
+                                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-white/5"
+                                >
+                                  <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-dashed border-slate-300 shrink-0" />
+                                  <span className="text-[13.5px] text-slate-500">No Status</span>
+                                  {!tasksInput[0].statusId && <Check size={14} className="ml-auto text-slate-400" />}
+                                </DropdownMenuItem>
+                                {taskStatuses
+                                  .filter(s => !statusSearch || s.name.toLowerCase().includes(statusSearch.toLowerCase()))
+                                  .map((s) => (
+                                  <DropdownMenuItem
+                                    key={s.id}
+                                    onSelect={() => { updateTaskInput(0, "statusId", s.id); setOpenStatusIdx(null); }}
+                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-white/5 ${
+                                      tasksInput[0].statusId === s.id ? "bg-slate-50 dark:bg-white/5" : ""
+                                    }`}
+                                  >
+                                    <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-dashed shrink-0" style={{ borderColor: s.color || '#94a3b8' }} />
+                                    <span className="text-[13.5px] font-medium text-slate-800 dark:text-slate-200">{s.name}</span>
+                                    {tasksInput[0].statusId === s.id && <Check size={14} className="ml-auto text-slate-500" />}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+
+                          {/* Priority */}
+                          <div className="space-y-2 opacity-60">
+                            <label className="text-sm font-medium">Priority</label>
+                            <div className="flex h-[36px] w-full rounded-[8px] bg-slate-50 dark:bg-white/5 px-3 items-center text-[13px] text-slate-700 dark:text-slate-350 gap-2">
+                              {(() => {
+                                const p = PRIORITY_OPTIONS.find(o => o.value === tasksInput[0].priority) || PRIORITY_OPTIONS[2];
+                                return (
+                                  <>
+                                    <span style={{ color: p.color }} className="text-base leading-none">
+                                      {p.value === 'MEDIUM' || p.value === 'CRITICAL' ? '🚩' : '🏳️'}
+                                    </span>
+                                    <span>{p.label}</span>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </div>
+
+                          {/* Due Date */}
+                          <div className="space-y-2 opacity-60">
+                            <label className="text-sm font-medium">Due Date</label>
+                            <div className="flex h-[36px] w-full rounded-[8px] bg-slate-50 dark:bg-white/5 px-3 items-center text-[13px] text-slate-700 dark:text-slate-350">
+                              {tasksInput[0].dueDate ? new Date(tasksInput[0].dueDate).toLocaleDateString() : "No Due Date"}
+                            </div>
+                          </div>
+
+                          {/* Allocated Hours */}
+                          <div className="space-y-2 opacity-60">
+                            <label className="text-sm font-medium">Allocated Hours</label>
+                            <div className="flex h-[36px] w-full rounded-[8px] bg-slate-50 dark:bg-white/5 px-3 items-center text-[13px] text-slate-700 dark:text-slate-350">
+                              {tasksInput[0].allocatedHours || "—"}
+                            </div>
+                          </div>
+
+                          {/* Tracked Hours */}
+                          <div className="space-y-2 opacity-60">
+                            <label className="text-sm font-medium">Tracked Hours</label>
+                            <div className="flex h-[36px] w-full rounded-[8px] bg-slate-50 dark:bg-white/5 px-3 items-center text-[13px] text-slate-700 dark:text-slate-350">
+                              {trackedHours || "0"}
+                            </div>
+                          </div>
+
+                          {/* Assignee */}
+                          <div className="space-y-2 col-span-1 opacity-60">
+                            <label className="text-sm font-medium">Assignee</label>
+                            <div className="flex flex-wrap gap-1.5 items-center w-full min-h-[36px] bg-slate-50 dark:bg-white/5 rounded-[8px] px-3 py-2 text-[13px]">
+                              {tasksInput[0].assignees.length === 0 ? (
+                                <span className="text-slate-400">Unassigned</span>
+                              ) : (
+                                tasksInput[0].assignees.map((id) => {
+                                  const u = users.find(usr => usr.id === id);
+                                  return u ? (
+                                    <Badge key={id} variant="secondary" className="font-normal !rounded-[6px] text-[11px]">
+                                      {u.name}
+                                    </Badge>
+                                  ) : null;
+                                })
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700 dark:text-slate-350">Status</label>
-                        <select
-                          value={tasksInput[0].statusId}
-                          onChange={(e) =>
-                            updateTaskInput(0, "statusId", e.target.value)
-                          }
-                          className="flex h-10 w-full rounded-[8px] border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-450 dark:border-white/10 dark:bg-transparent"
-                        >
-                          <option value="">No Status</option>
-                          {taskStatuses.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700 dark:text-slate-350">
-                          Tracked Hours
+
+                      {/* Description for Member View (Full Area, Outside the grid) */}
+                      <div className="space-y-3 mt-6 pt-4 border-t border-slate-100 dark:border-white/5 w-full">
+                        <label className="text-sm font-semibold text-slate-900 dark:text-white">
+                          Description
                         </label>
-                        <NumberStepper
-                          step={0.1}
-                          min={0}
-                          value={trackedHours}
-                          onChange={(e) => setTrackedHours(e.target.value)}
-                          placeholder="e.g. 5.5"
-                          className="!rounded-[8px] border-input"
-                          inputClassName="h-10 text-sm focus:ring-1 focus:ring-slate-450 dark:border-white/10 dark:bg-transparent !rounded-[8px]"
-                        />
+                        <div className="text-[13.5px] text-slate-700 dark:text-slate-300 leading-relaxed w-full">
+                          {tasksInput[0].description ? (
+                            <div dangerouslySetInnerHTML={{ __html: tasksInput[0].description }} className="w-full prose prose-sm max-w-none dark:prose-invert" />
+                          ) : (
+                            <span className="text-slate-450 dark:text-slate-400 italic">No description.</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    </>
                   ) : (
                     <div className="space-y-6">
                       {tasksInput.map((tInput, index) => (
@@ -907,7 +1031,7 @@ export default function TaskFormModal({
                                   type="date"
                                   value={tInput.dueDate}
                                   onChange={(e) => updateTaskInput(index, "dueDate", e.target.value)}
-                                  className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none cursor-pointer"
+                                  className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-350 rounded-[8px] outline-none cursor-pointer"
                                 />
                               </div>
 
@@ -974,27 +1098,27 @@ export default function TaskFormModal({
                                   <label className="text-sm font-medium">
                                     Allocated Hours <span className="text-destructive">*</span>
                                   </label>
-                                  <NumberStepper
-                                    step={0.1}
-                                    min={0.1}
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0.1"
                                     required
                                     value={tInput.allocatedHours}
                                     onChange={(e) => updateTaskInput(index, "allocatedHours", e.target.value)}
                                     placeholder="e.g. 10.5"
-                                    className="!rounded-[8px] border-0 bg-slate-50 dark:bg-white/5 overflow-hidden"
-                                    inputClassName="h-[36px] text-[13px] text-slate-700 dark:text-slate-300 focus:ring-0 bg-transparent border-0 !rounded-[8px]"
+                                    className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none placeholder:text-slate-400/80"
                                   />
                                   {isEditing && (
                                     <>
                                       <label className="text-sm font-medium mt-2 block">Tracked Hours</label>
-                                      <NumberStepper
-                                        step={0.1}
-                                        min={0}
+                                      <input
+                                        type="number"
+                                        step="0.1"
+                                        min="0"
                                         value={trackedHours}
                                         onChange={(e) => setTrackedHours(e.target.value)}
                                         placeholder="e.g. 5.5"
-                                        className="!rounded-[8px] border-0 bg-slate-50 dark:bg-white/5 overflow-hidden"
-                                        inputClassName="h-[36px] text-[13px] text-slate-700 dark:text-slate-300 focus:ring-0 bg-transparent border-0 !rounded-[8px]"
+                                        className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none placeholder:text-slate-400/80"
                                       />
                                     </>
                                   )}
@@ -1148,65 +1272,64 @@ export default function TaskFormModal({
                               const commonClasses = "h-full w-full border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-4 bg-transparent text-[14px] text-slate-700 dark:text-slate-300 rounded-none shadow-none outline-none appearance-none";
                               const fieldType = (field.type || 'text').toLowerCase();
 
-                              switch(fieldType) {
-                                case 'text area':
-                                  return <textarea value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} py-2.5 resize-none custom-scrollbar`} />;
-                                case 'checkbox':
-                                  return <div className="flex items-center h-full px-4"><input type="checkbox" checked={!!field.value} onChange={e => updateValue(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" /></div>;
+                              switch (fieldType) {
                                 case 'dropdown':
                                   return (
-                                    <select value={field.value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer`}>
-                                      <option value="" disabled>Select an option</option>
-                                      {(field.options || []).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                                    <select value={field.value || ''} onChange={e => updateValue(e.target.value)} className={commonClasses}>
+                                      <option value="">—</option>
+                                      {(field.options || []).map((o: string) => <option key={o} value={o}>{o}</option>)}
                                     </select>
+                                  );
+                                case 'checkbox':
+                                  return (
+                                    <div className="flex items-center h-full px-4">
+                                      <input type="checkbox" checked={!!field.value} onChange={e => updateValue(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900" />
+                                    </div>
                                   );
                                 case 'labels':
                                   const currentValues = Array.isArray(field.value) ? field.value : [];
                                   return (
                                     <div className="flex items-center flex-wrap gap-1.5 h-full px-4 py-1 overflow-y-auto custom-scrollbar">
                                       {currentValues.map((v: string) => (
-                                         <span key={v} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[12px] font-medium bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300">
-                                           {v}
-                                           <button type="button" onClick={() => updateValue(currentValues.filter((val: string) => val !== v))} className="text-slate-400 hover:text-red-500"><X size={10} /></button>
-                                         </span>
+                                        <span key={v} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300">
+                                          {v}
+                                          <button type="button" onClick={() => updateValue(currentValues.filter((val: string) => val !== v))} className="text-slate-400 hover:text-red-500"><X size={10} /></button>
+                                        </span>
                                       ))}
                                       <select 
-                                         value="" 
-                                         onChange={e => {
+                                        value="" 
+                                        onChange={e => {
                                             if (e.target.value && !currentValues.includes(e.target.value)) {
-                                               updateValue([...currentValues, e.target.value]);
+                                              updateValue([...currentValues, e.target.value]);
                                             }
-                                         }}
-                                         className="bg-transparent text-[12px] text-slate-500 outline-none cursor-pointer"
+                                        }}
+                                        className="bg-transparent text-[11px] text-slate-500 outline-none cursor-pointer"
                                       >
-                                         <option value="" disabled>+ Add label</option>
-                                         {(field.options || []).filter((o: string) => !currentValues.includes(o)).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                                        <option value="" disabled>+ Add label</option>
+                                        {(field.options || []).filter((o: string) => !currentValues.includes(o)).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
                                       </select>
                                     </div>
                                   );
                                 case 'number':
-                                  return <NumberStepper value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="0" min={0} step={1} className={commonClasses} inputClassName="text-[14px] text-slate-700 dark:text-slate-300" />;
+                                  return <input type="number" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
                                 case 'date':
-                                  return <Input type="date" value={field.value || ''} onChange={e => updateValue(e.target.value)} className={commonClasses} />;
+                                  return <input type="date" value={field.value || ''} onChange={e => updateValue(e.target.value)} className={commonClasses} />;
                                 case 'website':
                                 case 'url':
-                                  return <Input type="url" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="https://..." className={commonClasses} />;
+                                  return <input type="url" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
                                 case 'phone':
-                                  return <Input type="tel" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="+1..." className={commonClasses} />;
+                                  return <input type="tel" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
                                 case 'email':
-                                  return <Input type="email" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="email@example.com" className={commonClasses} />;
+                                  return <input type="email" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
                                 default:
-                                  return <Input type="text" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+                                  return <input type="text" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
                               }
                             };
 
-                            return (tInput.customFields || []).length > 0 && (
+                            return (
                               <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar mt-3">
                                 {(tInput.customFields || []).map((field, fIndex) => (
-                                  <div
-                                    key={fIndex}
-                                    className={`flex items-stretch w-full border border-slate-200 dark:border-white/10 rounded-[8px] overflow-hidden group transition-all ${field.type === 'text area' ? 'h-[80px]' : field.type === 'labels' ? 'min-h-[42px]' : 'h-[42px]'}`}
-                                  >
+                                  <div key={field.name} className="flex border border-slate-200 dark:border-white/10 rounded-[8px] overflow-hidden h-10 group bg-slate-50/50 dark:bg-white/[0.02]">
                                     {/* Left Side: Field info */}
                                     <div className="flex items-center gap-2 px-3 py-2 min-w-[150px] w-1/3 border-r border-slate-200 dark:border-white/10 bg-[#FAFAFA] dark:bg-[#1A1A1A] relative">
                                       {getIconForType(field.type)}
@@ -1318,17 +1441,20 @@ export default function TaskFormModal({
 
             {/* Right: Attach + Cancel + Save */}
             <div className="flex items-center gap-3.5 ml-auto">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-350 transition-colors cursor-pointer"
-              >
-                <Paperclip size={18} />
-              </button>
+              {!isLimitedEdit && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-350 transition-colors cursor-pointer"
+                >
+                  <Paperclip size={18} />
+                </button>
+              )}
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
+                disabled={isLimitedEdit && isPending}
                 className="!rounded-[8px] shadow-sm hover:bg-slate-50 dark:hover:bg-white/5 transition-colors h-9 px-4 font-semibold text-sm border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200"
               >
                 Cancel
@@ -1336,6 +1462,7 @@ export default function TaskFormModal({
               <Button
                 type="submit"
                 form="task-form"
+                disabled={isPending || (isLimitedEdit && !tasksInput[0].statusId)}
                 className="!rounded-[8px] shadow-sm h-9 px-4 font-semibold text-sm bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
               >
                 {isPending ? "Saving..." : isEditing ? "Update Task" : "Save Tasks"}
