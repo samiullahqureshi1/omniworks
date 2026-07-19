@@ -17,13 +17,20 @@ import { DocumentsPanel, DraftDocument } from "@/components/documents/DocumentsP
 import { createDocumentAction } from "@/app/actions/documents";
 import { Badge } from "@/components/ui/badge";
 import {
-  Plus, Trash2, Hash, Globe, Mail, Phone, Tags, CheckSquare, CircleDashed, Type, EyeOff, Settings, X, ChevronDown, AlignLeft, Sparkles, Smile, List as ListIcon, Calendar as CalendarIcon, PlusSquare
+  Plus, Trash2, Hash, Globe, Mail, Phone, Tags, CheckSquare, CircleDashed, Type, EyeOff, Settings, X, ChevronDown, AlignLeft, Sparkles, Smile, List as ListIcon, Calendar as CalendarIcon, PlusSquare, Wand2, Save, RefreshCw, Search, Repeat, Star, Paperclip
 } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { toast } from "sonner";
-import { createTaskAction, updateTaskAction, createTaskTemplateAction } from "@/app/actions/tasks";
+import { createTaskAction, updateTaskAction, createTaskTemplateAction, getTaskTemplatesAction, deleteTaskTemplateAction, updateTaskTemplateAction } from "@/app/actions/tasks";
 import { quickCreateProjectAction } from "@/app/actions/projects";
-import { RichTextEditor } from "@/components/ui/RichTextEditor";
+import { ProjectDescriptionEditor } from "@/components/ui/RichTextEditor";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 
 type TaskInput = {
   id: string; // temp unique id
@@ -137,6 +144,13 @@ export default function TaskFormModal({
   // Template Save States
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
+  const [isTemplateSelectOpen, setIsTemplateSelectOpen] = useState(false);
+  const [templateModalMode, setTemplateModalMode] = useState<'USE' | 'UPDATE'>('USE');
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [templateSearchQuery, setTemplateSearchQuery] = useState("");
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [isDeleteTemplateOpen, setIsDeleteTemplateOpen] = useState(false);
+  const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
 
   // Custom Fields Drawer States
   const [isFieldsDrawerOpen, setIsFieldsDrawerOpen] = useState(false);
@@ -152,6 +166,17 @@ export default function TaskFormModal({
   const [activeTab, setActiveTab] = useState<"task" | "doc">("task");
   const [minimized, setMinimized] = useState(false);
   const [draftDocs, setDraftDocs] = useState<DraftDocument[]>([]);
+
+  // Attachments State & Ref (matching Project modal behavior)
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [attachments, setAttachments] = useState<string[]>([]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const newFiles = Array.from(e.target.files).map(f => f.name);
+      setAttachments(prev => [...prev, ...newFiles]);
+    }
+  };
 
   const persistDraftDocs = async (taskIds: string[]) => {
     if (draftDocs.length === 0 || taskIds.length === 0) return;
@@ -232,6 +257,90 @@ export default function TaskFormModal({
     });
   };
 
+  // Load templates when selection modal is open
+  React.useEffect(() => {
+    if (isTemplateSelectOpen) {
+      setIsLoadingTemplates(true);
+      getTaskTemplatesAction().then((res: any) => {
+        setIsLoadingTemplates(false);
+        if (res.success && res.templates) {
+          setTemplates(res.templates);
+        } else {
+          toast.error(res.error || "Failed to load templates");
+        }
+      });
+    }
+  }, [isTemplateSelectOpen]);
+
+  const handleUseTemplate = (config: any) => {
+    setTasksInput([
+      {
+        id: tasksInput[0]?.id || Math.random().toString(),
+        title: config.title || "",
+        description: config.description || "",
+        statusId: config.statusId || (taskStatuses.length > 0 ? taskStatuses[0].id : ""),
+        priority: config.priority || "MEDIUM",
+        dueDate: config.dueDate || "",
+        allocatedHours: config.allocatedHours?.toString() || "",
+        assignees: config.assigneeIds || [],
+        customFields: config.customFields || [],
+      },
+    ]);
+    if (config.projectId) {
+      setProjectId(config.projectId);
+    }
+    setIsTemplateSelectOpen(false);
+    toast.success("Template applied");
+  };
+
+  const handleUpdateTemplate = async (template: any) => {
+    const tInput = tasksInput[0];
+    const config = {
+      title: tInput.title,
+      description: tInput.description,
+      priority: tInput.priority,
+      statusId: tInput.statusId || undefined,
+      dueDate: tInput.dueDate,
+      allocatedHours: tInput.allocatedHours ? parseFloat(tInput.allocatedHours) : undefined,
+      assigneeIds: tInput.assignees,
+      customFields: tInput.customFields || [],
+      projectId: projectId || undefined,
+    };
+
+    startTransition(async () => {
+      const res = await updateTaskTemplateAction(template.id, config);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("Template updated successfully");
+        setTemplates((prev) =>
+          prev.map((t) => (t.id === template.id ? { ...t, config } : t))
+        );
+        setIsTemplateSelectOpen(false);
+      }
+    });
+  };
+
+  const handleDeleteTemplate = (id: string) => {
+    setDeleteTemplateId(id);
+    setIsDeleteTemplateOpen(true);
+  };
+
+  const confirmDeleteTemplate = async () => {
+    if (!deleteTemplateId) return;
+    startTransition(async () => {
+      const res = await deleteTaskTemplateAction(deleteTemplateId);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("Template deleted successfully");
+        setTemplates((prev) => prev.filter((t) => t.id !== deleteTemplateId));
+        setIsDeleteTemplateOpen(false);
+        setDeleteTemplateId(null);
+      }
+    });
+  };
+
   // RBAC checks for the modal
   const isOwner = currentUser.role === "OWNER";
   const isClient = currentUser.role === "CLIENT";
@@ -243,6 +352,24 @@ export default function TaskFormModal({
 
   // If Member but not PM, they can only edit status and tracked hours (only applies when editing)
   const isLimitedEdit = isEditing && !isOwner && !isPM && isAssignedToTask;
+
+  // Hoisted hours variables
+  const projectTotalHours = selectedProject?.totalAllocatedHours || 0;
+  const projectUsedHours = selectedProject?.usedHours || 0;
+  const oldTaskHours =
+    isEditing && task ? task.allocatedHours || 0 : 0;
+  const alreadyAllocated =
+    (selectedProject?.tasks || []).reduce(
+      (sum: number, t: any) => sum + (t.allocatedHours || 0),
+      0,
+    ) - oldTaskHours;
+  const draftHours = tasksInput.reduce(
+    (sum, t) => sum + (parseFloat(t.allocatedHours) || 0),
+    0,
+  );
+  const remainingHours = projectTotalHours - alreadyAllocated;
+  const isExceeded =
+    projectTotalHours > 0 && draftHours > remainingHours;
 
   // Available assignees based on selected project
   // We show all members of the organization, except clients.
@@ -454,7 +581,7 @@ export default function TaskFormModal({
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
         <DialogContent
-          className="sm:max-w-[700px] p-0 flex flex-col h-[85vh] overflow-hidden bg-background"
+          className="sm:max-w-[860px] p-0 flex flex-col h-[85vh] overflow-hidden bg-white dark:bg-[#151518] border border-slate-200/80 dark:border-white/10 sm:!rounded-[8px] !rounded-[8px] shadow-2xl [&>button]:hidden"
           onInteractOutside={(e) => {
             if (isQuickProjectOpen || activeTaskAssigneeIndex !== null)
               e.preventDefault();
@@ -469,6 +596,15 @@ export default function TaskFormModal({
             onTabChange={(id) => setActiveTab(id as "task" | "doc")}
             onClose={() => onOpenChange(false)}
             onMinimize={() => setMinimized((m) => !m)}
+            rightSlot={
+              selectedProject && projectTotalHours > 0 && (
+                <div className="hidden sm:flex flex-col text-right text-[11px] leading-tight text-slate-500 dark:text-slate-400 font-semibold mr-3">
+                  <div>Project Total Hours: <span className="text-slate-900 dark:text-white font-bold">{projectTotalHours}h</span></div>
+                  <div>Allocated to Tasks: <span className="text-slate-900 dark:text-white font-bold">{alreadyAllocated + draftHours}h</span></div>
+                  <div>Remaining Hours: <span className="text-slate-900 dark:text-white font-bold">{Math.max(0, projectTotalHours - alreadyAllocated - draftHours)}h</span></div>
+                </div>
+              )
+            }
           />
 
           <div className={`flex-1 overflow-y-auto px-6 py-4 custom-scrollbar ${minimized ? "hidden" : ""}`}>
@@ -481,610 +617,627 @@ export default function TaskFormModal({
             />
             {!isEditing && (
               <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">
-                Documents will be saved and attached when you create the task.
+        Documents will be saved and attached when you create the task.
               </p>
             )}
           </div>
           <div className={activeTab === "task" ? "" : "hidden"}>
-          {(() => {
-            const projectTotalHours = selectedProject?.totalAllocatedHours || 0;
-            const projectUsedHours = selectedProject?.usedHours || 0;
-            const oldTaskHours =
-              isEditing && task ? task.allocatedHours || 0 : 0;
-            const alreadyAllocated =
-              (selectedProject?.tasks || []).reduce(
-                (sum: number, t: any) => sum + (t.allocatedHours || 0),
+            {(() => {
+              const projectTotalHours = selectedProject?.totalAllocatedHours || 0;
+              const projectUsedHours = selectedProject?.usedHours || 0;
+              const oldTaskHours =
+                isEditing && task ? task.allocatedHours || 0 : 0;
+              const alreadyAllocated =
+                (selectedProject?.tasks || []).reduce(
+                  (sum: number, t: any) => sum + (t.allocatedHours || 0),
+                  0,
+                ) - oldTaskHours;
+              const draftHours = tasksInput.reduce(
+                (sum, t) => sum + (parseFloat(t.allocatedHours) || 0),
                 0,
-              ) - oldTaskHours;
-            const draftHours = tasksInput.reduce(
-              (sum, t) => sum + (parseFloat(t.allocatedHours) || 0),
-              0,
-            );
-            const remainingHours = projectTotalHours - alreadyAllocated;
-            const isExceeded =
-              projectTotalHours > 0 && draftHours > remainingHours;
+              );
+              const remainingHours = projectTotalHours - alreadyAllocated;
+              const isExceeded =
+                projectTotalHours > 0 && draftHours > remainingHours;
 
-            return (
-              <form id="task-form" onSubmit={handleSave} className="space-y-6">
-                {!isClient && projectTotalHours > 0 && (
-                  <div
-                    className={`p-4 rounded-lg border text-sm space-y-2 shadow-sm ${isExceeded ? "bg-destructive/10 border-destructive text-destructive" : "bg-muted/30 border-slate-200 dark:border-slate-800"}`}
-                  >
-                    <div className="flex justify-between font-medium">
-                      <span>Project Total Hours:</span>
-                      <span>{projectTotalHours}</span>
+              return (
+                <form id="task-form" onSubmit={handleSave} className="space-y-6">
+                  {/* Exceeded hours alert banner */}
+                  {isExceeded && (
+                    <div className="p-3 text-xs font-bold bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400 border border-red-100 dark:border-red-900/30 rounded-[8px]">
+                      Task allocated hours ({draftHours}h) exceed the project’s remaining available hours ({remainingHours}h). Please increase project hours or reduce task hours.
                     </div>
-                    <div className="flex justify-between">
-                      <span>Already Allocated to Tasks:</span>
-                      <span>{alreadyAllocated}</span>
-                    </div>
-                    <div className="flex justify-between font-bold border-t pt-2 border-slate-200 dark:border-slate-800/50 mt-1">
-                      <span>Remaining Available Hours:</span>
-                      <span>{remainingHours}</span>
-                    </div>
-                    {isExceeded && (
-                      <p className="text-xs font-bold mt-2">
-                        Task allocated hours exceed the project’s total
-                        allocated hours. Increase project hours or reduce task
-                        hours.
-                      </p>
-                    )}
-                  </div>
-                )}
+                  )}
 
-                {/* Project Selection (only when creating) */}
-                {!isEditing && (
-                  <div className="space-y-2 bg-white dark:bg-[#1f1f1f] p-4 rounded-lg border shadow-sm">
-                    <label className="text-sm font-medium">
-                      Project <span className="text-destructive">*</span>
-                    </label>
-                    <select
-                      required
-                      value={projectId}
-                      onChange={handleProjectSelectChange}
-                      className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="" disabled>
-                        Select a project
-                      </option>
-                      {assignableProjects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                      {isOwner && (
-                        <option
-                          value="NEW_PROJECT"
-                          className="font-bold text-primary"
+                  {/* If Member is doing a limited edit */}
+                  {isLimitedEdit ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="col-span-2 p-3 bg-muted/50 dark:bg-[#19191c] rounded-[8px] border border-slate-100 dark:border-white/5 text-sm">
+                        <strong>Task:</strong> {task.title}
+                        <br />
+                        <span className="text-muted-foreground">
+                          {task.description}
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-350">Status</label>
+                        <select
+                          value={tasksInput[0].statusId}
+                          onChange={(e) =>
+                            updateTaskInput(0, "statusId", e.target.value)
+                          }
+                          className="flex h-10 w-full rounded-[8px] border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-450 dark:border-white/10 dark:bg-transparent"
                         >
-                          + Create New Project
-                        </option>
-                      )}
-                    </select>
-                  </div>
-                )}
-
-                {/* If Member is doing a limited edit */}
-                {isLimitedEdit ? (
-                  <div className="grid grid-cols-2 gap-4 bg-white dark:bg-[#1f1f1f] p-4 rounded-lg border shadow-sm">
-                    <div className="col-span-2 p-3 bg-muted/50 rounded-xl border text-sm">
-                      <strong>Task:</strong> {task.title}
-                      <br />
-                      <span className="text-muted-foreground">
-                        {task.description}
-                      </span>
+                          <option value="">No Status</option>
+                          {taskStatuses.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-350">
+                          Tracked Hours
+                        </label>
+                        <NumberStepper
+                          step={0.1}
+                          min={0}
+                          value={trackedHours}
+                          onChange={(e) => setTrackedHours(e.target.value)}
+                          placeholder="e.g. 5.5"
+                          className="!rounded-[8px] border-input"
+                          inputClassName="h-10 text-sm focus:ring-1 focus:ring-slate-450 dark:border-white/10 dark:bg-transparent !rounded-[8px]"
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Status</label>
-                      <select
-                        value={tasksInput[0].statusId}
-                        onChange={(e) =>
-                          updateTaskInput(0, "statusId", e.target.value)
-                        }
-                        className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
-                      >
-                        <option value="">No Status</option>
-                        {taskStatuses.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">
-                        Tracked Hours
-                      </label>
-                      <NumberStepper
-                        step={0.1}
-                        min={0}
-                        value={trackedHours}
-                        onChange={(e) => setTrackedHours(e.target.value)}
-                        placeholder="e.g. 5.5"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {tasksInput.map((tInput, index) => (
-                      <div
-                        key={tInput.id}
-                        className="bg-white dark:bg-[#1f1f1f] p-4 rounded-lg border shadow-sm space-y-4 relative"
-                      >
-                        {!isEditing && tasksInput.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="absolute top-2 right-2 h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            onClick={() => removeTask(index)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2 col-span-2 md:col-span-1">
-                            <label className="text-sm font-medium">
-                              Task Title{" "}
-                              <span className="text-destructive">*</span>
-                            </label>
-                            <Input
-                              required
-                              value={tInput.title}
-                              onChange={(e) =>
-                                updateTaskInput(index, "title", e.target.value)
-                              }
-                              placeholder="e.g. Design Landing Page"
-                            />
-                          </div>
-
-                          {!isClient && (
-                            <div className="space-y-2 col-span-2 md:col-span-1">
-                              <label className="text-sm font-medium">
-                                Status
-                              </label>
-                              <select
-                                value={tInput.statusId}
-                              onChange={(e) =>
-                                updateTaskInput(
-                                  index,
-                                  "statusId",
-                                  e.target.value,
-                                )
-                              }
-                              className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                  ) : (
+                    <div className="space-y-6">
+                      {tasksInput.map((tInput, index) => (
+                        <div
+                          key={tInput.id}
+                          className={`space-y-4 relative ${index > 0 ? "border-t pt-6 mt-6 border-slate-100 dark:border-white/5" : ""}`}
+                        >
+                          {!isEditing && tasksInput.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="absolute top-2 right-2 h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive !rounded-[8px]"
+                              onClick={() => removeTask(index)}
                             >
-                              <option value="">No Status</option>
-                              {taskStatuses.map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                           )}
 
-                          <div className="space-y-2 col-span-2">
-                            <label className="text-sm font-medium">
-                              Description
-                            </label>
-                            <RichTextEditor
-                              content={tInput.description}
-                              onChange={(val) =>
-                                updateTaskInput(
-                                  index,
-                                  "description",
-                                  val,
-                                )
-                              }
-                              placeholder="Task details and instructions..."
-                            />
-                          </div>
+                          <div className="project-properties-grid">
+                            <div className="grid grid-cols-2 gap-x-8 gap-y-1">
 
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">
-                              Priority
-                            </label>
-                            <select
-                              value={tInput.priority}
-                              onChange={(e) =>
-                                updateTaskInput(
-                                  index,
-                                  "priority",
-                                  e.target.value,
-                                )
-                              }
-                              className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
-                            >
-                              <option value="LOW">Low</option>
-                              <option value="MEDIUM">Medium</option>
-                              <option value="HIGH">High</option>
-                              <option value="CRITICAL">Critical</option>
-                            </select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">
-                              Due Date
-                            </label>
-                            <Input
-                              type="date"
-                              value={tInput.dueDate}
-                              onChange={(e) =>
-                                updateTaskInput(
-                                  index,
-                                  "dueDate",
-                                  e.target.value,
-                                )
-                              }
-                            />
-                          </div>
-
-                          {!isClient && (
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium">
-                                Allocated Hours{" "}
-                                <span className="text-destructive">*</span>
-                              </label>
-                              <NumberStepper
-                              step={0.1}
-                              min={0.1}
-                              required
-                              value={tInput.allocatedHours}
-                              onChange={(e) =>
-                                updateTaskInput(
-                                  index,
-                                  "allocatedHours",
-                                  e.target.value,
-                                )
-                              }
-                              placeholder="e.g. 10.5"
-                            />
-                          </div>
-                          )}
-
-                          {isEditing && !isClient && (
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium">
-                                Tracked Hours
-                              </label>
-                              <NumberStepper
-                                step={0.1}
-                                min={0}
-                                value={trackedHours}
-                                onChange={(e) =>
-                                  setTrackedHours(e.target.value)
-                                }
-                                placeholder="e.g. 5.5"
-                              />
-                            </div>
-                          )}
-
-                          {!isClient && (
-                            <div className="space-y-2 col-span-2">
-                              <label className="text-sm font-medium">
-                                Assignees
-                              </label>
-                            <div
-                              className="min-h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm cursor-pointer hover:border-primary/50 transition-colors flex flex-wrap gap-2 items-center"
-                              onClick={() => setActiveTaskAssigneeIndex(index)}
-                            >
-                              {tInput.assignees.length === 0 ? (
-                                <span className="text-muted-foreground">
-                                  Click to assign team members...
-                                </span>
+                              {/* Project */}
+                              {!isEditing ? (
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium">
+                                    Project <span className="text-destructive">*</span>
+                                  </label>
+                                  <select
+                                    required
+                                    value={projectId}
+                                    onChange={handleProjectSelectChange}
+                                    className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none cursor-pointer"
+                                  >
+                                    <option value="" disabled>Select a project</option>
+                                    {assignableProjects.map((p) => (
+                                      <option key={p.id} value={p.id}>{p.name}</option>
+                                    ))}
+                                    {isOwner && (
+                                      <option value="NEW_PROJECT" className="font-bold text-primary">
+                                        + Create New Project
+                                      </option>
+                                    )}
+                                  </select>
+                                </div>
                               ) : (
-                                tInput.assignees.map((id) => {
-                                  const u = users.find(
-                                    (user) => user.id === id,
-                                  );
-                                  return u ? (
-                                    <Badge
-                                      key={id}
-                                      variant="secondary"
-                                      className="font-normal"
-                                    >
-                                      {u.name}
-                                    </Badge>
-                                  ) : null;
-                                })
+                                <div className="space-y-2 opacity-60">
+                                  <label className="text-sm font-medium">Project</label>
+                                  <div className="flex h-[36px] w-full rounded-[8px] bg-slate-50 dark:bg-white/5 px-3 items-center text-[13px] text-slate-700 dark:text-slate-300">
+                                    {task.project?.name || "No Project"}
+                                  </div>
+                                </div>
                               )}
-                            </div>
-                          </div>
-                          )}
 
-                          {/* Custom Fields */}
-                          <div className="space-y-3 col-span-2 pt-2 border-t">
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-sm font-semibold flex items-center gap-1.5 text-muted-foreground">
-                                Custom Fields
-                              </label>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setActiveTaskIndexForFields(index);
-                                  setFieldsTab("create_new");
-                                  setIsFieldsDrawerOpen(true);
-                                }}
-                                className="h-8 px-3 text-[13px] bg-white dark:bg-[#252525] border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-slate-700 dark:text-slate-300 shadow-sm rounded-lg"
-                              >
-                                <Plus className="mr-1.5 h-3.5 w-3.5 text-slate-400" /> Add Field
-                              </Button>
-                            </div>
+                              {/* Task Title */}
+                              <div className="space-y-2">
+                                <label className="text-sm font-medium">
+                                  Task Title <span className="text-destructive">*</span>
+                                </label>
+                                <input
+                                  required
+                                  value={tInput.title}
+                                  onChange={(e) => updateTaskInput(index, "title", e.target.value)}
+                                  placeholder="e.g. Design Landing Page"
+                                  className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none placeholder:text-slate-400/80"
+                                />
+                              </div>
 
-                            {(() => {
-                              const getIconForType = (type: string) => {
-                                switch (type?.toLowerCase()) {
-                                  case 'number': return <Hash size={14} className="text-slate-400" />;
-                                  case 'url':
-                                  case 'website': return <Globe size={14} className="text-slate-400" />;
-                                  case 'email': return <Mail size={14} className="text-slate-400" />;
-                                  case 'phone': return <Phone size={14} className="text-slate-400" />;
-                                  case 'dropdown': return <Tags size={14} className="text-slate-400" />;
-                                  case 'checkbox': return <CheckSquare size={14} className="text-slate-400" />;
-                                  case 'labels': return <Tags size={14} className="text-slate-400" />;
-                                  case 'date': return <CircleDashed size={14} className="text-slate-400" />;
-                                  default: return <Type size={14} className="text-slate-400" />;
-                                }
-                              };
+                              {/* Status */}
+                              {!isClient && (
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium">Status</label>
+                                  <select
+                                    value={tInput.statusId}
+                                    onChange={(e) => updateTaskInput(index, "statusId", e.target.value)}
+                                    className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none cursor-pointer"
+                                  >
+                                    <option value="">No Status</option>
+                                    {taskStatuses.map((s) => (
+                                      <option key={s.id} value={s.id}>{s.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
 
-                              const renderFieldValueInput = (field: any, fIndex: number) => {
-                                const updateValue = (val: any) => {
-                                  const updated = [...tasksInput];
-                                  if (updated[index].customFields) {
-                                    updated[index].customFields[fIndex].value = val;
-                                    setTasksInput(updated);
-                                  }
-                                };
-                                
-                                const commonClasses = "h-full w-full border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-4 bg-transparent text-[14px] text-slate-700 dark:text-slate-300 rounded-none shadow-none outline-none appearance-none";
-                                const fieldType = (field.type || 'text').toLowerCase();
+                              {/* Priority */}
+                              <div className="space-y-2">
+                                <label className="text-sm font-medium">Priority</label>
+                                <select
+                                  value={tInput.priority}
+                                  onChange={(e) => updateTaskInput(index, "priority", e.target.value)}
+                                  className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none cursor-pointer"
+                                >
+                                  <option value="LOW">Low</option>
+                                  <option value="MEDIUM">Medium</option>
+                                  <option value="HIGH">High</option>
+                                  <option value="CRITICAL">Critical</option>
+                                </select>
+                              </div>
 
-                                switch(fieldType) {
-                                  case 'text area':
-                                    return <textarea value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} py-2.5 resize-none custom-scrollbar`} />;
-                                  case 'checkbox':
-                                    return <div className="flex items-center h-full px-4"><input type="checkbox" checked={!!field.value} onChange={e => updateValue(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" /></div>;
-                                  case 'dropdown':
-                                    return (
-                                      <select value={field.value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer`}>
-                                        <option value="" disabled>Select an option</option>
-                                        {(field.options || []).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
-                                      </select>
-                                    );
-                                  case 'labels':
-                                    const currentValues = Array.isArray(field.value) ? field.value : [];
-                                    return (
-                                      <div className="flex items-center flex-wrap gap-1.5 h-full px-4 py-1 overflow-y-auto custom-scrollbar">
-                                        {currentValues.map((v: string) => (
-                                           <span key={v} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[12px] font-medium bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300">
-                                             {v}
-                                             <button type="button" onClick={() => updateValue(currentValues.filter((val: string) => val !== v))} className="text-slate-400 hover:text-red-500"><X size={10} /></button>
-                                           </span>
-                                        ))}
-                                        <select 
-                                           value="" 
-                                           onChange={e => {
-                                              if (e.target.value && !currentValues.includes(e.target.value)) {
-                                                 updateValue([...currentValues, e.target.value]);
-                                              }
-                                           }}
-                                           className="bg-transparent text-[12px] text-slate-500 outline-none cursor-pointer"
+                              {/* Due Date */}
+                              <div className="space-y-2">
+                                <label className="text-sm font-medium">
+                                  Due Date
+                                </label>
+                                <input
+                                  type="date"
+                                  value={tInput.dueDate}
+                                  onChange={(e) => updateTaskInput(index, "dueDate", e.target.value)}
+                                  className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none cursor-pointer"
+                                />
+                              </div>
+
+                              {/* Make This Task Repeat */}
+                              {!isEditing && tasksInput.length === 1 ? (
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium">Make  task repeat</label>
+                                  <div className="flex items-center gap-2 h-[36px]">
+                                    <input
+                                      type="checkbox"
+                                      id={`repeat-${index}`}
+                                      checked={isRepeatEnabled}
+                                      onChange={(e) => setIsRepeatEnabled(e.target.checked)}
+                                      className="h-4 w-4 rounded border-gray-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                                    />
+                                    <label htmlFor={`repeat-${index}`} className="text-[13px] text-slate-600 dark:text-slate-400 cursor-pointer">
+                                      Enable repeat
+                                    </label>
+                                  </div>
+                                  {isRepeatEnabled && (
+                                    <div className="grid grid-cols-3 gap-2 mt-1">
+                                      <div className="space-y-1">
+                                        <span className="text-[11px] text-slate-400">Frequency</span>
+                                        <select
+                                          value={repeatFrequency}
+                                          onChange={(e) => setRepeatFrequency(e.target.value as any)}
+                                          className="w-full h-8 bg-slate-100 dark:bg-white/5 border-0 px-2 text-xs text-slate-700 dark:text-slate-300 rounded-[6px] outline-none"
                                         >
-                                           <option value="" disabled>+ Add label</option>
-                                           {(field.options || []).filter((o: string) => !currentValues.includes(o)).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                                          <option value="DAILY">Daily</option>
+                                          <option value="WEEKLY">Weekly</option>
+                                          <option value="MONTHLY">Monthly</option>
                                         </select>
                                       </div>
-                                    );
-                                  case 'number':
-                                    return <NumberStepper value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="0" min={0} step={1} className={commonClasses} inputClassName="text-[14px] text-slate-700 dark:text-slate-300" />;
-                                  case 'date':
-                                    return <Input type="date" value={field.value || ''} onChange={e => updateValue(e.target.value)} className={commonClasses} />;
-                                  case 'website':
-                                  case 'url':
-                                    return <Input type="url" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="https://..." className={commonClasses} />;
-                                  case 'phone':
-                                    return <Input type="tel" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="+1..." className={commonClasses} />;
-                                  case 'email':
-                                    return <Input type="email" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="email@example.com" className={commonClasses} />;
-                                  default:
-                                    return <Input type="text" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
-                                }
-                              };
-
-                              return (tInput.customFields || []).length > 0 && (
-                                <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
-                                  {(tInput.customFields || []).map((field, fIndex) => (
-                                    <div
-                                      key={fIndex}
-                                      className={`flex items-stretch w-full border border-slate-200 dark:border-white/10 rounded-md overflow-hidden group transition-all ${field.type === 'text area' ? 'h-[80px]' : field.type === 'labels' ? 'min-h-[42px]' : 'h-[42px]'}`}
-                                    >
-                                      {/* Left Side: Field info */}
-                                      <div className="flex items-center gap-2 px-3 py-2 min-w-[150px] w-1/3 border-r border-slate-200 dark:border-white/10 bg-[#FAFAFA] dark:bg-[#1A1A1A] relative">
-                                        {getIconForType(field.type)}
-                                        <Input
-                                          value={field.name}
-                                          onChange={(e) => {
-                                            const updated = [...tasksInput];
-                                            if (updated[index].customFields) {
-                                              updated[index].customFields[fIndex].name = e.target.value;
-                                              setTasksInput(updated);
-                                            }
-                                          }}
-                                          className="h-7 text-[14px] bg-transparent border-0 focus-visible:ring-1 focus-visible:ring-slate-300 px-1 font-medium text-slate-700 dark:text-slate-300 w-full shadow-none"
+                                      <div className="space-y-1">
+                                        <span className="text-[11px] text-slate-400">Start</span>
+                                        <input
+                                          type="date"
+                                          required={isRepeatEnabled}
+                                          value={repeatStartDate}
+                                          onChange={(e) => setRepeatStartDate(e.target.value)}
+                                          className="w-full h-8 bg-slate-100 dark:bg-white/5 border-0 px-2 text-xs text-slate-700 dark:text-slate-300 rounded-[6px] outline-none"
                                         />
                                       </div>
-
-                                      {/* Right Side: Value */}
-                                      <div className="flex-1 relative bg-white dark:bg-[#252525]">
-                                        {renderFieldValueInput(field, fIndex)}
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const updated = [...tasksInput];
-                                            updated[index].customFields = (updated[index].customFields || []).filter((_, i) => i !== fIndex);
-                                            setTasksInput(updated);
-                                          }}
-                                          className="absolute right-2 top-2 border border-slate-200 dark:border-white/10 rounded p-[3px] text-slate-500 hover:text-destructive hover:bg-slate-50 dark:hover:bg-white/5 transition-all bg-white dark:bg-[#252525] opacity-0 group-hover:opacity-100 shadow-sm z-10"
-                                        >
-                                          <X size={13} />
-                                        </button>
+                                      <div className="space-y-1">
+                                        <span className="text-[11px] text-slate-400">End</span>
+                                        <input
+                                          type="date"
+                                          required={isRepeatEnabled}
+                                          value={repeatEndDate}
+                                          onChange={(e) => setRepeatEndDate(e.target.value)}
+                                          className="w-full h-8 bg-slate-100 dark:bg-white/5 border-0 px-2 text-xs text-slate-700 dark:text-slate-300 rounded-[6px] outline-none"
+                                        />
                                       </div>
                                     </div>
-                                  ))}
+                                  )}
                                 </div>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                              ) : (
+                                <div />
+                              )}
 
-                    {/* Repeat Task settings (only when creating a single task) */}
-                    {!isEditing && tasksInput.length === 1 && (
-                      <div className="space-y-4 bg-purple-50/50 dark:bg-purple-950/10 p-4 rounded-xl border border-purple-100 dark:border-purple-900/30">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <label className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                              Repeat Task
+                              {/* Allocated Hours */}
+                              {!isClient && (
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium">
+                                    Allocated Hours <span className="text-destructive">*</span>
+                                  </label>
+                                  <NumberStepper
+                                    step={0.1}
+                                    min={0.1}
+                                    required
+                                    value={tInput.allocatedHours}
+                                    onChange={(e) => updateTaskInput(index, "allocatedHours", e.target.value)}
+                                    placeholder="e.g. 10.5"
+                                    className="!rounded-[8px] border-0 bg-slate-50 dark:bg-white/5 overflow-hidden"
+                                    inputClassName="h-[36px] text-[13px] text-slate-700 dark:text-slate-300 focus:ring-0 bg-transparent border-0 !rounded-[8px]"
+                                  />
+                                  {isEditing && (
+                                    <>
+                                      <label className="text-sm font-medium mt-2 block">Tracked Hours</label>
+                                      <NumberStepper
+                                        step={0.1}
+                                        min={0}
+                                        value={trackedHours}
+                                        onChange={(e) => setTrackedHours(e.target.value)}
+                                        placeholder="e.g. 5.5"
+                                        className="!rounded-[8px] border-0 bg-slate-50 dark:bg-white/5 overflow-hidden"
+                                        inputClassName="h-[36px] text-[13px] text-slate-700 dark:text-slate-300 focus:ring-0 bg-transparent border-0 !rounded-[8px]"
+                                      />
+                                    </>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Assignee */}
+                              {!isClient && (
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium">Assignee</label>
+                                  <div
+                                    className="w-full min-h-[36px] bg-slate-50 dark:bg-white/5 rounded-[8px] px-3 py-2 text-[13px] cursor-pointer hover:bg-slate-100 dark:hover:bg-white/10 transition-colors flex flex-wrap gap-1.5 items-center"
+                                    onClick={() => setActiveTaskAssigneeIndex(index)}
+                                  >
+                                    {tInput.assignees.length === 0 ? (
+                                      <span className="text-slate-400/80">Assign team members...</span>
+                                    ) : (
+                                      tInput.assignees.map((id) => {
+                                        const u = users.find((user) => user.id === id);
+                                        return u ? (
+                                          <Badge key={id} variant="secondary" className="font-normal !rounded-[6px] text-[11px]">
+                                            {u.name}
+                                          </Badge>
+                                        ) : null;
+                                      })
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                            </div>
+                          </div>
+
+
+
+
+                          {/* Description field - full width */}
+                          <div className="space-y-3 mt-4">
+                            <div>
+                              <label className="text-sm font-semibold text-slate-900 dark:text-white">
+                                Description
+                              </label>
+                              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                                Add context, type “/” for blocks, or “@” to mention a teammate.
+                              </p>
+                            </div>
+                            <ProjectDescriptionEditor
+                              content={tInput.description}
+                              onChange={(val) =>
+                                updateTaskInput(index, "description", val)
+                              }
+                              placeholder="Add description, or write with AI"
+                              people={users.filter(u => u.role !== 'CLIENT' && u.status === 'ACTIVE')}
+                              plain
+                            />
+                          </div>
+
+                          {/* Fields Header and Row */}
+                          <div className="flex justify-between items-center mt-6 pt-4 border-t border-slate-100 dark:border-white/5">
+                            <label className="text-sm font-bold text-slate-900 dark:text-white">
+                              Fields
                             </label>
-                            <p className="text-xs text-muted-foreground">
-                              Automatically create duplicate tasks based on frequency.
-                            </p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setActiveTaskIndexForFields(index);
+                                setFieldsTab("create_new");
+                                setIsFieldsDrawerOpen(true);
+                              }}
+                              className="h-8 px-3 text-[13px] bg-white dark:bg-[#252525] border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-slate-700 dark:text-slate-300 shadow-sm rounded-[8px]"
+                            >
+                              <Plus className="mr-1.5 h-3.5 w-3.5 text-slate-400" /> Add Field
+                            </Button>
                           </div>
-                          <input
-                            type="checkbox"
-                            checked={isRepeatEnabled}
-                            onChange={(e) => setIsRepeatEnabled(e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                          />
+
+                          {/* Custom Fields List */}
+                          {(() => {
+                            const getIconForType = (type: string) => {
+                              switch (type?.toLowerCase()) {
+                                case 'number': return <Hash size={14} className="text-slate-400" />;
+                                case 'url':
+                                case 'website': return <Globe size={14} className="text-slate-400" />;
+                                case 'email': return <Mail size={14} className="text-slate-400" />;
+                                case 'phone': return <Phone size={14} className="text-slate-400" />;
+                                case 'dropdown': return <Tags size={14} className="text-slate-400" />;
+                                case 'checkbox': return <CheckSquare size={14} className="text-slate-400" />;
+                                case 'labels': return <Tags size={14} className="text-slate-400" />;
+                                case 'date': return <CircleDashed size={14} className="text-slate-400" />;
+                                default: return <Type size={14} className="text-slate-400" />;
+                              }
+                            };
+
+                            const renderFieldValueInput = (field: any, fIndex: number) => {
+                              const updateValue = (val: any) => {
+                                const updated = [...tasksInput];
+                                if (updated[index].customFields) {
+                                  updated[index].customFields[fIndex].value = val;
+                                  setTasksInput(updated);
+                                }
+                              };
+                              
+                              const commonClasses = "h-full w-full border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-4 bg-transparent text-[14px] text-slate-700 dark:text-slate-300 rounded-none shadow-none outline-none appearance-none";
+                              const fieldType = (field.type || 'text').toLowerCase();
+
+                              switch(fieldType) {
+                                case 'text area':
+                                  return <textarea value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={`${commonClasses} py-2.5 resize-none custom-scrollbar`} />;
+                                case 'checkbox':
+                                  return <div className="flex items-center h-full px-4"><input type="checkbox" checked={!!field.value} onChange={e => updateValue(e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" /></div>;
+                                case 'dropdown':
+                                  return (
+                                    <select value={field.value || ''} onChange={e => updateValue(e.target.value)} className={`${commonClasses} cursor-pointer`}>
+                                      <option value="" disabled>Select an option</option>
+                                      {(field.options || []).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                                    </select>
+                                  );
+                                case 'labels':
+                                  const currentValues = Array.isArray(field.value) ? field.value : [];
+                                  return (
+                                    <div className="flex items-center flex-wrap gap-1.5 h-full px-4 py-1 overflow-y-auto custom-scrollbar">
+                                      {currentValues.map((v: string) => (
+                                         <span key={v} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[12px] font-medium bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300">
+                                           {v}
+                                           <button type="button" onClick={() => updateValue(currentValues.filter((val: string) => val !== v))} className="text-slate-400 hover:text-red-500"><X size={10} /></button>
+                                         </span>
+                                      ))}
+                                      <select 
+                                         value="" 
+                                         onChange={e => {
+                                            if (e.target.value && !currentValues.includes(e.target.value)) {
+                                               updateValue([...currentValues, e.target.value]);
+                                            }
+                                         }}
+                                         className="bg-transparent text-[12px] text-slate-500 outline-none cursor-pointer"
+                                      >
+                                         <option value="" disabled>+ Add label</option>
+                                         {(field.options || []).filter((o: string) => !currentValues.includes(o)).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                                      </select>
+                                    </div>
+                                  );
+                                case 'number':
+                                  return <NumberStepper value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="0" min={0} step={1} className={commonClasses} inputClassName="text-[14px] text-slate-700 dark:text-slate-300" />;
+                                case 'date':
+                                  return <Input type="date" value={field.value || ''} onChange={e => updateValue(e.target.value)} className={commonClasses} />;
+                                case 'website':
+                                case 'url':
+                                  return <Input type="url" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="https://..." className={commonClasses} />;
+                                case 'phone':
+                                  return <Input type="tel" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="+1..." className={commonClasses} />;
+                                case 'email':
+                                  return <Input type="email" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="email@example.com" className={commonClasses} />;
+                                default:
+                                  return <Input type="text" value={field.value || ''} onChange={e => updateValue(e.target.value)} placeholder="—" className={commonClasses} />;
+                              }
+                            };
+
+                            return (tInput.customFields || []).length > 0 && (
+                              <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar mt-3">
+                                {(tInput.customFields || []).map((field, fIndex) => (
+                                  <div
+                                    key={fIndex}
+                                    className={`flex items-stretch w-full border border-slate-200 dark:border-white/10 rounded-[8px] overflow-hidden group transition-all ${field.type === 'text area' ? 'h-[80px]' : field.type === 'labels' ? 'min-h-[42px]' : 'h-[42px]'}`}
+                                  >
+                                    {/* Left Side: Field info */}
+                                    <div className="flex items-center gap-2 px-3 py-2 min-w-[150px] w-1/3 border-r border-slate-200 dark:border-white/10 bg-[#FAFAFA] dark:bg-[#1A1A1A] relative">
+                                      {getIconForType(field.type)}
+                                      <Input
+                                        value={field.name}
+                                        onChange={(e) => {
+                                          const updated = [...tasksInput];
+                                          if (updated[index].customFields) {
+                                            updated[index].customFields[fIndex].name = e.target.value;
+                                            setTasksInput(updated);
+                                          }
+                                        }}
+                                        className="h-7 text-[14px] bg-transparent border-0 focus-visible:ring-1 focus-visible:ring-slate-350 px-1 font-medium text-slate-700 dark:text-slate-300 w-full shadow-none !rounded-[8px]"
+                                      />
+                                    </div>
+
+                                    {/* Right Side: Value */}
+                                    <div className="flex-1 relative bg-white dark:bg-[#252525]">
+                                      {renderFieldValueInput(field, fIndex)}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const updated = [...tasksInput];
+                                          updated[index].customFields = (updated[index].customFields || []).filter((_, i) => i !== fIndex);
+                                          setTasksInput(updated);
+                                        }}
+                                        className="absolute right-2 top-2 border border-slate-200 dark:border-white/10 rounded p-[3px] text-slate-500 hover:text-destructive hover:bg-slate-50 dark:hover:bg-white/5 transition-all bg-white dark:bg-[#252525] opacity-0 group-hover:opacity-100 shadow-sm z-10"
+                                      >
+                                        <X size={13} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
+
+                          {/* File attachments section inside form body */}
+                          {attachments.length > 0 && (
+                            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 space-y-2">
+                              <h3 className="text-xs font-bold text-slate-900 dark:text-white">Attachments</h3>
+                              <div className="grid grid-cols-2 gap-2">
+                                {attachments.map((file, idx) => (
+                                  <div key={idx} className="flex items-center justify-between p-2 border border-slate-200 dark:border-white/10 rounded-[8px] bg-slate-50 dark:bg-[#19191c] text-xs">
+                                    <span className="truncate">{file}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}
+                                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
-
-                        {isRepeatEnabled && (
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-purple-100/50 dark:border-purple-900/20 animate-in fade-in slide-in-from-top-1 duration-200">
-                            <div className="space-y-1.5">
-                              <label className="text-xs font-semibold text-muted-foreground">Frequency</label>
-                              <select
-                                value={repeatFrequency}
-                                onChange={(e) => setRepeatFrequency(e.target.value as any)}
-                                className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring"
-                              >
-                                <option value="DAILY">Daily</option>
-                                <option value="WEEKLY">Weekly</option>
-                                <option value="MONTHLY">Monthly</option>
-                              </select>
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <label className="text-xs font-semibold text-muted-foreground">Start Date</label>
-                              <Input
-                                type="date"
-                                required={isRepeatEnabled}
-                                value={repeatStartDate}
-                                onChange={(e) => setRepeatStartDate(e.target.value)}
-                                className="h-9 text-xs"
-                              />
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <label className="text-xs font-semibold text-muted-foreground">End Date</label>
-                              <Input
-                                type="date"
-                                required={isRepeatEnabled}
-                                value={repeatEndDate}
-                                onChange={(e) => setRepeatEndDate(e.target.value)}
-                                className="h-9 text-xs"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <DialogFooter className="px-6 py-4 border-t shrink-0 bg-background sticky bottom-0 z-20 flex justify-between items-center">
-                  {!isEditing && tasksInput.length === 1 && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsSaveTemplateOpen(true)}
-                      className="text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-900/50 dark:hover:bg-purple-950/20"
-                    >
-                      Save as Template
-                    </Button>
+                      ))}
+                    </div>
                   )}
-                  <div className="flex gap-2 ml-auto">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => onOpenChange(false)}
-                      className="rounded-full shadow-sm hover:bg-slate-50 transition-colors h-10 px-5 font-semibold text-sm border-slate-200"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={
-                        isPending || (!isEditing && !projectId) || isExceeded
-                      }
-                      className="rounded-full shadow-sm h-10 px-5 font-semibold text-sm bg-foreground text-background hover:bg-foreground/90 transition-colors"
-                    >
-                      {isPending
-                        ? "Saving..."
-                        : isEditing
-                          ? "Update Task"
-                          : "Save Tasks"}
-                    </Button>
-                  </div>
-                </DialogFooter>
-              </form>
-            );
-          })()}
-          </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
-      {/* Quick Create Project Nested Modal */}
-      <Dialog open={isQuickProjectOpen} onOpenChange={setIsQuickProjectOpen}>
-        <DialogContent
-          className="sm:max-w-[400px]"
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onInteractOutside={(e) => e.preventDefault()}
-        >
-          {" "}
-          <DialogHeader>
-            <DialogTitle>Quick Create Project</DialogTitle>
-            <DialogDescription>
-              Create a new project instantly to add tasks to it.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleQuickCreateProject} className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Project Name</label>
-              <Input
-                required
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                placeholder="e.g. Q3 Marketing Campaign"
-              />
+                  {/* Hidden File Input */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    onChange={handleFileChange}
+                    multiple
+                  />
+                </form>
+              );
+            })()}
             </div>
-            <DialogFooter className="pt-4">
+            </div>
+
+          {/* ── Fixed footer — direct child of DialogContent (flex-col), always pinned ── */}
+          <div className="px-6 py-4 border-t shrink-0 bg-white dark:bg-[#151518] border-slate-100 dark:border-white/5 flex items-center justify-between">
+            {/* Left: Templates (create-only) */}
+            {!isEditing && tasksInput.length === 1 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="text-slate-700 border-slate-200 hover:bg-slate-50 dark:text-slate-350 dark:border-white/10 dark:hover:bg-white/5 rounded-[8px] flex items-center gap-1.5 h-9"
+                  >
+                    <Wand2 size={15} className="text-slate-400" />
+                    <span>Templates</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-[240px] rounded-xl shadow-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1c1c1c] p-1.5 z-[9999]">
+                  <DropdownMenuItem onClick={() => { setTemplateModalMode('USE'); setIsTemplateSelectOpen(true); }} className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer text-slate-800 dark:text-slate-200">
+                    <Wand2 size={15} className="text-slate-500" />
+                    <span>Use Template</span>
+                  </DropdownMenuItem>
+                  <div className="h-[1px] bg-slate-100 dark:bg-white/5 my-1" />
+                  <DropdownMenuItem onClick={() => { setIsSaveTemplateOpen(true); }} className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer text-slate-800 dark:text-slate-200">
+                    <Save size={15} />
+                    <span>Save as template</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setTemplateModalMode('UPDATE'); setIsTemplateSelectOpen(true); }} className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer text-slate-800 dark:text-slate-200">
+                    <RefreshCw size={15} />
+                    <span>Update existing template</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {/* Right: Attach + Cancel + Save */}
+            <div className="flex items-center gap-3.5 ml-auto">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-350 transition-colors cursor-pointer"
+              >
+                <Paperclip size={18} />
+              </button>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setIsQuickProjectOpen(false)}
+                onClick={() => onOpenChange(false)}
+                className="!rounded-[8px] shadow-sm hover:bg-slate-50 dark:hover:bg-white/5 transition-colors h-9 px-4 font-semibold text-sm border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-200"
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? "Creating..." : "Create Project"}
+              <Button
+                type="submit"
+                form="task-form"
+                className="!rounded-[8px] shadow-sm h-9 px-4 font-semibold text-sm bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+              >
+                {isPending ? "Saving..." : isEditing ? "Update Task" : "Save Tasks"}
               </Button>
-            </DialogFooter>
+            </div>
+          </div>
+          </DialogContent>
+
+        </Dialog>
+
+        {/* Quick Create Project Nested Modal */}
+        <Dialog open={isQuickProjectOpen} onOpenChange={setIsQuickProjectOpen}>
+        <DialogContent
+          className="sm:max-w-[450px] bg-white dark:bg-[#151518] border border-slate-200/80 dark:border-white/10 p-0 sm:!rounded-[8px] !rounded-[8px] shadow-2xl overflow-hidden [&>button]:hidden"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] relative shrink-0">
+            <h2 className="text-[16.5px] font-bold text-slate-900 dark:text-white leading-tight">Quick Create Project</h2>
+            <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">
+              Create a new project instantly to add tasks to it.
+            </p>
+            <DialogPrimitive.Close className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-250 dark:hover:bg-zinc-700 transition-all rounded-full p-1.5 cursor-pointer outline-none flex items-center justify-center h-7 w-7">
+              <X size={14} />
+            </DialogPrimitive.Close>
+          </div>
+          <form onSubmit={handleQuickCreateProject} className="flex flex-col">
+            <div className="p-6 space-y-4">
+              <div className="space-y-2">
+                <label className="text-[12.5px] font-bold text-slate-600 dark:text-slate-350">Project Name</label>
+                <Input
+                  required
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  placeholder="e.g. Q3 Marketing Campaign"
+                  className="h-10 !rounded-[8px] border-slate-200 focus-visible:ring-1 focus-visible:ring-slate-450 dark:border-white/10 dark:bg-transparent"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setIsQuickProjectOpen(false)}
+                className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 !rounded-[8px] transition-colors outline-none cursor-pointer"
+                disabled={isPending}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isPending}
+                className="px-5 py-2 text-sm font-bold !rounded-[8px] bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors shadow-sm disabled:opacity-50 outline-none cursor-pointer"
+              >
+                {isPending ? "Creating..." : "Create Project"}
+              </button>
+            </div>
           </form>
         </DialogContent>
       </Dialog>
@@ -1098,17 +1251,19 @@ export default function TaskFormModal({
         }}
       >
         <DialogContent
-          className="sm:max-w-[400px]"
+          className="sm:max-w-[450px] bg-white dark:bg-[#151518] border border-slate-200/80 dark:border-white/10 p-0 sm:!rounded-[8px] !rounded-[8px] shadow-2xl overflow-hidden [&>button]:hidden"
           onPointerDownOutside={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
         >
-          {" "}
-          <DialogHeader>
-            <DialogTitle>Select Assignees</DialogTitle>
-            <DialogDescription>Assign members to this task.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <div className="border rounded-xl p-3 max-h-[300px] overflow-y-auto space-y-1 bg-background shadow-inner custom-scrollbar">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] relative shrink-0">
+            <h2 className="text-[16.5px] font-bold text-slate-900 dark:text-white leading-tight">Select Assignees</h2>
+            <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">Assign members to this task.</p>
+            <DialogPrimitive.Close className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-250 dark:hover:bg-zinc-700 transition-all rounded-full p-1.5 cursor-pointer outline-none flex items-center justify-center h-7 w-7">
+              <X size={14} />
+            </DialogPrimitive.Close>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="border border-slate-150 dark:border-white/5 rounded-[8px] p-3 max-h-[300px] overflow-y-auto space-y-1 bg-background shadow-inner custom-scrollbar">
               {availableAssignees.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic">
                   No members available in this organization.
@@ -1123,7 +1278,7 @@ export default function TaskFormModal({
                   return (
                     <label
                       key={m.id}
-                      className="flex items-center gap-3 p-2 hover:bg-muted/50 rounded cursor-pointer transition-colors"
+                      className="flex items-center gap-3 p-2 hover:bg-muted/50 rounded-[8px] cursor-pointer transition-colors"
                     >
                       <input
                         type="checkbox"
@@ -1142,55 +1297,211 @@ export default function TaskFormModal({
                 })
               )}
             </div>
-            <DialogFooter className="pt-4 border-t mt-4">
-              <Button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setActiveTaskAssigneeIndex(null);
-                }}
-                className="w-full"
-              >
-                Done
-              </Button>
-            </DialogFooter>
+          </div>
+          <div className="px-6 py-4 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] flex justify-end gap-2.5">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setActiveTaskAssigneeIndex(null);
+              }}
+              className="px-5 py-2 text-sm font-bold !rounded-[8px] bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors shadow-sm outline-none cursor-pointer w-full text-center"
+            >
+              Done
+            </button>
           </div>
         </DialogContent>
       </Dialog>
 
       {/* Save Template Name Modal */}
       <Dialog open={isSaveTemplateOpen} onOpenChange={setIsSaveTemplateOpen}>
-        <DialogContent className="sm:max-w-[400px] bg-background border-border">
-          <DialogHeader>
-            <DialogTitle>Save as Template</DialogTitle>
-            <DialogDescription>
-              Enter a name for this task template. This will save the task details, priority, config, and custom fields.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSaveTemplate} className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Template Name</label>
-              <Input
-                value={templateName}
-                onChange={(e) => setTemplateName(e.target.value)}
-                required
-                placeholder="e.g. SEO Audit Template"
-              />
+        <DialogContent className="sm:max-w-[450px] bg-white dark:bg-[#151518] border border-slate-200/80 dark:border-white/10 p-0 sm:!rounded-[8px] !rounded-[8px] shadow-2xl overflow-hidden [&>button]:hidden">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] relative shrink-0">
+            <h2 className="text-[16.5px] font-bold text-slate-900 dark:text-white leading-tight">Save as Template</h2>
+            <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">
+              Enter a name for this template.
+            </p>
+            <DialogPrimitive.Close className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-250 dark:hover:bg-zinc-700 transition-all rounded-full p-1.5 cursor-pointer outline-none flex items-center justify-center h-7 w-7">
+              <X size={14} />
+            </DialogPrimitive.Close>
+          </div>
+          <form onSubmit={handleSaveTemplate} className="flex flex-col">
+            <div className="p-6 space-y-4">
+              <div className="space-y-2">
+                <label className="text-[12.5px] font-bold text-slate-600 dark:text-slate-350">Template Name</label>
+                <Input
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  required
+                  placeholder="e.g. SEO Audit Template"
+                  className="h-10 !rounded-[8px] border-slate-200 focus-visible:ring-1 focus-visible:ring-slate-450 dark:border-white/10 dark:bg-transparent"
+                />
+              </div>
             </div>
-            <DialogFooter className="pt-4">
-              <Button
+            <div className="px-6 py-4 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] flex justify-end gap-2.5">
+              <button
                 type="button"
-                variant="outline"
                 onClick={() => setIsSaveTemplateOpen(false)}
+                className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 !rounded-[8px] transition-colors outline-none cursor-pointer"
+                disabled={isPending}
               >
                 Cancel
-              </Button>
-              <Button type="submit" disabled={isPending}>
+              </button>
+              <button
+                type="submit"
+                disabled={isPending || !templateName.trim()}
+                className="px-5 py-2 text-sm font-bold !rounded-[8px] bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors shadow-sm disabled:opacity-50 outline-none cursor-pointer"
+              >
                 {isPending ? "Saving..." : "Save Template"}
-              </Button>
-            </DialogFooter>
+              </button>
+            </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Template Selection Modal */}
+      <Dialog open={isTemplateSelectOpen} onOpenChange={setIsTemplateSelectOpen}>
+        <DialogContent className="sm:max-w-[850px] h-[80vh] flex flex-col overflow-hidden bg-white dark:bg-[#151518] border border-slate-200/80 dark:border-white/10 p-0 sm:!rounded-[8px] !rounded-[8px] shadow-2xl [&>button]:hidden">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] relative shrink-0">
+            <h2 className="text-[16.5px] font-bold text-slate-900 dark:text-white leading-tight">
+              {templateModalMode === 'UPDATE' ? 'Update Existing Template' : 'Select a Template'}
+            </h2>
+            <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">
+              {templateModalMode === 'UPDATE'
+                ? 'Choose an existing template to overwrite with current task configuration.'
+                : 'Choose one of your saved custom configurations.'}
+            </p>
+            <DialogPrimitive.Close className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-250 dark:hover:bg-zinc-700 transition-all rounded-full p-1.5 cursor-pointer outline-none flex items-center justify-center h-7 w-7">
+              <X size={14} />
+            </DialogPrimitive.Close>
+          </div>
+
+          {/* Search bar inside modal */}
+          <div className="px-6 pt-4 shrink-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search templates by name..."
+                value={templateSearchQuery}
+                onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                className="pl-9 h-10 !rounded-[8px] border bg-background text-sm shadow-sm"
+              />
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+            {isLoadingTemplates ? (
+              <div className="h-48 flex items-center justify-center text-muted-foreground text-sm font-semibold">
+                Loading templates...
+              </div>
+            ) : templates.length === 0 ? (
+              <div className="h-48 flex flex-col items-center justify-center border border-dashed rounded-2xl border-slate-200 dark:border-white/10 text-slate-455 dark:text-slate-400 p-6">
+                <Repeat size={32} className="opacity-20 mb-2" />
+                <p className="text-sm font-medium">No templates saved yet.</p>
+                <p className="text-xs text-center mt-1">Save a template using the button in the footer to reuse it here.</p>
+              </div>
+            ) : (() => {
+              const filtered = templates.filter(t =>
+                t.name.toLowerCase().includes(templateSearchQuery.toLowerCase())
+              );
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="h-48 flex flex-col items-center justify-center text-muted-foreground">
+                    <p className="text-sm font-medium">No templates match "{templateSearchQuery}"</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {filtered.map((template) => {
+                    const cfg = template.config || {};
+                    const fieldsCount = (cfg.customFields || []).length;
+
+                    return (
+                      <div
+                        key={template.id}
+                        className="relative overflow-hidden group hover:border-slate-350 dark:hover:border-white/20 transition-all duration-300 shadow-sm border border-slate-100 dark:border-white/5 rounded-lg bg-white dark:bg-[#151518] p-5 flex flex-col justify-between h-44"
+                      >
+                        {currentUser?.role === 'OWNER' && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTemplate(template.id)}
+                            className="absolute right-4 top-4 text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+
+                        <div className="space-y-1.5 pr-6">
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">{template.name}</h3>
+                          </div>
+                          
+                          <div className="flex flex-wrap gap-1.5">
+                            <Badge variant="secondary" className="bg-purple-50 text-purple-700 dark:bg-purple-950/20 dark:text-purple-400 border border-purple-100/50 dark:border-purple-900/30 text-[10px] font-bold py-0.5 px-2">
+                              {fieldsCount} {fieldsCount === 1 ? 'Field' : 'Fields'}
+                            </Badge>
+                          </div>
+
+                          <p className="text-[10px] text-muted-foreground font-semibold flex items-center">
+                            <CalendarIcon className="h-3 w-3 mr-1" />
+                            Created: {new Date(template.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (templateModalMode === 'UPDATE') {
+                              handleUpdateTemplate(template);
+                            } else {
+                              handleUseTemplate(cfg);
+                            }
+                          }}
+                          className="w-full text-xs font-bold h-9 !rounded-[8px] shadow-sm transition-colors cursor-pointer bg-slate-900 hover:bg-slate-800 dark:bg-white text-white dark:text-slate-900 dark:hover:bg-slate-100"
+                        >
+                          {templateModalMode === 'UPDATE' ? 'Update Template' : 'Use Template'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+
+          <div className="px-6 py-4 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] flex justify-end gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsTemplateSelectOpen(false)}
+              className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 !rounded-[8px] transition-colors outline-none cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Template Confirmation Modal */}
+      <Dialog open={isDeleteTemplateOpen} onOpenChange={setIsDeleteTemplateOpen}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151518] border border-slate-200/80 dark:border-white/10 p-0 sm:!rounded-[8px] !rounded-[8px] shadow-2xl [&>button]:hidden">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] relative shrink-0">
+            <h2 className="text-[16.5px] font-bold text-slate-900 dark:text-white leading-tight">Delete Template</h2>
+            <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">Are you sure you want to delete this template?</p>
+            <DialogPrimitive.Close className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-250 dark:hover:bg-zinc-700 transition-all rounded-full p-1.5 cursor-pointer outline-none flex items-center justify-center h-7 w-7">
+              <X size={14} />
+            </DialogPrimitive.Close>
+          </div>
+          <div className="p-6">
+            <p className="text-sm text-slate-500">This action cannot be undone. This template will be permanently removed.</p>
+          </div>
+          <div className="px-6 py-4 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] flex justify-end gap-2.5">
+            <Button type="button" variant="outline" onClick={() => setIsDeleteTemplateOpen(false)} className="!rounded-[8px] h-9">Cancel</Button>
+            <Button type="button" onClick={confirmDeleteTemplate} className="bg-red-650 hover:bg-red-700 text-white !rounded-[8px] h-9">Delete</Button>
+          </div>
         </DialogContent>
       </Dialog>
 

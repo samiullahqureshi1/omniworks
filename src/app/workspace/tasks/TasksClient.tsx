@@ -14,12 +14,14 @@ import { Badge } from '@/components/ui/badge';
 import {
   Search, Plus, Settings, Calendar, Clock, LayoutGrid, List, Columns,
   X, Type, Hash, Tags, Sparkles, PlusSquare, CheckSquare, Globe, Mail, Phone,
-  AlignLeft, ChevronDown, Check, CircleDashed, CircleDot, CheckCircle2, Circle
+  AlignLeft, ChevronDown, Check, CircleDashed, CircleDot, CheckCircle2, Circle,
+  User, Flag
 } from 'lucide-react';
 import { List as ListIcon2 } from 'lucide-react';
 import { Calendar as CalendarIcon } from 'lucide-react';
+import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Edit, Trash2, Repeat, TrendingUp, Hourglass, ChevronRight } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, Repeat, TrendingUp, Hourglass, ChevronRight, Star, Filter, Layers } from 'lucide-react';
 import { deleteTaskAction, updateTaskAction, getTaskTemplatesAction, deleteTaskTemplateAction, createTaskStatusAction, updateTaskStatusAction, deleteTaskStatusAction } from '@/app/actions/tasks';
 import { getTaskHiddenColumnsAction, setTaskHiddenColumnsAction } from '@/app/actions/settings';
 import { toast } from 'sonner';
@@ -859,6 +861,23 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   const [selectedStatusId, setSelectedStatusId] = useState<string>('all');
   const [selectedAssigneeId, setSelectedAssigneeId] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
+  const [showFilters, setShowFilters] = useState(false);
+  const [groupByField, setGroupByField] = useState<'Status' | 'Assignee' | 'Priority' | 'Due date'>('Status');
+  const [groupByOrder, setGroupByOrder] = useState<'Ascending' | 'Descending'>('Descending');
+
+  const getFieldIcon = (field: 'Status' | 'Assignee' | 'Priority' | 'Due date', className?: string) => {
+    const size = 14;
+    switch (field) {
+      case 'Status':
+        return <CircleDot size={size} className={className} />;
+      case 'Assignee':
+        return <User size={size} className={className} />;
+      case 'Priority':
+        return <Flag size={size} className={className} />;
+      case 'Due date':
+        return <CalendarIcon size={size} className={className} />;
+    }
+  };
 
   // ── Drag & Drop
   const [activeDragItem, setActiveDragItem] = useState<any>(null);
@@ -1031,6 +1050,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   // ── Templates
   const [taskTemplates, setTaskTemplates] = useState<any[]>([]);
   const [isTemplateSelectOpen, setIsTemplateSelectOpen] = useState(false);
+  const [templateSearchQuery, setTemplateSearchQuery] = useState("");
   const [selectedTemplateConfig, setSelectedTemplateConfig] = useState<any>(null);
   const [isRepeatFromDropdown, setIsRepeatFromDropdown] = useState(false);
 
@@ -1152,9 +1172,9 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
     isClient;
   const canManageStatuses = currentUser.role === 'OWNER';
 
-  const availableUsers = isClient
+  const availableUsers = (isClient
     ? users.filter(u => initialTasks.some(t => t.assignees.some((a: any) => a.userId === u.id)))
-    : users;
+    : users).filter(u => u.role !== 'CLIENT');
 
   // ── Filters
   const filteredTasks = tasks.filter(t => {
@@ -1228,75 +1248,312 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Tasks</h1>
-          <p className="text-muted-foreground">Manage your tasks, track hours, and monitor timelines.</p>
+    <div className=" max-w-7xl mx-auto space-y-6">
+      {/* Header Container that stretches to touch the sidebar */}
+     <div className="-mx-6 -mt-6 border-b border-slate-200 dark:border-white/10 bg-white dark:bg-[#151518] z-20 mb-6">
+        {/* Task Space title row */}
+        <div className="px-6 pt-3.5 pb-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+            <span className="flex items-center justify-center w-5 h-5 rounded bg-purple-600 text-white">
+              <CheckSquare size={12} />
+            </span>
+
+            <span className="text-slate-900 dark:text-white font-semibold text-base">
+              Task Space
+            </span>
+
+            <Star size={14} className="text-slate-400 hover:text-yellow-500 cursor-pointer ml-1" />
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {canManageStatuses && (
-            <Button variant="outline" onClick={() => setIsStatusManageOpen(true)}>
-              <Settings className="w-4 h-4 mr-2" />
-              Manage Statuses
-            </Button>
-          )}
-          {canCreateTask && (
-            <div className="flex items-center -space-x-px shadow-sm rounded-xl overflow-hidden">
-              <Button
-                onClick={() => {
-                  setEditingTask(null);
-                  setSelectedTemplateConfig(null);
-                  setIsRepeatFromDropdown(false);
-                  setIsCreateOpen(true);
-                }}
-                className="rounded-r-none h-10 px-4"
+
+        {/* Controls row */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 px-6 pb-3.5">
+          {/* Left side: view switcher + group button */}
+          <div className="flex flex-wrap items-center gap-4">
+            {/* View toggle (Table / Kanban switcher) */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-zinc-800/80 p-0.5 rounded-[8px] border border-slate-200/50 dark:border-white/5">
+              <button
+                type="button"
+                onClick={() => handleSetViewMode('table')}
+                className={`h-7 px-3 rounded-[6px] text-xs font-semibold transition-all flex items-center cursor-pointer ${
+                  viewMode === 'table'
+                    ? 'bg-white dark:bg-[#2c2c30] shadow-sm text-slate-900 dark:text-white'
+                    : 'text-slate-500 hover:text-slate-750 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
               >
-                <Plus className="mr-2 h-4 w-4" /> Create Task
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button className="rounded-l-none border-l border-white/20 px-2.5 h-10">
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1.5 z-50">
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setEditingTask(null);
-                      setSelectedTemplateConfig(null);
-                      setIsRepeatFromDropdown(false);
-                      setIsCreateOpen(true);
-                    }}
-                    className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
-                  >
-                    Create New Task
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setIsTemplateSelectOpen(true)}
-                    className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
-                  >
-                    Use Existing Task Template
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setEditingTask(null);
-                      setSelectedTemplateConfig(null);
-                      setIsRepeatFromDropdown(true);
-                      setIsCreateOpen(true);
-                    }}
-                    className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
-                  >
-                    Create Repeated Task
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                <LayoutGrid className="w-3.5 h-3.5 mr-1.5" /> Table
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetViewMode('kanban')}
+                className={`h-7 px-3 rounded-[6px] text-xs font-semibold transition-all flex items-center cursor-pointer ${
+                  viewMode === 'kanban'
+                    ? 'bg-white dark:bg-[#2c2c30] shadow-sm text-slate-900 dark:text-white'
+                    : 'text-slate-500 hover:text-slate-750 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+              >
+                <Columns className="w-3.5 h-3.5 mr-1.5" /> Kanban
+              </button>
             </div>
-          )}
+
+            {/* Group Status Popover (styled exactly like project module) */}
+            <PopoverPrimitive.Root>
+              <PopoverPrimitive.Trigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400 text-xs font-semibold border border-blue-100 dark:border-blue-900/50 cursor-pointer transition-all hover:bg-blue-100/50 shadow-none h-[28px]"
+                >
+                  <Layers size={12} />
+                  <span>Group: {groupByField}</span>
+                </button>
+              </PopoverPrimitive.Trigger>
+              <PopoverPrimitive.Portal>
+                <PopoverPrimitive.Content align="start" sideOffset={6} className="z-50 w-auto bg-white dark:bg-[#1a1a1a] rounded-[8px] border border-slate-200 dark:border-white/10 shadow-lg p-3 outline-none animate-in fade-in-0 zoom-in-95 duration-100">
+                  <div className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1.5 uppercase tracking-wider">Group by</div>
+                  
+                  <div className="flex items-center gap-2">
+                    {/* Group By Field Selector Dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" className="flex items-center justify-between gap-1.5 px-3 py-1.5 border border-slate-200 dark:border-white/10 rounded-[8px] text-sm bg-transparent hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer min-w-[140px] text-slate-700 dark:text-slate-200 text-left outline-none font-medium">
+                          <span className="flex items-center gap-1.5">
+                            {getFieldIcon(groupByField, "text-slate-500")}
+                            {groupByField}
+                          </span>
+                          <ChevronDown size={14} className="text-slate-400" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-48 bg-white dark:bg-[#1a1a1a] rounded-[8px] border border-slate-200 dark:border-white/10 shadow-md p-1 z-[60]">
+                        {(["Status", "Assignee", "Priority", "Due date"] as const).map((field) => (
+                          <DropdownMenuItem
+                            key={field}
+                            onClick={() => setGroupByField(field)}
+                            className="flex items-center justify-between px-2 py-1.5 text-xs rounded-[4px] hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer text-slate-700 dark:text-slate-200"
+                          >
+                            <span className="flex items-center gap-2">
+                              {getFieldIcon(field, "text-slate-400")}
+                              {field}
+                            </span>
+                            {groupByField === field && <Check size={12} className="text-slate-500" />}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* Sorting Order Selector Dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" className="flex items-center justify-between gap-1.5 px-3 py-1.5 border border-slate-200 dark:border-white/10 rounded-[8px] text-sm bg-transparent hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer min-w-[110px] text-slate-700 dark:text-slate-200 text-left outline-none font-medium">
+                          <span>{groupByOrder}</span>
+                          <ChevronDown size={14} className="text-slate-400" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-32 bg-white dark:bg-[#1a1a1a] rounded-[8px] border border-slate-200 dark:border-white/10 shadow-md p-1 z-[60]">
+                        {(["Ascending", "Descending"] as const).map((order) => (
+                          <DropdownMenuItem
+                            key={order}
+                            onClick={() => setGroupByOrder(order)}
+                            className="flex items-center justify-between px-2 py-1.5 text-xs rounded-[4px] hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer text-slate-700 dark:text-slate-200"
+                          >
+                            <span>{order}</span>
+                            {groupByOrder === order && <Check size={12} className="text-slate-500" />}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* Reset Button (Trash Icon) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGroupByField("Status");
+                        setGroupByOrder("Descending");
+                      }}
+                      title="Reset Grouping"
+                      className="p-2 rounded-[8px] text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer transition-colors border border-slate-200 dark:border-white/10 outline-none flex items-center justify-center h-[34px] w-[34px]"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </PopoverPrimitive.Content>
+              </PopoverPrimitive.Portal>
+            </PopoverPrimitive.Root>
+          </div>
+
+          {/* Right side: Filter + Manage Statuses + Add Task */}
+          <div className="flex flex-wrap items-center gap-3 ml-auto sm:ml-0">
+            {/* Filter button dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button 
+                  type="button" 
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer transition-colors shadow-none h-[28px] ${
+                    (searchQuery || selectedProjectId !== 'all' || selectedStatusId !== 'all' || selectedAssigneeId !== 'all')
+                      ? 'bg-slate-900 border-slate-900 text-white dark:bg-white dark:border-white dark:text-slate-900' 
+                      : 'border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-350 bg-white dark:bg-transparent'
+                  }`}
+                >
+                  <Filter size={12} />
+                  <span>Filter</span>
+                  {(searchQuery || selectedProjectId !== 'all' || selectedStatusId !== 'all' || selectedAssigneeId !== 'all') && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400 animate-pulse" />
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-80 p-4 bg-white dark:bg-[#1a1a1a] rounded-[8px] border border-slate-200 dark:border-white/10 shadow-lg z-50">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b pb-2 border-slate-100 dark:border-white/5">
+                    <h4 className="font-semibold text-sm text-slate-800 dark:text-slate-200">Filters</h4>
+                    {(searchQuery || selectedProjectId !== 'all' || selectedStatusId !== 'all' || selectedAssigneeId !== 'all') && (
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery("");
+                          setSelectedProjectId("all");
+                          setSelectedStatusId("all");
+                          setSelectedAssigneeId("all");
+                        }}
+                        className="text-xs text-blue-650 hover:text-blue-500 font-medium cursor-pointer bg-transparent border-0 outline-none"
+                      >
+                        Clear all
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Search input */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-500">Search</label>
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                      <Input
+                        placeholder="Search tasks..."
+                        className="pl-8.5 w-full h-8 text-xs bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 !rounded-[8px] focus-visible:ring-1 focus-visible:ring-slate-400 focus-visible:border-slate-400 transition-all duration-200 text-slate-700 dark:text-slate-200"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Project Selector */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-500">Project</label>
+                    <select
+                      value={selectedProjectId}
+                      onChange={(e) => setSelectedProjectId(e.target.value)}
+                      className="w-full h-8 text-xs bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-[8px] px-2 text-slate-700 dark:text-slate-300 outline-none cursor-pointer"
+                    >
+                      <option value="all">All Tasks</option>
+                      {projects.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Status Selector */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-500">Status</label>
+                    <select
+                      value={selectedStatusId}
+                      onChange={(e) => setSelectedStatusId(e.target.value)}
+                      className="w-full h-8 text-xs bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-[8px] px-2 text-slate-700 dark:text-slate-300 outline-none cursor-pointer"
+                    >
+                      <option value="all">All Statuses</option>
+                      {taskStatuses.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Assignee Selector */}
+                  {currentUser.role !== 'MEMBER' && (
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-500">Assignee</label>
+                      <select
+                        value={selectedAssigneeId}
+                        onChange={(e) => setSelectedAssigneeId(e.target.value)}
+                        className="w-full h-8 text-xs bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-[8px] px-2 text-slate-700 dark:text-slate-300 outline-none cursor-pointer"
+                      >
+                        <option value="all">All Assignees</option>
+                        {availableUsers.map(u => (
+                          <option key={u.id} value={u.id}>{u.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {canManageStatuses && (
+              <Button 
+                variant="outline" 
+                onClick={() => setIsStatusManageOpen(true)} 
+                className="!rounded-[8px] h-9 border-slate-200 hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5 text-slate-800 dark:text-slate-200 font-medium text-xs"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Manage Statuses
+              </Button>
+            )}
+
+            {/* split Create Task button */}
+            {canCreateTask && (
+              <div className="flex items-center -space-x-px shadow-sm rounded-[8px] overflow-hidden">
+                <Button
+                  onClick={() => {
+                    setEditingTask(null);
+                    setSelectedTemplateConfig(null);
+                    setIsRepeatFromDropdown(false);
+                    setIsCreateOpen(true);
+                  }}
+                  className="rounded-r-none h-9 px-4 rounded-l-[8px] bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-xs font-semibold"
+                >
+                  <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Task
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="rounded-l-none border-l border-white/20 px-2.5 h-9 rounded-r-[8px] bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52 bg-white dark:bg-[#1c1c1f] rounded-xl shadow-lg border border-slate-200 dark:border-white/10 p-1.5 z-50">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setEditingTask(null);
+                        setSelectedTemplateConfig(null);
+                        setIsRepeatFromDropdown(false);
+                        setIsCreateOpen(true);
+                      }}
+                      className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
+                    >
+                      Create New Task
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setIsTemplateSelectOpen(true)}
+                      className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
+                    >
+                      Use Existing Task Template
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setEditingTask(null);
+                        setSelectedTemplateConfig(null);
+                        setIsRepeatFromDropdown(true);
+                        setIsCreateOpen(true);
+                      }}
+                      className="cursor-pointer rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted focus:bg-muted"
+                    >
+                      Create Repeated Task
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      {/* 3 cards stats grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
         <div className="relative overflow-hidden bg-gradient-to-br from-indigo-50/40 via-white to-white dark:from-indigo-950/10 dark:via-background dark:to-background border border-slate-100 dark:border-white/5 rounded-2xl p-5 shadow-sm transition-all duration-300 hover:shadow-md">
           <div className="flex justify-between items-start">
             <div className="space-y-1.5">
@@ -1363,86 +1620,6 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                 <span className="font-medium text-amber-600 dark:text-amber-400">{totalAllocated > 0 ? ((remainingHours / totalAllocated) * 100).toFixed(0) : 100}%</span> of allocation left
               </>
             )}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col xl:flex-row gap-4 items-stretch xl:items-center bg-white/60 dark:bg-[#151515]/60 backdrop-blur-md p-4 rounded-2xl border border-slate-100 dark:border-white/5 shadow-sm">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input
-            placeholder="Search tasks..."
-            className="pl-9.5 w-full bg-slate-50/50 dark:bg-white/5 border-slate-200 dark:border-white/10 rounded-xl focus-visible:ring-2 focus-visible:ring-violet-500/20 focus-visible:border-violet-500 transition-all duration-200"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-          <div className="relative flex items-center">
-            <span className="absolute left-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider pointer-events-none">Project</span>
-            <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="flex h-10 w-full sm:w-[170px] rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/5 pl-[64px] pr-8 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all duration-200 cursor-pointer appearance-none text-slate-700 dark:text-slate-200"
-            >
-              <option value="all">All Tasks</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-            <ChevronDown size={14} className="absolute right-3 text-slate-400 pointer-events-none" />
-          </div>
-
-          <div className="relative flex items-center">
-            <span className="absolute left-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider pointer-events-none">Status</span>
-            <select
-              value={selectedStatusId}
-              onChange={(e) => setSelectedStatusId(e.target.value)}
-              className="flex h-10 w-full sm:w-[170px] rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/5 pl-[60px] pr-8 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all duration-200 cursor-pointer appearance-none text-slate-700 dark:text-slate-200"
-            >
-              <option value="all">All Statuses</option>
-              {taskStatuses.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-            <ChevronDown size={14} className="absolute right-3 text-slate-400 pointer-events-none" />
-          </div>
-
-          {currentUser.role !== 'MEMBER' && (
-            <div className="relative flex items-center">
-              <span className="absolute left-3.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider pointer-events-none">Assignee</span>
-              <select
-                value={selectedAssigneeId}
-                onChange={(e) => setSelectedAssigneeId(e.target.value)}
-                className="flex h-10 w-full sm:w-[180px] rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/5 pl-[72px] pr-8 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all duration-200 cursor-pointer appearance-none text-slate-700 dark:text-slate-200"
-              >
-                <option value="all">All Assignees</option>
-                {availableUsers.map(u => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-3 text-slate-400 pointer-events-none" />
-            </div>
-          )}
-
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-white/5 p-1 rounded-xl border border-slate-200/50 dark:border-white/5 self-stretch sm:self-auto justify-center">
-            <Button 
-              variant={viewMode === 'table' ? 'secondary' : 'ghost'} 
-              size="sm" 
-              className={`h-8 px-3 rounded-lg text-xs font-medium transition-all ${viewMode === 'table' ? 'bg-white dark:bg-[#252525] shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`} 
-              onClick={() => handleSetViewMode('table')}
-            >
-              <LayoutGrid className="w-3.5 h-3.5 mr-1.5" /> Table
-            </Button>
-            <Button 
-              variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} 
-              size="sm" 
-              className={`h-8 px-3 rounded-lg text-xs font-medium transition-all ${viewMode === 'kanban' ? 'bg-white dark:bg-[#252525] shadow-sm text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`} 
-              onClick={() => handleSetViewMode('kanban')}
-            >
-              <Columns className="w-3.5 h-3.5 mr-1.5" /> Kanban
-            </Button>
           </div>
         </div>
       </div>
@@ -1636,55 +1813,69 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
 
       {/* Confirm Status Change (Kanban drag) */}
       <Dialog open={!!confirmDropState} onOpenChange={(open) => !open && !isUpdatingStatus && setConfirmDropState(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirm Status Change</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151518] border border-slate-200/80 dark:border-white/10 p-0 sm:!rounded-[8px] !rounded-[8px] shadow-2xl overflow-hidden [&>button]:hidden">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] relative shrink-0">
+            <h2 className="text-[16.5px] font-bold text-slate-900 dark:text-white leading-tight">Confirm Status Change</h2>
+            <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">
               Are you sure you want to move &quot;{confirmDropState?.task.title}&quot; to {confirmDropState?.targetStatus.name}?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDropState(null)} disabled={isUpdatingStatus}>Cancel</Button>
-            <Button onClick={confirmStatusChange} disabled={isUpdatingStatus}>
+            </p>
+            <DialogPrimitive.Close className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-250 dark:hover:bg-zinc-700 transition-all rounded-full p-1.5 cursor-pointer outline-none flex items-center justify-center h-7 w-7">
+              <X size={14} />
+            </DialogPrimitive.Close>
+          </div>
+          <div className="p-6">
+            <p className="text-sm text-slate-500">This will update the task status in the database.</p>
+          </div>
+          <div className="px-6 py-4 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] flex justify-end gap-2.5">
+            <Button variant="outline" onClick={() => setConfirmDropState(null)} disabled={isUpdatingStatus} className="!rounded-[8px] h-9">Cancel</Button>
+            <Button onClick={confirmStatusChange} disabled={isUpdatingStatus} className="!rounded-[8px] h-9 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100">
               {isUpdatingStatus ? 'Moving...' : 'Confirm Move'}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Delete Task Confirmation */}
       <Dialog open={isDeleteTaskOpen} onOpenChange={setIsDeleteTaskOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Task</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this task? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteTaskOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmDeleteTask} disabled={isPending}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151518] border border-slate-200/80 dark:border-white/10 p-0 sm:!rounded-[8px] !rounded-[8px] shadow-2xl overflow-hidden [&>button]:hidden">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] relative shrink-0">
+            <h2 className="text-[16.5px] font-bold text-slate-900 dark:text-white leading-tight">Delete Task</h2>
+            <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">Are you sure you want to delete this task?</p>
+            <DialogPrimitive.Close className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-250 dark:hover:bg-zinc-700 transition-all rounded-full p-1.5 cursor-pointer outline-none flex items-center justify-center h-7 w-7">
+              <X size={14} />
+            </DialogPrimitive.Close>
+          </div>
+          <div className="p-6">
+            <p className="text-sm text-slate-500">This action cannot be undone. This task will be permanently removed.</p>
+          </div>
+          <div className="px-6 py-4 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] flex justify-end gap-2.5">
+            <Button variant="outline" onClick={() => setIsDeleteTaskOpen(false)} className="!rounded-[8px] h-9">Cancel</Button>
+            <Button onClick={confirmDeleteTask} disabled={isPending} className="!rounded-[8px] h-9 bg-red-650 hover:bg-red-700 text-white">
               {isPending ? 'Deleting...' : 'Delete'}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Delete Template Confirmation */}
       <Dialog open={isDeleteTemplateOpen} onOpenChange={setIsDeleteTemplateOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Template</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this task template? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteTemplateOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmDeleteTemplate}>
+        <DialogContent className="sm:max-w-md bg-white dark:bg-[#151518] border border-slate-200/80 dark:border-white/10 p-0 sm:!rounded-[8px] !rounded-[8px] shadow-2xl overflow-hidden [&>button]:hidden">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] relative shrink-0">
+            <h2 className="text-[16.5px] font-bold text-slate-900 dark:text-white leading-tight">Delete Template</h2>
+            <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">Are you sure you want to delete this task template?</p>
+            <DialogPrimitive.Close className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-250 dark:hover:bg-zinc-700 transition-all rounded-full p-1.5 cursor-pointer outline-none flex items-center justify-center h-7 w-7">
+              <X size={14} />
+            </DialogPrimitive.Close>
+          </div>
+          <div className="p-6">
+            <p className="text-sm text-slate-500">This action cannot be undone. This template will be permanently removed.</p>
+          </div>
+          <div className="px-6 py-4 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] flex justify-end gap-2.5">
+            <Button variant="outline" onClick={() => setIsDeleteTemplateOpen(false)} className="!rounded-[8px] h-9">Cancel</Button>
+            <Button onClick={confirmDeleteTemplate} className="!rounded-[8px] h-9 bg-red-650 hover:bg-red-700 text-white">
               Delete Template
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1719,77 +1910,119 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
 
       {/* Template Selection Modal */}
       <Dialog open={isTemplateSelectOpen} onOpenChange={setIsTemplateSelectOpen}>
-        <DialogContent className="sm:max-w-[600px] bg-background border-border flex flex-col h-[70vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>Use Task Template</DialogTitle>
-            <DialogDescription>
-              Select a task template to pre-populate details and custom fields.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="sm:max-w-[850px] h-[80vh] flex flex-col overflow-hidden bg-white dark:bg-[#151518] border border-slate-200/80 dark:border-white/10 p-0 sm:!rounded-[8px] !rounded-[8px] shadow-2xl [&>button]:hidden">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] relative shrink-0">
+            <h2 className="text-[16.5px] font-bold text-slate-900 dark:text-white leading-tight">Select a Template</h2>
+            <p className="text-xs text-slate-450 dark:text-slate-400 mt-1">Choose one of your saved custom task templates.</p>
+            <DialogPrimitive.Close className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-250 dark:hover:bg-zinc-700 transition-all rounded-full p-1.5 cursor-pointer outline-none flex items-center justify-center h-7 w-7">
+              <X size={14} />
+            </DialogPrimitive.Close>
+          </div>
 
-          <div className="flex-1 overflow-y-auto py-4 space-y-4 custom-scrollbar">
+          {/* Search bar inside modal */}
+          <div className="px-6 pt-4 shrink-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search templates by name..."
+                value={templateSearchQuery}
+                onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                className="pl-9 h-10 !rounded-[8px] border bg-background text-sm shadow-sm"
+              />
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar">
             {taskTemplates.length === 0 ? (
-              <div className="h-48 flex flex-col items-center justify-center border border-dashed rounded-2xl text-muted-foreground p-6">
+              <div className="h-48 flex flex-col items-center justify-center border border-dashed rounded-2xl border-slate-200 dark:border-white/10 text-slate-450 dark:text-slate-400 p-6">
                 <Repeat size={32} className="opacity-20 mb-2" />
-                <p className="text-sm font-medium">No task templates saved yet.</p>
-                <p className="text-xs text-center mt-1">Save a task template inside the creation form to reuse it here.</p>
+                <p className="text-sm font-medium">No templates saved yet.</p>
+                <p className="text-xs text-center mt-1">Save a template using the button in the task form footer to reuse it here.</p>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {taskTemplates.map((tpl) => {
-                  const config = tpl.config || {};
-                  const fieldsCount = (config.customFields || []).length;
-                  const dateFormatted = new Date(tpl.createdAt).toLocaleDateString("en-US", {
-                    month: "long",
-                    year: "numeric",
-                  });
+            ) : (() => {
+              const filtered = taskTemplates.filter(t =>
+                t.name.toLowerCase().includes(templateSearchQuery.toLowerCase())
+              );
 
-                  return (
-                    <Card key={tpl.id} className="relative overflow-hidden group hover:border-purple-200 dark:hover:border-purple-900/50 transition-all duration-300 shadow-sm flex flex-col justify-between">
-                      {currentUser.role === "OWNER" && (
+              if (filtered.length === 0) {
+                return (
+                  <div className="h-48 flex flex-col items-center justify-center text-muted-foreground">
+                    <p className="text-sm font-medium">No templates match "{templateSearchQuery}"</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {filtered.map((tpl) => {
+                    const config = tpl.config || {};
+                    const fieldsCount = (config.customFields || []).length;
+                    const dateFormatted = new Date(tpl.createdAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      year: "numeric",
+                      day: "numeric",
+                    });
+
+                    return (
+                      <div
+                        key={tpl.id}
+                        className="relative overflow-hidden group hover:border-slate-350 dark:hover:border-white/20 transition-all duration-300 shadow-sm border border-slate-100 dark:border-white/5 rounded-lg bg-white dark:bg-[#151518] p-5 flex flex-col justify-between h-44"
+                      >
+                        {currentUser?.role === 'OWNER' && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTemplate(tpl.id)}
+                            className="absolute right-4 top-4 text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+
+                        <div className="space-y-1.5 pr-6">
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">{tpl.name}</h3>
+                          </div>
+                          
+                          <div className="flex flex-wrap gap-1.5">
+                            <Badge variant="secondary" className="bg-purple-50 text-purple-700 dark:bg-purple-950/20 dark:text-purple-400 border border-purple-100/50 dark:border-purple-900/30 text-[10px] font-bold py-0.5 px-2">
+                              {fieldsCount} {fieldsCount === 1 ? 'Field' : 'Fields'}
+                            </Badge>
+                          </div>
+
+                          <p className="text-[10px] text-muted-foreground font-semibold flex items-center">
+                            <CalendarIcon className="h-3 w-3 mr-1" />
+                            Created: {dateFormatted}
+                          </p>
+                        </div>
+
                         <button
                           type="button"
-                          onClick={() => handleDeleteTemplate(tpl.id)}
-                          className="absolute right-3 top-3 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                      <CardHeader className="p-4 pb-2">
-                        <CardTitle className="text-sm font-bold truncate pr-6">{tpl.name}</CardTitle>
-                        <CardDescription className="text-xs truncate">{config.title || "Untitled Task"}</CardDescription>
-                      </CardHeader>
-                      <CardContent className="p-4 pt-0 space-y-2 text-xs">
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>Custom Fields:</span>
-                          <span className="font-semibold text-foreground">{fieldsCount}</span>
-                        </div>
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>Created:</span>
-                          <span className="font-semibold text-foreground">{dateFormatted}</span>
-                        </div>
-                        <Button
                           onClick={() => {
                             setSelectedTemplateConfig(config);
                             setIsTemplateSelectOpen(false);
                             setIsCreateOpen(true);
                           }}
-                          className="w-full mt-2 h-8 text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700"
+                          className="w-full text-xs font-bold h-9 !rounded-[8px] shadow-sm transition-colors cursor-pointer bg-slate-900 hover:bg-slate-800 dark:bg-white text-white dark:text-slate-900 dark:hover:bg-slate-100"
                         >
                           Use Template
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
-          <DialogFooter className="pt-4 border-t shrink-0">
-            <Button variant="outline" onClick={() => setIsTemplateSelectOpen(false)}>
-              Cancel
-            </Button>
-          </DialogFooter>
+
+          <div className="px-6 py-4 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-[#19191c] flex justify-end gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsTemplateSelectOpen(false)}
+              className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 !rounded-[8px] transition-colors outline-none cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -599,6 +599,33 @@ export async function deleteTaskTemplateAction(templateId: string) {
   }
 }
 
+export async function updateTaskTemplateAction(templateId: string, config: any) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== 'OWNER') {
+      return { error: 'Unauthorized: Only Owners can update task templates.' };
+    }
+
+    if (!templateId || !config) {
+      return { error: 'Template ID and configuration details are required.' };
+    }
+
+    const template = await prisma.taskTemplate.update({
+      where: {
+        id: templateId,
+        organizationId: session.organizationId,
+      },
+      data: {
+        config: config,
+      },
+    });
+
+    return { success: true, template };
+  } catch (error: any) {
+    return { error: error.message || 'Failed to update task template.' };
+  }
+}
+
 export async function updateTaskCustomFieldsAction(taskId: string, customFields: any) {
   try {
     const session = await getSession();
