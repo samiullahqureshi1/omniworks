@@ -25,7 +25,7 @@ import { MoreHorizontal, Edit, Trash2, Repeat, TrendingUp, Hourglass, ChevronRig
 import { deleteTaskAction, updateTaskAction, getTaskTemplatesAction, deleteTaskTemplateAction, createTaskStatusAction, updateTaskStatusAction, deleteTaskStatusAction } from '@/app/actions/tasks';
 import { getTaskHiddenColumnsAction, setTaskHiddenColumnsAction } from '@/app/actions/settings';
 import { toast } from 'sonner';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import TaskFormModal from './TaskFormModal';
 import StatusManagementModal from './StatusManagementModal';
 import { DndContext, DragOverlay, useDraggable, useDroppable, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -1102,6 +1102,8 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => setIsMounted(true), []);
 
+  const searchParams = useSearchParams();
+
   // ── Load hidden columns from DB on mount
   useEffect(() => {
     getTaskHiddenColumnsAction().then(res => {
@@ -1113,9 +1115,8 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
 
   // ── Auto-open task details from query param (?taskId=...)
   useEffect(() => {
-    if (typeof window !== 'undefined' && tasks.length > 0) {
-      const urlParams = new URLSearchParams(window.location.search);
-      const taskIdParam = urlParams.get('taskId');
+    if (tasks.length > 0) {
+      const taskIdParam = searchParams.get('taskId');
       if (taskIdParam) {
         const foundTask = tasks.find(t => t.id === taskIdParam);
         if (foundTask) {
@@ -1123,7 +1124,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
         }
       }
     }
-  }, [tasks]);
+  }, [tasks, searchParams]);
 
   const hideColumn = (colName: string) => {
     if (hiddenColumns.includes(colName)) return;
