@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   EditorContent,
   NodeViewContent,
@@ -327,6 +328,12 @@ export function RichTextEditor({
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const [selectedMentionIndex, setSelectedMentionIndex] = useState(0);
   const [selectedBannerIndex, setSelectedBannerIndex] = useState(0);
+  const [menuPosition, setMenuPosition] = useState<{ top?: number; bottom?: number; left: number } | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     setSelectedCommandIndex(0);
@@ -340,14 +347,82 @@ export function RichTextEditor({
     setSelectedBannerIndex(0);
   }, [bannerInsertRange]);
 
+  const commandListRef = useRef<HTMLDivElement>(null);
+  const mentionListRef = useRef<HTMLDivElement>(null);
+  const bannerListRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (commandListRef.current) {
+      const activeEl = commandListRef.current.querySelector('[data-active="true"]');
+      if (activeEl) {
+        activeEl.scrollIntoView({ block: "nearest" });
+      }
+    }
+  }, [selectedCommandIndex]);
+
+  useEffect(() => {
+    if (mentionListRef.current) {
+      const activeEl = mentionListRef.current.querySelector('[data-active="true"]');
+      if (activeEl) {
+        activeEl.scrollIntoView({ block: "nearest" });
+      }
+    }
+  }, [selectedMentionIndex]);
+
+  useEffect(() => {
+    if (bannerListRef.current) {
+      const activeEl = bannerListRef.current.querySelector('[data-active="true"]');
+      if (activeEl) {
+        activeEl.scrollIntoView({ block: "nearest" });
+      }
+    }
+  }, [selectedBannerIndex]);
+
   const syncTriggerMenus = (currentEditor: any) => {
-    const { $from } = currentEditor.state.selection;
-    const textBeforeCursor = $from.parent.textBetween(0, $from.parentOffset, undefined, "\ufffc");
+    const { selection } = currentEditor.state;
+    const { $from } = selection;
+    
+    // Fallback safe extraction: get up to 100 characters before the cursor
+    const start = Math.max(0, $from.parentOffset - 100);
+    const textBeforeCursor = $from.parent.textBetween(start, $from.parentOffset, undefined, "\ufffc");
+    
+    // Check match at the very end of the extracted slice
     const slashMatch = textBeforeCursor.match(/(?:^|\s)\/([^\s/]*)$/);
     const mentionMatch = textBeforeCursor.match(/(?:^|\s)@([^\s@\n]*)$/);
 
     setSlashQuery(slashMatch ? slashMatch[1] : null);
     setMentionQuery(mentionMatch ? mentionMatch[1] : null);
+
+    if (slashMatch || mentionMatch) {
+      try {
+        const { from } = selection;
+        const coords = currentEditor.view.coordsAtPos(from);
+        
+        // Ensure menu doesn't overflow horizontally right
+        const leftPos = Math.min(Math.max(8, coords.left), window.innerWidth - 320);
+        
+        const spaceBelow = window.innerHeight - coords.bottom;
+        const spaceAbove = coords.top;
+
+        if (spaceBelow < 320 && spaceAbove > spaceBelow) {
+          // Position above the cursor using fixed positioning
+          setMenuPosition({
+            bottom: window.innerHeight - coords.top + 8,
+            left: leftPos
+          });
+        } else {
+          // Position below the cursor using fixed positioning
+          setMenuPosition({
+            top: coords.bottom + 8,
+            left: leftPos
+          });
+        }
+      } catch (e) {
+        setMenuPosition(null);
+      }
+    } else {
+      setMenuPosition(null);
+    }
   };
 
   const editor = useEditor({
@@ -614,8 +689,12 @@ export function RichTextEditor({
       <button
         key={`${item.command}-${item.label}`}
         type="button"
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={() => runCommand(item.command)}
+        data-active={isSelected}
+        onMouseEnter={() => setSelectedCommandIndex(globalIndex)}
+        onMouseDown={(event) => {
+          event.preventDefault();
+          runCommand(item.command);
+        }}
         className={`flex w-full items-center gap-3 rounded-[8px] px-2 py-2 text-left text-[14px] text-slate-800 transition-colors focus-visible:outline-none dark:text-slate-100 ${
           isSelected
             ? "bg-slate-100 dark:bg-white/10 ring-1 ring-slate-300 dark:ring-white/20 font-medium"
@@ -682,8 +761,9 @@ export function RichTextEditor({
       )}
       <EditorContent editor={editor} />
 
-      {bannerInsertRange !== null && (
-        <div className={`absolute left-2 right-2 z-[125] max-h-[390px] overflow-y-auto rounded-[8px] border border-slate-200 bg-white p-3 shadow-[0_18px_50px_rgba(15,23,42,0.24)] dark:border-white/10 dark:bg-[#202024] ${toolbar ? "top-[86px]" : "top-[56px]"}`}>
+      {bannerInsertRange !== null && isMounted && createPortal(
+        <div ref={bannerListRef} className="fixed z-[9999] max-h-[390px] w-full max-w-[420px] overflow-y-auto rounded-[8px] border border-slate-200 bg-white p-3 shadow-[0_18px_50px_rgba(15,23,42,0.24)] dark:border-white/10 dark:bg-[#202024]"
+             style={{ top: menuPosition?.top, bottom: menuPosition?.bottom, left: menuPosition?.left }}>
           <div className="mb-2 flex items-center justify-between px-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Choose banner color</p>
             <button
@@ -703,8 +783,12 @@ export function RichTextEditor({
                 <button
                   key={item.value}
                   type="button"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => insertBanner(item.value)}
+                  data-active={isSelected}
+                  onMouseEnter={() => setSelectedBannerIndex(idx)}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    insertBanner(item.value);
+                  }}
                   className={`flex items-center gap-3 rounded-[8px] px-2 py-2.5 text-left text-sm text-slate-800 transition-colors focus-visible:outline-none dark:text-slate-100 ${
                     isSelected
                       ? "bg-slate-100 dark:bg-white/10 ring-1 ring-slate-300 dark:ring-white/20 font-medium"
@@ -719,11 +803,15 @@ export function RichTextEditor({
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {slashQuery !== null && (
-        <div className={`absolute left-2 right-2 z-[120] max-h-[390px] overflow-y-auto rounded-[8px] border border-slate-200 bg-white p-3 shadow-[0_18px_50px_rgba(15,23,42,0.22)] dark:border-white/10 dark:bg-[#202024] ${toolbar ? "top-[86px]" : "top-[56px]"}`}>
+      {slashQuery !== null && isMounted && createPortal(
+        <div ref={commandListRef}
+          className="fixed z-[9999] max-h-[390px] w-full max-w-[320px] overflow-y-auto rounded-[8px] border border-slate-200 bg-white p-3 shadow-[0_18px_50px_rgba(15,23,42,0.22)] dark:border-white/10 dark:bg-[#202024]"
+          style={{ top: menuPosition?.top, bottom: menuPosition?.bottom, left: menuPosition?.left }}
+        >
           {visibleSuggestionCommands.length > 0 && (
             <div>
               <p className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
@@ -744,11 +832,15 @@ export function RichTextEditor({
               </div>
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
 
-      {people !== undefined && mentionQuery !== null && slashQuery === null && (
-        <div className={`absolute left-2 right-2 z-[120] overflow-hidden rounded-[8px] border border-slate-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.22)] dark:border-white/10 dark:bg-[#202024] ${toolbar ? "top-[86px]" : "top-[56px]"}`}>
+      {people !== undefined && mentionQuery !== null && slashQuery === null && isMounted && createPortal(
+        <div ref={mentionListRef}
+          className="fixed z-[9999] w-full max-w-[320px] overflow-hidden rounded-[8px] border border-slate-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.22)] dark:border-white/10 dark:bg-[#202024]"
+          style={{ top: menuPosition?.top, bottom: menuPosition?.bottom, left: menuPosition?.left }}
+        >
           <div className="border-b border-slate-200 px-4 pt-3 dark:border-white/10">
             <div className="inline-flex items-center gap-2 border-b-2 border-slate-900 pb-2 text-[14px] font-semibold text-slate-900 dark:border-white dark:text-white">
               <AtSign className="size-4" /> People
@@ -774,8 +866,12 @@ export function RichTextEditor({
                     <button
                       key={person.id}
                       type="button"
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => insertMention(person)}
+                      data-active={isSelected}
+                      onMouseEnter={() => setSelectedMentionIndex(idx)}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        insertMention(person);
+                      }}
                       className={`flex w-full items-center gap-3 rounded-[8px] px-2 py-2 text-left transition-colors focus-visible:outline-none ${
                         isSelected
                           ? "bg-slate-100 dark:bg-white/10 ring-1 ring-slate-300 dark:ring-white/20 font-medium"
@@ -806,7 +902,8 @@ export function RichTextEditor({
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

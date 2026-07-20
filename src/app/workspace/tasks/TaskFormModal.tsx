@@ -596,10 +596,8 @@ export default function TaskFormModal({
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
         <DialogContent
           className="sm:max-w-[860px] p-0 flex flex-col h-[85vh] overflow-hidden bg-white dark:bg-[#151518] border border-slate-200/80 dark:border-white/10 sm:!rounded-[8px] !rounded-[8px] shadow-2xl [&>button]:hidden"
-          onInteractOutside={(e) => {
-            if (isQuickProjectOpen || activeTaskAssigneeIndex !== null)
-              e.preventDefault();
-          }}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
         >
           <ModalTabsHeader
             tabs={[
@@ -612,9 +610,11 @@ export default function TaskFormModal({
             onMinimize={() => setMinimized((m) => !m)}
             rightSlot={
               !isLimitedEdit && selectedProject && projectTotalHours > 0 && (
-                <div className="hidden sm:flex flex-col text-right text-[11px] leading-tight text-slate-500 dark:text-slate-400 font-semibold mr-3">
+                <div className="hidden sm:flex items-center gap-4 text-right text-[11px] leading-tight text-slate-500 dark:text-slate-400 font-semibold mr-3 bg-slate-50 dark:bg-white/5 px-3.5 py-1.5 rounded-lg border border-slate-100 dark:border-white/5">
                   <div>Project Total Hours: <span className="text-slate-900 dark:text-white font-bold">{projectTotalHours}h</span></div>
+                  <div className="h-3 w-px bg-slate-250 dark:bg-white/10" />
                   <div>Allocated to Tasks: <span className="text-slate-900 dark:text-white font-bold">{alreadyAllocated + draftHours}h</span></div>
+                  <div className="h-3 w-px bg-slate-250 dark:bg-white/10" />
                   <div>Remaining Hours: <span className="text-slate-900 dark:text-white font-bold">{Math.max(0, projectTotalHours - alreadyAllocated - draftHours)}h</span></div>
                 </div>
               )

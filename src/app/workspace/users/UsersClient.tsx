@@ -4,7 +4,7 @@ import React, { useState, useTransition, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, UserPlus, Users as UsersIcon, Mail, ShieldAlert, MoreHorizontal, Key, UserX, UserCheck, Pencil, Trash2 } from 'lucide-react';
+import { Search, UserPlus, Users as UsersIcon, Mail, ShieldAlert, MoreHorizontal, Key, UserX, UserCheck, Pencil, Trash2, Table as TableIcon, LayoutGrid, List as ListIcon, ChevronDown } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -19,8 +19,11 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
   const [users, setUsers] = useState(initialUsers);
   const [isPending, startTransition] = useTransition();
 
-  // Search & Filters
-  const [searchQuery, setSearchQuery] = useState('');
+  // Filter States
+  const [roleFilter, setRoleFilter] = useState('All Roles');
+  const [statusFilter, setStatusFilter] = useState('All Statuses');
+  const [startDateFilter, setStartDateFilter] = useState('');
+  const [endDateFilter, setEndDateFilter] = useState('');
 
   // Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -32,6 +35,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
 
   const searchParams = useSearchParams();
   const router = useRouter();
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (searchParams.get('invite') === 'true') {
@@ -43,10 +47,94 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
 
   // Filtered Users
   const filteredUsers = users.filter(u => {
-    const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase());
     const isMember = u.role === 'OWNER' || u.role === 'MEMBER';
-    return matchesSearch && isMember;
+    
+    // Role filter
+    const matchesRole = roleFilter === 'All Roles' || 
+                        (roleFilter === 'Owner' && u.role === 'OWNER') || 
+                        (roleFilter === 'Member' && u.role === 'MEMBER');
+                        
+    // Status filter
+    const matchesStatus = statusFilter === 'All Statuses' || 
+                          (statusFilter === 'Active' && u.status === 'ACTIVE') || 
+                          (statusFilter === 'Inactive' && u.status !== 'ACTIVE');
+
+    // Date filters (using u.createdAt)
+    const userDate = new Date(u.createdAt);
+    const matchesStartDate = startDateFilter ? userDate >= new Date(startDateFilter) : true;
+    
+    // For end date, add 1 day to include the entire end date day
+    let matchesEndDate = true;
+    if (endDateFilter) {
+      const endD = new Date(endDateFilter);
+      endD.setDate(endD.getDate() + 1);
+      matchesEndDate = userDate < endD;
+    }
+
+    return isMember && matchesRole && matchesStatus && matchesStartDate && matchesEndDate;
   });
+
+  const handleExportCSV = () => {
+    if (filteredUsers.length === 0) {
+      toast.error('No users to export.');
+      return;
+    }
+    const headers = ['Name', 'Email', 'Role', 'Status', 'Joined Date'];
+    const csvContent = [
+      headers.join(','),
+      ...filteredUsers.map(u => `"${u.name}","${u.email}","${u.role}","${u.status}","${new Date(u.createdAt).toLocaleDateString()}"`)
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', 'users_export.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Exported users to CSV');
+  };
+
+  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (!text) return;
+      const lines = text.split('\n');
+      const data = lines.slice(1).filter(l => l.trim().length > 0);
+      let successCount = 0;
+      let errorCount = 0;
+
+      toast.info('Starting import...');
+      
+      startTransition(async () => {
+        for (const line of data) {
+           const parts = line.split(',');
+           if (parts.length >= 3) {
+             const name = parts[0].replace(/"/g, '').trim();
+             const email = parts[1].replace(/"/g, '').trim();
+             const role = parts[2].replace(/"/g, '').trim();
+             if (name && email && role) {
+               const formData = new FormData();
+               formData.append('name', name);
+               formData.append('email', email);
+               formData.append('role', role.toUpperCase() === 'OWNER' ? 'OWNER' : 'MEMBER');
+               const res = await addUserAction(formData);
+               if (res.success) successCount++;
+               else errorCount++;
+             }
+           }
+        }
+        toast.success(`Import completed: ${successCount} added. ${errorCount > 0 ? `Failed: ${errorCount}` : ''}`);
+        router.refresh();
+      });
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   // Handle Add User
   const handleAddSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -143,35 +231,118 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
     });
   };
 
+  const hasActiveFilters = roleFilter !== 'All Roles' || statusFilter !== 'All Statuses' || startDateFilter !== '' || endDateFilter !== '';
+
+  const handleClearFilters = () => {
+    setRoleFilter('All Roles');
+    setStatusFilter('All Statuses');
+    setStartDateFilter('');
+    setEndDateFilter('');
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header Area */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <UsersIcon className="text-primary" size={28} />
-            User Management
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Add and manage members within your organization.
-          </p>
+      {/* Header Container */}
+      <div className="-mx-4 md:-mx-8 -mt-6 border-b border-slate-200 dark:border-white/10 bg-white dark:bg-[#151518] z-20 mb-8 pb-3">
+        {/* Top Header Bar */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 pb-3 px-4 md:px-8">
+          {/* Breadcrumb Left */}
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+            <span className="flex items-center justify-center w-5 h-5 rounded bg-slate-900 dark:bg-white text-white dark:text-slate-900">
+              <UsersIcon size={12} />
+            </span>
+            <span className="text-slate-900 dark:text-white font-semibold text-lg">
+              User Management
+            </span>
+          </div>
         </div>
-        
-        <Button onClick={() => setIsAddModalOpen(true)} className="w-full sm:w-auto shadow-md group">
-          <UserPlus className="mr-2 h-4 w-4 transition-transform group-hover:scale-110" /> Add User
-        </Button>
-      </div>
 
-      {/* Filters & Search */}
-      <div className="flex flex-col sm:flex-row justify-between gap-4 p-1">
-        <div className="relative w-full sm:max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Search by name or email..." 
-            className="pl-9 bg-background shadow-sm border-transparent focus-visible:border-primary transition-all" 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+        {/* Sub-toolbar / Filter bar */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 px-4 md:px-8 py-1">
+          {/* Left Sub-Toolbar actions */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
+              <input 
+                type="date" 
+                value={startDateFilter}
+                onChange={(e) => setStartDateFilter(e.target.value)}
+                className="h-9 px-3 bg-white dark:bg-transparent border border-slate-200 dark:border-white/10 rounded-[8px] text-sm font-medium text-slate-700 dark:text-slate-300 hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-white transition-all w-[140px]" 
+              />
+              <span className="text-sm font-medium text-slate-400">to</span>
+              <input 
+                type="date" 
+                value={endDateFilter}
+                onChange={(e) => setEndDateFilter(e.target.value)}
+                className="h-9 px-3 bg-white dark:bg-transparent border border-slate-200 dark:border-white/10 rounded-[8px] text-sm font-medium text-slate-700 dark:text-slate-300 hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-white transition-all w-[140px]" 
+              />
+            </div>
+          </div>
+
+          {/* Right Sub-Toolbar actions */}
+          <div className="flex items-center flex-wrap gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-2 h-9 px-3 bg-white dark:bg-transparent border border-slate-200 dark:border-white/10 rounded-[8px] text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5">
+                  {roleFilter} <ChevronDown size={14} className="text-slate-400" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => setRoleFilter('All Roles')}>All Roles</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setRoleFilter('Owner')}>Owner</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setRoleFilter('Member')}>Member</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-2 h-9 px-3 bg-white dark:bg-transparent border border-slate-200 dark:border-white/10 rounded-[8px] text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5">
+                  {statusFilter} <ChevronDown size={14} className="text-slate-400" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => setStatusFilter('All Statuses')}>All Statuses</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter('Active')}>Active</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter('Inactive')}>Inactive</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {hasActiveFilters && (
+              <button 
+                onClick={handleClearFilters}
+                className="flex items-center justify-center gap-1.5 h-9 px-3 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 rounded-[8px] text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors mr-2"
+              >
+                Clear
+              </button>
+            )}
+
+            <div className="flex items-center">
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleImportCSV} 
+                className="hidden" 
+                accept=".csv" 
+              />
+              <button 
+                onClick={() => setIsAddModalOpen(true)}
+                className="flex items-center gap-2 h-9 px-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-l-[8px] text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors border-r border-white/20 dark:border-black/20"
+              >
+                <UserPlus size={14} /> New User
+              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center justify-center h-9 w-8 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-r-[8px] hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors">
+                    <ChevronDown size={14} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>Import Users</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportCSV}>Export CSV</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -180,11 +351,11 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/30">
-              <TableHead className="w-[300px]">Member</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Joined</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="w-1/4">Member</TableHead>
+              <TableHead className="w-1/4">Role</TableHead>
+              <TableHead className="w-1/4">Status</TableHead>
+              <TableHead className="w-1/4">Joined</TableHead>
+              <TableHead className="text-right w-[100px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
