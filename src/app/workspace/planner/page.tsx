@@ -2,7 +2,7 @@ import React from 'react';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { CalendarDays, Video, Sparkles, Timer } from 'lucide-react';
+import { CalendarDays, Video, Sparkles, Timer, Users } from 'lucide-react';
 import PlannerConnectGate from './PlannerConnectGate';
 
 export default async function PlannerPage() {
@@ -29,6 +29,7 @@ export default async function PlannerPage() {
     { name: 'Meetings', icon: Video, desc: 'Bookings, Meet links, and AI notes.' },
     { name: 'Events', icon: Sparkles, desc: 'Milestones and org events.' },
     { name: 'Reminders', icon: Timer, desc: 'Upcoming deadlines and calls.' },
+    { name: 'Contacts', icon: Users, desc: 'Your leads and customers.' },
   ];
 
   return (

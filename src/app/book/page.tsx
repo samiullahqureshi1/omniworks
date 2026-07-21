@@ -40,7 +40,7 @@ export default async function GeneralBookingPage({
       mode="lead"
       identifier={org}
       title={org === 'the-smith-marketing-4878' ? '15-Minute Plumbing Lead System Call' : `${res.slotDurationMinutes}-Minute Intro Call`}
-      attendeeName={res.attendeeName || res.orgName}
+      attendeeName={res.orgName}
       timezone={res.timezone!}
       slotDurationMinutes={res.slotDurationMinutes!}
       initialDays={res.days!}

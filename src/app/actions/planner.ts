@@ -98,6 +98,9 @@ export interface PlannerEventInput {
   assignedToId?: string | null;
   visibility: 'INTERNAL' | 'CLIENT_VISIBLE';
   status?: string;
+  isRepeated?: boolean;
+  repeatFrequency?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY' | null;
+  repeatEndsAt?: string | null;
 }
 
 export async function createPlannerEventAction(input: PlannerEventInput) {
@@ -119,6 +122,9 @@ export async function createPlannerEventAction(input: PlannerEventInput) {
         assignedToId: input.assignedToId || null,
         visibility: input.visibility,
         status: input.status || 'OPEN',
+        isRepeated: input.isRepeated || false,
+        repeatFrequency: input.repeatFrequency || null,
+        repeatEndsAt: input.repeatEndsAt ? new Date(input.repeatEndsAt) : null,
       },
     });
 
@@ -126,6 +132,80 @@ export async function createPlannerEventAction(input: PlannerEventInput) {
     return { success: true, event };
   } catch (error: any) {
     return { error: error.message || 'Failed to create event.' };
+  }
+}
+
+/**
+ * Advance recurring events: called on page load.
+ * For any recurring event whose startDate is in the past and has no future child,
+ * it creates the next occurrence automatically.
+ */
+export async function processRecurringEventsAction() {
+  try {
+    const session = await getSession();
+    if (!session) return { error: 'Unauthorized' };
+
+    const now = new Date();
+    const recurringEvents = await prisma.plannerEvent.findMany({
+      where: {
+        organizationId: session.organizationId,
+        isRepeated: true,
+        parentEventId: null, // only root events
+        startDate: { lt: now },
+      },
+    });
+
+    for (const ev of recurringEvents) {
+      if (!ev.repeatFrequency) continue;
+      // Check if ends at is passed
+      if (ev.repeatEndsAt && ev.repeatEndsAt < now) continue;
+
+      // Check if a future child already exists
+      const futureChild = await prisma.plannerEvent.findFirst({
+        where: { parentEventId: ev.id, startDate: { gte: now } },
+      });
+      if (futureChild) continue;
+
+      // Calculate next date
+      const nextStart = new Date(ev.startDate);
+      if (ev.repeatFrequency === 'DAILY') nextStart.setDate(nextStart.getDate() + 1);
+      else if (ev.repeatFrequency === 'WEEKLY') nextStart.setDate(nextStart.getDate() + 7);
+      else if (ev.repeatFrequency === 'MONTHLY') nextStart.setMonth(nextStart.getMonth() + 1);
+      else if (ev.repeatFrequency === 'YEARLY') nextStart.setFullYear(nextStart.getFullYear() + 1);
+
+      // Advance until next date is in the future
+      while (nextStart <= now) {
+        if (ev.repeatFrequency === 'DAILY') nextStart.setDate(nextStart.getDate() + 1);
+        else if (ev.repeatFrequency === 'WEEKLY') nextStart.setDate(nextStart.getDate() + 7);
+        else if (ev.repeatFrequency === 'MONTHLY') nextStart.setMonth(nextStart.getMonth() + 1);
+        else if (ev.repeatFrequency === 'YEARLY') nextStart.setFullYear(nextStart.getFullYear() + 1);
+      }
+
+      if (ev.repeatEndsAt && nextStart > ev.repeatEndsAt) continue;
+
+      await prisma.plannerEvent.create({
+        data: {
+          organizationId: ev.organizationId,
+          title: ev.title,
+          type: ev.type,
+          startDate: nextStart,
+          endDate: null,
+          projectId: ev.projectId,
+          assignedToId: ev.assignedToId,
+          visibility: ev.visibility,
+          status: 'OPEN',
+          isRepeated: true,
+          repeatFrequency: ev.repeatFrequency,
+          repeatEndsAt: ev.repeatEndsAt,
+          parentEventId: ev.id,
+        },
+      });
+    }
+
+    revalidatePath('/workspace/planner/events');
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message || 'Failed to process recurring events.' };
   }
 }
 
