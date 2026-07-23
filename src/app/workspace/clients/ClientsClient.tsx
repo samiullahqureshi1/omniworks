@@ -37,6 +37,10 @@ export default function ClientsClient({ initialUsers, currentUser }: { initialUs
   const router = useRouter();
 
   useEffect(() => {
+    setUsers(initialUsers);
+  }, [initialUsers]);
+
+  useEffect(() => {
     if (searchParams.get('invite') === 'true') {
       setIsAddModalOpen(true);
       // Clean up the URL
@@ -72,39 +76,67 @@ export default function ClientsClient({ initialUsers, currentUser }: { initialUs
     return true;
   });
 
-  // Handle Add Client
+  // Handle Add Client (Instant Optimistic Update)
   const handleAddSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const name = (formData.get('name') as string) || '';
+    const email = (formData.get('email') as string) || '';
+
+    // Optimistic instant add
+    const tempId = `temp-${Date.now()}`;
+    const newClient = {
+      id: tempId,
+      name,
+      email,
+      role: 'CLIENT',
+      status: 'ACTIVE',
+      createdAt: new Date().toISOString(),
+    };
+
+    setUsers(prev => [newClient, ...prev]);
+    setIsAddFormValid(false);
+    setIsAddModalOpen(false);
+    toast.success('Client created successfully');
 
     startTransition(async () => {
       const res = await addUserAction(formData);
       if (res.error) {
+        // Rollback on failure
+        setUsers(prev => prev.filter(u => u.id !== tempId));
         toast.error(res.error);
       } else {
-        toast.success(res.message);
-        setIsAddFormValid(false);
-        setIsAddModalOpen(false);
-        // Soft refresh the page data
         router.refresh(); 
       }
     });
   };
 
-  // Handle Edit Client
+  // Handle Edit Client (Instant Optimistic Update)
   const handleEditSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editUser) return;
     const formData = new FormData(e.currentTarget);
     formData.append('role', 'CLIENT');
 
+    const newName = (formData.get('name') as string) || editUser.name;
+    const newEmail = (formData.get('email') as string) || editUser.email;
+    const targetId = editUser.id;
+    const originalUser = editUser;
+
+    // Optimistic instant update
+    setUsers(prev =>
+      prev.map(u => (u.id === targetId ? { ...u, name: newName, email: newEmail } : u))
+    );
+    setEditUser(null);
+    toast.success('Client updated successfully');
+
     startTransition(async () => {
-      const res = await editUserAction(editUser.id, formData);
+      const res = await editUserAction(targetId, formData);
       if (res.error) {
+        // Rollback on failure
+        setUsers(prev => prev.map(u => (u.id === targetId ? originalUser : u)));
         toast.error(res.error);
       } else {
-        toast.success(res.message);
-        setEditUser(null);
         router.refresh();
       }
     });
@@ -134,35 +166,56 @@ export default function ClientsClient({ initialUsers, currentUser }: { initialUs
     });
   };
 
-  // Handle Deactivate/Activate
+  // Handle Deactivate/Activate (Instant Optimistic Update)
   const handleToggleStatus = async (userToToggle: any) => {
+    const targetId = userToToggle.id;
+    const newStatus = userToToggle.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    const oldStatus = userToToggle.status;
+
+    // Optimistic instant toggle
+    setUsers(prev =>
+      prev.map(u => (u.id === targetId ? { ...u, status: newStatus } : u))
+    );
+    setDeactivateUser(null);
+    toast.success(`Client status set to ${newStatus}`);
+
     startTransition(async () => {
       let res;
-      if (userToToggle.status === 'ACTIVE') {
-        res = await deactivateUserAction(userToToggle.id);
+      if (oldStatus === 'ACTIVE') {
+        res = await deactivateUserAction(targetId);
       } else {
-        res = await activateUserAction(userToToggle.id);
+        res = await activateUserAction(targetId);
       }
 
       if (res.error) {
+        // Rollback on error
+        setUsers(prev =>
+          prev.map(u => (u.id === targetId ? { ...u, status: oldStatus } : u))
+        );
         toast.error(res.error);
       } else {
-        toast.success(res.message);
-        setDeactivateUser(null);
         router.refresh();
       }
     });
   };
 
-  // Handle Delete
+  // Handle Delete (Instant Optimistic Update)
   const handleDeleteSubmit = async (userToDelete: any) => {
+    const targetId = userToDelete.id;
+    const deletedUser = userToDelete;
+
+    // Optimistic instant delete
+    setUsers(prev => prev.filter(u => u.id !== targetId));
+    setDeleteUser(null);
+    toast.success('Client deleted successfully');
+
     startTransition(async () => {
-      const res = await deleteUserAction(userToDelete.id);
+      const res = await deleteUserAction(targetId);
       if (res.error) {
+        // Rollback on error
+        setUsers(prev => [...prev, deletedUser]);
         toast.error(res.error);
       } else {
-        toast.success(res.message);
-        setDeleteUser(null);
         router.refresh();
       }
     });

@@ -2,7 +2,7 @@ import React from 'react';
 import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import ContactsClient from './ContactsClient';
-import { getContactsAction } from '@/app/actions/contacts';
+import { getContactsAction, getUserViewPreferenceAction } from '@/app/actions/contacts';
 
 export default async function ContactsPage() {
   const session = await getSession();
@@ -10,7 +10,10 @@ export default async function ContactsPage() {
     redirect('/login');
   }
 
-  const result = await getContactsAction();
+  const [result, prefResult] = await Promise.all([
+    getContactsAction(),
+    getUserViewPreferenceAction('contacts_columns'),
+  ]);
 
   if (result.error) {
     return (
@@ -20,5 +23,10 @@ export default async function ContactsPage() {
     );
   }
 
-  return <ContactsClient contacts={result.contacts || []} />;
+  return (
+    <ContactsClient
+      contacts={result.contacts || []}
+      initialColumns={(prefResult.preferences as string[]) || null}
+    />
+  );
 }

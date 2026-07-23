@@ -68,3 +68,87 @@ export async function createContactAction(data: {
     return { error: 'Failed to create contact.' };
   }
 }
+
+/**
+ * Save user view preferences (e.g. visible columns) in database.
+ */
+export async function saveUserViewPreferenceAction(viewKey: string, preferences: any) {
+  try {
+    const session = await getSession();
+    if (!session) return { error: 'Unauthorized' };
+
+    const result = await prisma.userViewPreference.upsert({
+      where: {
+        userId_viewKey: {
+          userId: session.userId,
+          viewKey,
+        },
+      },
+      update: {
+        preferences,
+      },
+      create: {
+        userId: session.userId,
+        viewKey,
+        preferences,
+      },
+    });
+
+    return { success: true, preference: result };
+  } catch (error: any) {
+    console.error('[saveUserViewPreferenceAction] Error:', error);
+    return { error: 'Failed to save view preference.' };
+  }
+}
+
+/**
+ * Get user view preferences from database.
+ */
+export async function getUserViewPreferenceAction(viewKey: string) {
+  try {
+    const session = await getSession();
+    if (!session) return { error: 'Unauthorized' };
+
+    const result = await prisma.userViewPreference.findUnique({
+      where: {
+        userId_viewKey: {
+          userId: session.userId,
+          viewKey,
+        },
+      },
+    });
+
+    return { success: true, preferences: result?.preferences || null };
+  } catch (error: any) {
+    console.error('[getUserViewPreferenceAction] Error:', error);
+    return { error: 'Failed to fetch view preference.' };
+  }
+}
+
+/**
+ * Delete contacts by IDs.
+ */
+export async function deleteContactsAction(contactIds: string[]) {
+  try {
+    const session = await getSession();
+    if (!session) return { error: 'Unauthorized' };
+
+    if (!contactIds || contactIds.length === 0) {
+      return { error: 'No contacts selected.' };
+    }
+
+    await prisma.lead.deleteMany({
+      where: {
+        id: { in: contactIds },
+        organizationId: session.organizationId,
+      },
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('[deleteContactsAction] Error:', error);
+    return { error: 'Failed to delete contact(s).' };
+  }
+}
+
+

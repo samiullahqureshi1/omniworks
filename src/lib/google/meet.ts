@@ -1,15 +1,5 @@
 import { getAccessTokenFromRefresh } from './calendar';
 
-/**
- * Best-effort fetch of a Google Meet transcript's text for a meeting.
- *
- * IMPORTANT: Meet auto-transcription only exists on Google Workspace Business
- * Standard+ (never personal Gmail), and requires the meetings.space.readonly
- * scope. This function NEVER throws — it returns the transcript text if it can
- * confidently find one, otherwise null, so the caller degrades to "no
- * transcript available" + manual notes.
- */
-
 const MEET_API = 'https://meet.googleapis.com/v2';
 
 async function meetGet(path: string, accessToken: string): Promise<any | null> {
@@ -29,6 +19,84 @@ function meetingCodeFromLink(meetLink?: string | null): string | null {
   if (!meetLink) return null;
   const m = meetLink.match(/meet\.google\.com\/([a-z0-9-]+)/i);
   return m ? m[1].toLowerCase() : null;
+}
+
+export interface MeetParticipant {
+  displayName: string;
+  email: string | null;
+  joinTime: string | null;
+  leaveTime: string | null;
+}
+
+/**
+ * Given a known conferenceRecordName (e.g. "conferenceRecords/IKrdO1ge..."),
+ * fetch all participants and transcript using the Google Meet REST API.
+ * Returns both lists, never throws.
+ */
+export async function fetchMeetParticipantsAndTranscript(params: {
+  conferenceRecordName: string;
+  accessToken: string;
+}): Promise<{ participants: MeetParticipant[]; transcript: string | null }> {
+  const { conferenceRecordName, accessToken } = params;
+
+  // --- 1. Participants ---
+  const participants: MeetParticipant[] = [];
+  try {
+    let pageToken: string | undefined;
+    let guard = 0;
+    do {
+      const q = pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : '';
+      const page = await meetGet(`${conferenceRecordName}/participants${q}`, accessToken);
+      for (const p of page?.participants || []) {
+        const session = p.signedinUser || p.anonymousUser || {};
+        participants.push({
+          displayName: session.displayName || p.displayName || 'Unknown',
+          email: session.user
+            ? session.user.replace(/^users\//, '')
+            : (session.email ?? null),
+          joinTime: p.earliestStartTime || null,
+          leaveTime: p.latestEndTime || null,
+        });
+      }
+      pageToken = page?.nextPageToken;
+      guard++;
+    } while (pageToken && guard < 20);
+  } catch (e: any) {
+    console.warn('[Meet API] Participant fetch error:', e.message);
+  }
+
+  // --- 2. Transcript ---
+  let transcript: string | null = null;
+  try {
+    const transcriptsPage = await meetGet(`${conferenceRecordName}/transcripts`, accessToken);
+    const firstTranscript = transcriptsPage?.transcripts?.find(
+      (t: any) => t.state === 'ENDED'
+    );
+
+    if (firstTranscript?.name) {
+      const lines: string[] = [];
+      let pageToken: string | undefined;
+      let guard = 0;
+      do {
+        const q = pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : '';
+        const entries = await meetGet(`${firstTranscript.name}/entries${q}`, accessToken);
+        for (const e of entries?.transcriptEntries || []) {
+          const speaker = e.participant?.split('/').pop() || 'Speaker';
+          if (e.text) lines.push(`${speaker}: ${e.text}`);
+        }
+        pageToken = entries?.nextPageToken;
+        guard++;
+      } while (pageToken && guard < 50);
+
+      if (lines.length > 0) {
+        transcript = lines.join('\n').trim();
+      }
+    }
+  } catch (e: any) {
+    console.warn('[Meet API] Transcript fetch error:', e.message);
+  }
+
+  return { participants, transcript };
 }
 
 export async function fetchMeetTranscriptText(params: {
@@ -60,29 +128,11 @@ export async function fetchMeetTranscriptText(params: {
     }
     if (!best?.name) return null;
 
-    // List transcripts for that conference record.
-    const transcripts = await meetGet(`${best.name}/transcripts`, accessToken);
-    const first = transcripts?.transcripts?.[0];
-    if (!first?.name || first.state !== 'ENDED') return null;
-
-    // Page through transcript entries and concatenate "Speaker: text".
-    const lines: string[] = [];
-    let pageToken: string | undefined;
-    let guard = 0;
-    do {
-      const q = pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : '';
-      const entries = await meetGet(`${first.name}/entries${q}`, accessToken);
-      if (!entries) break;
-      for (const e of entries.transcriptEntries || []) {
-        const speaker = e.participant?.split('/').pop() || 'Speaker';
-        if (e.text) lines.push(`${speaker}: ${e.text}`);
-      }
-      pageToken = entries.nextPageToken;
-      guard++;
-    } while (pageToken && guard < 50);
-
-    const text = lines.join('\n').trim();
-    return text.length > 0 ? text : null;
+    const { transcript } = await fetchMeetParticipantsAndTranscript({
+      conferenceRecordName: best.name,
+      accessToken,
+    });
+    return transcript;
   } catch {
     return null;
   }

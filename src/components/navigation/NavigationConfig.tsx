@@ -57,7 +57,6 @@ export const mainSidebarItems: MainSidebarItem[] = [
   { id: 'home', name: 'Home', icon: Home },
   { id: 'calendar', name: 'Planner', icon: Calendar },
   { id: 'agents', name: 'AI', icon: Bot },
-  { id: 'teams', name: 'Teams', icon: UsersIcon },
   { id: 'conversations', name: 'Chat', icon: MessageSquare },
   { id: 'more', name: 'More', icon: LayoutGrid },
 ];

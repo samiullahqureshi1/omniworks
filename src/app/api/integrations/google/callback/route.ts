@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { exchangeCodeForTokens, fetchGoogleEmail } from '@/lib/google/calendar';
+import { exchangeCodeForTokens, fetchGoogleUserInfo } from '@/lib/google/calendar';
 import { getOrCreateOrgSettings } from '@/app/actions/availability';
+import { createGoogleMeetWorkspaceSubscription } from '@/lib/google/workspaceEvents';
 
 function settingsRedirect(req: NextRequest, status: string) {
   return NextResponse.redirect(new URL(`/workspace/planner/settings?google=${status}`, req.url));
@@ -35,7 +36,8 @@ export async function GET(req: NextRequest) {
       return settingsRedirect(req, 'no_refresh_token');
     }
 
-    const email = tokens.access_token ? await fetchGoogleEmail(tokens.access_token) : null;
+    const googleUser = tokens.access_token ? await fetchGoogleUserInfo(tokens.access_token) : null;
+    const email = googleUser?.email ?? null;
 
     await getOrCreateOrgSettings(session.organizationId, session.userId);
     await prisma.organizationSettings.update({
@@ -46,10 +48,22 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    // Attempt Google Workspace Event subscription for Pub/Sub topic
+    try {
+      await createGoogleMeetWorkspaceSubscription(
+        session.organizationId,
+        tokens.refresh_token,
+        googleUser?.id
+      );
+    } catch (subErr: any) {
+      console.warn('[Google Meet Subscription Notice]:', subErr.message);
+    }
+
     const res = settingsRedirect(req, 'connected');
     res.cookies.delete('google_oauth_state');
     return res;
-  } catch (e) {
+  } catch (e: any) {
+    console.error('[Google OAuth Callback Error]:', e);
     return settingsRedirect(req, 'error');
   }
 }

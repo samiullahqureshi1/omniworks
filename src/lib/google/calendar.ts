@@ -12,9 +12,8 @@ export const GOOGLE_SCOPES = [
   'openid',
   'email',
   'https://www.googleapis.com/auth/calendar.events',
-  // Read Meet conference records + transcripts (Phase 4). Only yields data on
-  // Google Workspace Business Standard+; harmless (unused) on personal Gmail.
   'https://www.googleapis.com/auth/meetings.space.readonly',
+  'https://www.googleapis.com/auth/meetings.space.created',
 ];
 
 export function googleConfigured(): boolean {
@@ -50,18 +49,29 @@ export async function exchangeCodeForTokens(code: string) {
   return tokens; // { refresh_token, access_token, id_token, expiry_date, ... }
 }
 
-/** Fetch the connected account's email using an access token. */
-export async function fetchGoogleEmail(accessToken: string): Promise<string | null> {
+export interface GoogleUserInfo {
+  id: string | null;
+  email: string | null;
+}
+
+/** Fetch the connected account's user info using an access token. */
+export async function fetchGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo | null> {
   try {
     const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) return null;
     const data = await res.json();
-    return data.email ?? null;
+    return { id: data.id ?? null, email: data.email ?? null };
   } catch {
     return null;
   }
+}
+
+/** Fetch the connected account's email using an access token. */
+export async function fetchGoogleEmail(accessToken: string): Promise<string | null> {
+  const info = await fetchGoogleUserInfo(accessToken);
+  return info?.email ?? null;
 }
 
 export async function getAccessTokenFromRefresh(refreshToken: string): Promise<string> {

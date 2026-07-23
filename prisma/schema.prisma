@@ -670,6 +670,8 @@ enum LeadStatus {
 
 enum MeetingStatus {
   SCHEDULED
+  RESCHEDULED
+  POSTPONED
   COMPLETED
   CANCELLED
   NO_SHOW
@@ -707,6 +709,8 @@ model OrganizationSettings {
   defaultIntroCallAttendee   User?        @relation("IntroCallAttendee", fields: [defaultIntroCallAttendeeId], references: [id], onDelete: SetNull)
   googleRefreshToken         String?
   googleConnectedEmail       String?
+  googleSubscriptionId       String?
+  googleSubscriptionExpiresAt DateTime?
   createdAt                  DateTime     @default(now())
   updatedAt                  DateTime     @updatedAt
 }
@@ -756,8 +760,10 @@ model Meeting {
   leadNote       String?
   startTime      DateTime
   endTime        DateTime
-  status         MeetingStatus @default(SCHEDULED)
-  meetLink       String?
+  status           MeetingStatus @default(SCHEDULED)
+  rescheduleReason String?
+  postponeReason   String?
+  meetLink         String?
   googleEventId  String?
   reminderSentAt DateTime?
   note           MeetingNote?
@@ -779,6 +785,8 @@ model MeetingNote {
   keyPoints        Json?
   actionItems      Json?
   notes            String?
+  participants     Json?            // Auto-fetched from Google Meet API on completion
+  rawTranscript    String?          // Auto-fetched transcript text on completion
   transcriptStatus TranscriptStatus @default(PENDING)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
@@ -833,5 +841,13 @@ model Document {
   @@index([taskId])
 }
 
+model UserViewPreference {
+  id          String   @id @default(uuid())
+  userId      String
+  viewKey     String   // e.g. "contacts_columns"
+  preferences Json     // array of column keys or view settings object
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-
+  @@unique([userId, viewKey])
+}

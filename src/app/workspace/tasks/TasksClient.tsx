@@ -968,22 +968,40 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
 
   const confirmStatusChange = async () => {
     if (!confirmDropState) return;
-    setIsUpdatingStatus(true);
+    const { task, targetStatus } = confirmDropState;
+    const previousStatus = task.status;
+    const previousStatusId = task.statusId;
+
+    // Optimistic instant status move
+    setTasks((prev: any) =>
+      prev.map((t: any) =>
+        t.id === task.id ? { ...t, statusId: targetStatus.id, status: targetStatus } : t
+      )
+    );
+    setConfirmDropState(null);
+    toast.success(`Task moved to ${targetStatus.name}`);
+
     try {
-      const res = await updateTaskAction(confirmDropState.task.id, {
-        statusId: confirmDropState.targetStatus.id
+      const res = await updateTaskAction(task.id, {
+        statusId: targetStatus.id,
       });
       if (res.error) {
         toast.error(res.error);
+        setTasks((prev: any) =>
+          prev.map((t: any) =>
+            t.id === task.id ? { ...t, statusId: previousStatusId, status: previousStatus } : t
+          )
+        );
       } else {
-        toast.success(`Task moved to ${confirmDropState.targetStatus.name}`);
-        setTasks(tasks.map((t: any) => t.id === confirmDropState.task.id ? { ...t, statusId: confirmDropState.targetStatus.id, status: confirmDropState.targetStatus } : t));
+        router.refresh();
       }
     } catch (e: any) {
       toast.error(e.message || "Failed to update status");
-    } finally {
-      setIsUpdatingStatus(false);
-      setConfirmDropState(null);
+      setTasks((prev: any) =>
+        prev.map((t: any) =>
+          t.id === task.id ? { ...t, statusId: previousStatusId, status: previousStatus } : t
+        )
+      );
     }
   };
 
@@ -1239,15 +1257,21 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   const confirmDeleteTask = () => {
     if (!deleteTaskId) return;
     const id = deleteTaskId;
+    const previousTasks = tasks;
+
+    // Optimistic instant delete
+    setTasks(prev => prev.filter(t => t.id !== id));
     setIsDeleteTaskOpen(false);
     setDeleteTaskId(null);
+    toast.success('Task deleted successfully');
+
     startTransition(async () => {
       const res = await deleteTaskAction(id);
       if (res.error) {
+        // Rollback on error
+        setTasks(previousTasks);
         toast.error(res.error);
       } else {
-        toast.success('Task deleted successfully');
-        setTasks(prev => prev.filter(t => t.id !== id));
         router.refresh();
       }
     });

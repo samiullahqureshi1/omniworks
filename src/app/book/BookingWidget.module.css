@@ -1,6 +1,11 @@
 .pageShell {
   min-height: 100vh;
-  padding: clamp(46px, 7.7vh, 92px) clamp(24px, 3vw, 58px) 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  box-sizing: border-box;
   color: #0b2948;
   background: #fbfbfc;
   font-family: Arial, Helvetica, sans-serif;
@@ -9,25 +14,24 @@
 .bookingCard {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) minmax(480px, 1fr);
-  width: min(980px, 100%);
-  min-height: min(50px, calc(100vh - 100px));
+  grid-template-columns: minmax(260px, 0.85fr) minmax(360px, 1.15fr);
+  width: min(720px, 100%);
   margin: 0 auto;
   overflow: hidden;
   border: 1px solid #cbdced;
-  border-radius: 14px;
+  border-radius: 12px;
   background: #fff;
   box-shadow: 0 4px 13px rgba(14, 42, 70, 0.12);
 }
 
 .bookingCard.withTimes {
-  grid-template-columns: minmax(340px, 35%) minmax(420px, 37%) minmax(320px, 28%);
-  width: min(1180px, 100%);
+  grid-template-columns: minmax(240px, 30%) minmax(320px, 40%) minmax(240px, 30%);
+  width: min(880px, 100%);
 }
 
 .bookingCard.withForm {
-  grid-template-columns: minmax(380px, 0.92fr) minmax(500px, 1.08fr);
-  width: min(900px, 100%);
+  grid-template-columns: minmax(280px, 0.9fr) minmax(380px, 1.1fr);
+  width: min(680px, 100%);
 }
 
 .eventPanel {
@@ -35,63 +39,64 @@
   min-width: 0;
   flex-direction: column;
   justify-content: space-between;
-  padding: 35px 40px 30px;
+  padding: 24px 26px 20px;
   border-right: 1px solid #cbdced;
 }
 
 .hostName {
-  margin-bottom: 7px;
+  margin-bottom: 4px;
   color: #476d93;
-  font-size: 20px;
+  font-size: 14px;
   font-weight: 700;
 }
 
 .eventPanel h1 {
-  max-width: 600px;
+  max-width: 440px;
   margin: 0;
   color: #092847;
-  font-size: clamp(28px, 2vw, 36px);
+  font-size: clamp(19px, 1.6vw, 22px);
   font-weight: 750;
   letter-spacing: -0.035em;
-  line-height: 1.08;
+  line-height: 1.15;
 }
 
 .eventMeta {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  margin-top: 30px;
+  gap: 12px;
+  margin-top: 18px;
   color: #0b2948;
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 700;
 }
 
 .eventMeta div {
   display: flex;
   align-items: flex-start;
-  gap: 15px;
+  gap: 10px;
 }
 
 .eventMeta svg {
-  width: 28px;
-  height: 28px;
+  width: 18px;
+  height: 18px;
   flex: 0 0 auto;
   stroke-width: 2.4;
 }
 
 .eventMeta span {
-  max-width: 520px;
-  padding-top: 4px;
-  line-height: 1.45;
+  max-width: 360px;
+  padding-top: 1px;
+  line-height: 1.35;
 }
 
 .eventPanel footer {
   display: flex;
-  gap: 40px;
+  gap: 16px;
   align-items: center;
   color: #075cc9;
-  font-size: 16px;
+  font-size: 12px;
   font-weight: 600;
+  margin-top: 24px;
 }
 
 .eventPanel footer button {
@@ -104,14 +109,14 @@
 
 .calendarPanel {
   min-width: 0;
-  padding: 35px 40px 30px;
+  padding: 24px 26px 20px;
 }
 
 .calendarPanel h2,
 .formPanel h2 {
   margin: 0;
   color: #092847;
-  font-size: clamp(26px, 2vw, 32px);
+  font-size: clamp(17px, 1.5vw, 20px);
   font-weight: 750;
   letter-spacing: -0.035em;
 }
@@ -120,19 +125,19 @@
   display: grid;
   grid-template-columns: 1fr 2.1fr 1fr;
   align-items: center;
-  margin: 35px auto 30px;
+  margin: 16px auto 14px;
   color: #092847;
 }
 
 .monthNav strong {
   text-align: center;
-  font-size: 18px;
+  font-size: 14px;
 }
 
 .monthNav button {
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 30px;
+  height: 30px;
   place-items: center;
   border: 0;
   color: #095ecb;
@@ -141,112 +146,112 @@
 }
 
 .monthNav button:last-child { justify-self: end; }
-.monthNav svg { width: 28px; height: 28px; stroke-width: 2; }
+.monthNav svg { width: 18px; height: 18px; stroke-width: 2; }
 
 .calendarGrid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(40px, 1fr));
-  grid-auto-rows: 50px;
+  grid-template-columns: repeat(7, minmax(30px, 1fr));
+  grid-auto-rows: 36px;
   align-items: center;
   justify-items: center;
-  column-gap: 8px;
-  row-gap: 12px;
+  column-gap: 4px;
+  row-gap: 4px;
 }
 
 .weekDay {
   color: #42698f;
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 700;
 }
 
 .calendarGrid button {
   position: relative;
   display: grid;
-  width: 44px;
-  height: 44px;
+  width: 32px;
+  height: 32px;
   place-items: center;
   border: 0;
   border-radius: 50%;
   color: #476d93;
   background: transparent;
-  font-size: 18px;
+  font-size: 13px;
 }
 
 .calendarGrid button:disabled { opacity: 1; }
 .calendarGrid button.availableDay { color: #045bcc; background: #f3f7fc; cursor: pointer; }
 .calendarGrid button.availableDay:hover { outline: 2px solid #0875f5; }
 .calendarGrid button.selectedDay { color: #fff; background: #0875f5; }
-.calendarGrid button i { position: absolute; bottom: 3px; width: 6px; height: 6px; border-radius: 50%; background: #42698f; }
+.calendarGrid button i { position: absolute; bottom: 2px; width: 4px; height: 4px; border-radius: 50%; background: #42698f; }
 .calendarGrid button.selectedDay i { background: #fff; }
 
 .timezoneBlock {
-  margin-top: 48px;
+  margin-top: 20px;
   color: #092847;
 }
 
 .timezoneBlock > strong {
   display: block;
-  margin-bottom: 15px;
-  font-size: 21px;
+  margin-bottom: 6px;
+  font-size: 13px;
 }
 
 .timezoneBlock button {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
   border: 0;
   color: #183653;
   background: transparent;
   font: inherit;
-  font-size: 21px;
+  font-size: 13px;
   white-space: nowrap;
 }
 
-.timezoneBlock svg { width: 24px; height: 24px; }
-.timezoneBlock svg:last-child { width: 17px; }
+.timezoneBlock svg { width: 16px; height: 16px; }
+.timezoneBlock svg:last-child { width: 13px; }
 
 .timesPanel {
   min-width: 0;
-  padding: 160px 75px 0 30px;
+  padding: 60px 30px 0 16px;
 }
 
 .timesPanel h3 {
-  margin: 0 0 65px;
+  margin: 0 0 24px;
   color: #173653;
   text-align: center;
-  font-size: 28px;
+  font-size: 18px;
   font-weight: 400;
 }
 
 .timesList {
   display: flex;
-  max-height: calc(100vh - 350px);
+  max-height: 340px;
   flex-direction: column;
-  gap: 18px;
+  gap: 10px;
   overflow-y: auto;
-  padding-right: 14px;
+  padding-right: 6px;
   scrollbar-color: #496f94 transparent;
   scrollbar-width: auto;
 }
 
 .timeButton,
 .activeTime {
-  min-height: 94px;
+  min-height: 52px;
   border: 2px solid #1386ff;
-  border-radius: 7px;
+  border-radius: 6px;
   color: #0456bd;
   background: #fff;
-  font-size: 27px;
+  font-size: 16px;
   font-weight: 700;
   cursor: pointer;
 }
 
-.timeButton:hover { border-width: 3px; background: #f7fbff; }
+.timeButton:hover { border-width: 2px; background: #f7fbff; }
 
 .activeTimeRow {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 8px;
 }
 
 .activeTime {
@@ -258,10 +263,10 @@
 .nextButton,
 .scheduleButton {
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   color: #fff;
   background: #0875f5;
-  font-size: 22px;
+  font-size: 15px;
   font-weight: 700;
   cursor: pointer;
 }
@@ -269,35 +274,35 @@
 .poweredRibbon {
   position: absolute;
   z-index: 5;
-  top: 25px;
-  right: -56px;
+  top: 16px;
+  right: -42px;
   display: flex;
-  width: 216px;
-  height: 83px;
+  width: 150px;
+  height: 52px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   transform: rotate(45deg);
   color: #fff;
   background: #58636a;
-  box-shadow: 0 3px 7px rgba(9, 27, 42, 0.22);
+  box-shadow: 0 2px 4px rgba(9, 27, 42, 0.18);
   text-align: center;
 }
 
-.poweredRibbon small { font-size: 12px; font-weight: 700; }
-.poweredRibbon strong { font-size: 21px; line-height: 1; }
+.poweredRibbon small { font-size: 8px; font-weight: 700; }
+.poweredRibbon strong { font-size: 13px; line-height: 1; }
 
 .formPanel {
   position: relative;
-  padding: 58px 75px;
+  padding: 28px 36px;
 }
 
 .backButton {
   display: grid;
-  width: 48px;
-  height: 48px;
+  width: 34px;
+  height: 34px;
   place-items: center;
-  margin-bottom: 28px;
+  margin-bottom: 16px;
   border: 1px solid #d5e1ec;
   border-radius: 50%;
   color: #0864d1;
@@ -308,12 +313,13 @@
 .chosenTime {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin: 26px 0;
-  padding: 20px;
+  gap: 5px;
+  margin: 14px 0;
+  padding: 12px;
   border: 1px solid #d9e4ee;
-  border-radius: 9px;
+  border-radius: 7px;
   color: #476d93;
+  font-size: 13px;
 }
 
 .chosenTime strong { color: #092847; }
@@ -321,13 +327,13 @@
 .formFields {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 7px;
 }
 
 .formFields label {
-  margin-top: 9px;
+  margin-top: 5px;
   color: #092847;
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -335,93 +341,93 @@
 .formFields textarea {
   width: 100%;
   border: 1px solid #b7c8d8;
-  border-radius: 7px;
+  border-radius: 6px;
   outline: 0;
   color: #092847;
   background: #fff;
   font: inherit;
-  font-size: 17px;
+  font-size: 13px;
 }
 
-.formFields input { height: 49px; padding: 0 13px; }
-.formFields textarea { padding: 13px; resize: vertical; }
+.formFields input { height: 36px; padding: 0 10px; }
+.formFields textarea { padding: 10px; resize: vertical; }
 .formFields input:focus, .formFields textarea:focus { border: 2px solid #0875f5; }
 
 .scheduleButton {
   display: flex;
-  min-width: 190px;
-  height: 52px;
+  min-width: 140px;
+  height: 40px;
   align-items: center;
   justify-content: center;
-  gap: 9px;
-  margin-top: 25px;
-  padding: 0 25px;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 0 16px;
 }
 
 .scheduleButton:disabled { opacity: 0.45; cursor: not-allowed; }
-.spinner { width: 19px; animation: spin 900ms linear infinite; }
+.spinner { width: 16px; animation: spin 900ms linear infinite; }
 
 .confirmedCard {
   display: block;
-  width: min(680px, 100%);
+  width: min(560px, 100%);
   min-height: 0;
-  padding: 70px;
+  padding: 50px 40px;
   text-align: center;
 }
 
 .successIcon {
   display: grid;
-  width: 74px;
-  height: 74px;
+  width: 60px;
+  height: 60px;
   place-items: center;
-  margin: 0 auto 25px;
+  margin: 0 auto 20px;
   border-radius: 50%;
   color: #fff;
   background: #1f9d67;
 }
 
-.confirmedCard h1 { margin: 0; font-size: 35px; }
-.confirmedCard > p { color: #476d93; }
-.confirmedDetails { display: flex; flex-direction: column; gap: 10px; margin: 35px 0; padding: 25px; border: 1px solid #d9e4ee; border-radius: 10px; text-align: left; }
-.confirmedDetails span { display: flex; align-items: center; gap: 9px; color: #476d93; }
-.brandFooter { color: #6b8195; }
+.confirmedCard h1 { margin: 0; font-size: 28px; }
+.confirmedCard > p { color: #476d93; font-size: 14px; }
+.confirmedDetails { display: flex; flex-direction: column; gap: 8px; margin: 25px 0; padding: 18px; border: 1px solid #d9e4ee; border-radius: 8px; text-align: left; font-size: 13px; }
+.confirmedDetails span { display: flex; align-items: center; gap: 8px; color: #476d93; }
+.brandFooter { color: #6b8195; font-size: 12px; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 1250px) {
-  .bookingCard, .bookingCard.withTimes { grid-template-columns: minmax(330px, 0.75fr) minmax(520px, 1.25fr); }
-  .bookingCard.withTimes { width: min(1160px, 100%); }
-  .timesPanel { grid-column: 2; padding: 0 57px 50px; }
-  .timesPanel h3 { margin: 0 0 25px; text-align: left; }
-  .timesList { max-height: 480px; }
+  .bookingCard, .bookingCard.withTimes { grid-template-columns: minmax(260px, 0.75fr) minmax(400px, 1.25fr); }
+  .bookingCard.withTimes { width: min(880px, 100%); }
+  .timesPanel { grid-column: 2; padding: 0 40px 40px; }
+  .timesPanel h3 { margin: 0 0 20px; text-align: left; }
+  .timesList { max-height: 400px; }
   .eventPanel { grid-row: span 2; }
 }
 
 @media (max-width: 860px) {
   .pageShell { padding: 0; background: #fff; }
   .bookingCard, .bookingCard.withTimes, .bookingCard.withForm { display: flex; width: 100%; min-height: 100vh; flex-direction: column; border: 0; border-radius: 0; box-shadow: none; }
-  .eventPanel { padding: 35px 25px; border-right: 0; border-bottom: 1px solid #d8e3ed; }
-  .hostName { font-size: 18px; }
-  .eventPanel h1 { font-size: 32px; }
-  .eventMeta { gap: 17px; margin-top: 28px; font-size: 17px; }
-  .eventMeta svg { width: 25px; height: 25px; }
+  .eventPanel { padding: 25px 20px; border-right: 0; border-bottom: 1px solid #d8e3ed; }
+  .hostName { font-size: 14px; }
+  .eventPanel h1 { font-size: 24px; }
+  .eventMeta { gap: 12px; margin-top: 20px; font-size: 14px; }
+  .eventMeta svg { width: 20px; height: 20px; }
   .eventPanel footer { display: none; }
-  .calendarPanel { padding: 34px 22px; }
-  .calendarPanel h2 { font-size: 30px; }
-  .monthNav { margin: 35px auto 22px; }
-  .calendarGrid { grid-template-columns: repeat(7, minmax(35px, 1fr)); grid-auto-rows: 52px; gap: 8px 2px; }
-  .calendarGrid button { width: 47px; height: 47px; font-size: 18px; }
-  .timezoneBlock { margin-top: 30px; }
-  .timezoneBlock button { align-items: flex-start; font-size: 16px; white-space: normal; text-align: left; }
-  .timesPanel { padding: 20px 22px 45px; }
-  .timesPanel h3 { font-size: 21px; }
+  .calendarPanel { padding: 24px 18px; }
+  .calendarPanel h2 { font-size: 22px; }
+  .monthNav { margin: 24px auto 16px; }
+  .calendarGrid { grid-template-columns: repeat(7, minmax(30px, 1fr)); grid-auto-rows: 40px; gap: 6px 2px; }
+  .calendarGrid button { width: 36px; height: 36px; font-size: 14px; }
+  .timezoneBlock { margin-top: 20px; }
+  .timezoneBlock button { align-items: flex-start; font-size: 13px; white-space: normal; text-align: left; }
+  .timesPanel { padding: 16px 18px 35px; }
+  .timesPanel h3 { font-size: 16px; }
   .timesList { max-height: none; overflow: visible; padding: 0; }
-  .timeButton, .activeTime { min-height: 64px; font-size: 20px; }
-  .formPanel { padding: 35px 25px 55px; }
-  .poweredRibbon { top: 18px; right: -72px; transform: rotate(45deg) scale(.78); }
+  .timeButton, .activeTime { min-height: 48px; font-size: 16px; }
+  .formPanel { padding: 25px 20px 40px; }
+  .poweredRibbon { top: 14px; right: -56px; transform: rotate(45deg) scale(.75); }
 }
 
 @media (max-width: 430px) {
-  .calendarGrid button { width: 42px; height: 42px; }
-  .weekDay { font-size: 13px; }
+  .calendarGrid button { width: 32px; height: 32px; }
+  .weekDay { font-size: 11px; }
 }
