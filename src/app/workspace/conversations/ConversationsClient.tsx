@@ -27,12 +27,149 @@ import {
   Calendar,
   AlertCircle,
   Pencil,
-  ArrowRight
+  ArrowRight,
+  Mic,
+  Play,
+  Pause,
+  Square
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+
+const VoiceNotePlayer = ({
+  src,
+  sender,
+  createdAt,
+  isCurrentUser
+}: {
+  src: string;
+  sender?: { name: string; avatar?: string };
+  createdAt?: string;
+  isCurrentUser: boolean;
+}) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play();
+      setIsPlaying(true);
+    }
+  };
+
+  const formatAudioTime = (time: number) => {
+    if (isNaN(time) || time === 0) return '0:00';
+    const mins = Math.floor(time / 60);
+    const secs = Math.floor(time % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const formattedTime = createdAt
+    ? new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+    : '11:59';
+
+  const waveformHeights = [
+    30, 50, 75, 40, 90, 60, 35, 80, 100, 45, 65, 85, 30, 95, 70,
+    40, 60, 90, 50, 80, 65, 35, 75, 100, 45, 85, 60, 40, 90, 50
+  ];
+
+  const progressPercent = duration > 0 ? (currentTime / duration) : 0;
+  const activeBarIndex = Math.floor(progressPercent * waveformHeights.length);
+
+  return (
+    <div className={`flex items-center gap-3 px-4 py-3 rounded-[20px] max-w-sm relative shadow-2xs ${
+      isCurrentUser 
+        ? 'bg-[#16181a] text-white' 
+        : 'bg-[#e5e5ea] dark:bg-[#26262a] text-slate-900 dark:text-white'
+    }`}>
+      <audio
+        ref={audioRef}
+        src={src}
+        onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
+        onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
+        onEnded={() => { setIsPlaying(false); setCurrentTime(0); }}
+        className="hidden"
+      />
+
+      {/* Play/Pause Button */}
+      <button
+        type="button"
+        onClick={togglePlay}
+        className="text-current hover:opacity-80 transition-transform active:scale-95 shrink-0"
+      >
+        {isPlaying ? (
+          <Pause size={20} className="fill-current text-current" />
+        ) : (
+          <Play size={20} className="fill-current text-current ml-0.5" />
+        )}
+      </button>
+
+      {/* Waveform & Timestamps Container */}
+      <div className="flex-1 flex flex-col justify-center min-w-0">
+        {/* Waveform bars with progress blue dot */}
+        <div
+          className="relative flex items-center gap-[2.5px] h-7 w-full cursor-pointer py-1"
+          onClick={(e) => {
+            if (!audioRef.current || !duration) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const pct = Math.max(0, Math.min(1, clickX / rect.width));
+            audioRef.current.currentTime = pct * duration;
+            setCurrentTime(pct * duration);
+          }}
+        >
+          {/* Blue progress dot */}
+          <span
+            className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-[#007aff] z-10 shadow-xs transition-all duration-75"
+            style={{ left: `calc(${progressPercent * 100}% - 4px)` }}
+          />
+
+          {waveformHeights.map((h, idx) => {
+            const isPassed = idx <= activeBarIndex;
+            return (
+              <span
+                key={idx}
+                className={`flex-1 rounded-full transition-colors duration-150 ${
+                  isPassed
+                    ? (isCurrentUser ? 'bg-white' : 'bg-slate-900 dark:bg-white')
+                    : (isCurrentUser ? 'bg-white/30' : 'bg-slate-400/50 dark:bg-white/30')
+                }`}
+                style={{ height: `${h}%` }}
+              />
+            );
+          })}
+        </div>
+
+        {/* Timestamps */}
+        <div className="flex justify-between items-center text-[10px] text-slate-400 font-medium px-0.5 mt-0.5">
+          <span>{formatAudioTime(currentTime || duration)}</span>
+          <span>{formattedTime}</span>
+        </div>
+      </div>
+
+      {/* Sender Avatar with Blue Mic Overlay */}
+      <div className="relative shrink-0 ml-1">
+        <Avatar className="h-9 w-9 border border-black/10 dark:border-white/10">
+          <AvatarImage src={sender?.avatar || `https://api.dicebear.com/7.x/notionists/svg?seed=${sender?.name || 'user'}`} />
+          <AvatarFallback className="text-[10px] font-extrabold uppercase bg-primary/20 text-primary">
+            {(sender?.name || 'U').substring(0, 2)}
+          </AvatarFallback>
+        </Avatar>
+        <span className="absolute -bottom-0.5 -left-1 bg-[#007aff] text-white p-0.5 rounded-full ring-2 ring-white dark:ring-[#181818] shadow-xs">
+          <Mic size={9} className="stroke-[2.5]" />
+        </span>
+      </div>
+    </div>
+  );
+};
 
 interface ConversationsClientProps {
   currentUser: {
@@ -75,12 +212,39 @@ export default function ConversationsClient({
   users,
   organizations
 }: ConversationsClientProps) {
-  // Read tab and selection from URL params (set by ConversationsSidebarPanel)
+  // Read tab and selection with instant local state
   const searchParams = useSearchParams();
   const router = useRouter();
-  const activeTab = (searchParams.get('chatTab') as 'projects' | 'teams') || 'projects';
-  const selectedProjectId = searchParams.get('project') || (projects.length > 0 ? projects[0].id : null);
-  const selectedGroupId = searchParams.get('group');
+
+  const [activeTab, setActiveTab] = useState<'projects' | 'teams'>(
+    (searchParams.get('chatTab') as 'projects' | 'teams') || 'projects'
+  );
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    searchParams.get('project') || (projects.length > 0 ? projects[0].id : null)
+  );
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(
+    searchParams.get('group')
+  );
+
+  useEffect(() => {
+    const syncFromLocation = () => {
+      const sp = new URLSearchParams(window.location.search);
+      const tab = (sp.get('chatTab') as 'projects' | 'teams') || 'projects';
+      const proj = sp.get('project') || (projects.length > 0 ? projects[0].id : null);
+      const group = sp.get('group');
+
+      setActiveTab(prev => prev !== tab ? tab : prev);
+      setSelectedProjectId(prev => prev !== proj ? proj : prev);
+      setSelectedGroupId(prev => prev !== group ? group : prev);
+    };
+
+    window.addEventListener('popstate', syncFromLocation);
+    const interval = setInterval(syncFromLocation, 50);
+    return () => {
+      window.removeEventListener('popstate', syncFromLocation);
+      clearInterval(interval);
+    };
+  }, [projects]);
 
   // Teams tab state
   const [groups, setGroups] = useState<any[]>([]);
@@ -105,11 +269,280 @@ export default function ConversationsClient({
   const [isDirectModalOpen, setIsDirectModalOpen] = useState(false);
   const [directUserSearchQuery, setDirectUserSearchQuery] = useState('');
   const [isCreatingDirect, setIsCreatingDirect] = useState(false);
+  const [isNewDirectModalOpen, setIsNewDirectModalOpen] = useState(false);
+  const [selectedUserForDirect, setSelectedUserForDirect] = useState<string>('');
+  const [isStartingDirect, setIsStartingDirect] = useState(false);
+
+  // Mention Suggestions State for Teams Tab Chat
+  const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
+  const [mentionMode, setMentionMode] = useState<'members' | 'projects' | 'tasks'>('members');
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [allTasks, setAllTasks] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadTasks = async () => {
+      try {
+        const { getTasksAction } = await import('@/app/actions/tasks');
+        const res = await getTasksAction();
+        if (res.success && res.tasks) {
+          setAllTasks(res.tasks);
+        }
+      } catch (err) {
+        console.error('Failed to load tasks for mentions:', err);
+      }
+    };
+    loadTasks();
+  }, []);
+
+  // Context-aware projects & tasks filter helpers for mentions
+  const getContextualProjects = () => {
+    const memberMatches = messageContent.match(/@([A-Za-z0-9_]+)/g);
+    if (memberMatches && memberMatches.length > 0) {
+      const lastMemberMention = memberMatches[memberMatches.length - 1].replace('@', '').toLowerCase();
+      const matchedUser = users.find(u => 
+        u.name.replace(/\s+/g, '').toLowerCase() === lastMemberMention || 
+        u.name.toLowerCase().includes(lastMemberMention)
+      );
+      if (matchedUser) {
+        const userProjects = projects.filter(p => 
+          p.projectManagerId === matchedUser.id ||
+          p.clientId === matchedUser.id ||
+          (p as any).assignees?.some((a: any) => a.userId === matchedUser.id || a.user?.id === matchedUser.id)
+        );
+        if (userProjects.length > 0) return userProjects;
+      }
+    }
+    return projects;
+  };
+
+  const getContextualTasks = () => {
+    const projectMatches = messageContent.match(/@@([A-Za-z0-9_]+)/g);
+    if (projectMatches && projectMatches.length > 0) {
+      const lastProjMention = projectMatches[projectMatches.length - 1].replace('@@', '').toLowerCase();
+      const matchedProject = projects.find(p => 
+        p.name.replace(/\s+/g, '').toLowerCase() === lastProjMention || 
+        p.name.toLowerCase().includes(lastProjMention)
+      );
+      if (matchedProject) {
+        const projTasks = allTasks.filter(t => t.projectId === matchedProject.id);
+        if (projTasks.length > 0) return projTasks;
+      }
+    }
+    return allTasks;
+  };
+
+  const [mentionHighlightedIndex, setMentionHighlightedIndex] = useState(0);
+
+  const getFilteredMentionItems = () => {
+    if (mentionMode === 'members') {
+      return users.filter(u => u.name.toLowerCase().includes(mentionQuery) || u.email.toLowerCase().includes(mentionQuery));
+    } else if (mentionMode === 'projects') {
+      return getContextualProjects().filter(p => p.name.toLowerCase().includes(mentionQuery));
+    } else {
+      return getContextualTasks().filter(t => t.title.toLowerCase().includes(mentionQuery));
+    }
+  };
+
+  const handleMessageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setMessageContent(value);
+
+    const words = value.split(/\s+/);
+    const lastWord = words[words.length - 1] || '';
+    if (lastWord.startsWith('@@')) {
+      setMentionMode('projects');
+      setMentionQuery(lastWord.substring(2).toLowerCase());
+      setShowMentionSuggestions(true);
+      setMentionHighlightedIndex(0);
+    } else if (lastWord.startsWith('@')) {
+      setMentionMode('members');
+      setMentionQuery(lastWord.substring(1).toLowerCase());
+      setShowMentionSuggestions(true);
+      setMentionHighlightedIndex(0);
+    } else if (lastWord.startsWith('#')) {
+      setMentionMode('tasks');
+      setMentionQuery(lastWord.substring(1).toLowerCase());
+      setShowMentionSuggestions(true);
+      setMentionHighlightedIndex(0);
+    } else {
+      setShowMentionSuggestions(false);
+    }
+  };
+
+  const handleComposerKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showMentionSuggestions) return;
+
+    const items = getFilteredMentionItems();
+    if (items.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setMentionHighlightedIndex((prev) => (prev + 1) % items.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setMentionHighlightedIndex((prev) => (prev - 1 + items.length) % items.length);
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      const selectedItem = items[mentionHighlightedIndex] || items[0];
+      if (selectedItem) {
+        if (mentionMode === 'members') {
+          insertGroupMention(selectedItem.name, '@');
+        } else if (mentionMode === 'projects') {
+          insertGroupMention(selectedItem.name, '@@');
+        } else {
+          insertGroupMention(selectedItem.title, '#');
+        }
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setShowMentionSuggestions(false);
+    }
+  };
+
+  const renderFormattedMessageContent = (rawContent: string) => {
+    if (!rawContent) return null;
+    const parts = rawContent.split(/(@@[A-Za-z0-9_]+|@[A-Za-z0-9_]+|#[A-Za-z0-9_]+)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith('@@')) {
+        return (
+          <span
+            key={index}
+            className="inline-flex items-center px-2 py-0.5 mx-0.5 rounded-[6px] text-xs font-black bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-200 border border-blue-300 dark:border-blue-500/40 shadow-2xs"
+          >
+            {part}
+          </span>
+        );
+      } else if (part.startsWith('@')) {
+        return (
+          <span
+            key={index}
+            className="inline-flex items-center px-2 py-0.5 mx-0.5 rounded-[6px] text-xs font-black bg-indigo-100 text-indigo-800 dark:bg-indigo-950/80 dark:text-indigo-200 border border-indigo-300 dark:border-indigo-500/40 shadow-2xs"
+          >
+            {part}
+          </span>
+        );
+      } else if (part.startsWith('#')) {
+        return (
+          <span
+            key={index}
+            className="inline-flex items-center px-2 py-0.5 mx-0.5 rounded-[6px] text-xs font-black bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-200 border border-amber-300 dark:border-amber-500/40 shadow-2xs"
+          >
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
+
+  const insertGroupMention = (name: string, prefix: string) => {
+    const words = messageContent.trimEnd().split(/\s+/);
+    words.pop();
+    words.push(`${prefix}${name.replace(/\s+/g, '')} `);
+    setMessageContent(words.join(' '));
+    setShowMentionSuggestions(false);
+  };
 
   // File Upload State
   const [uploading, setUploading] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ url: string; name: string; size: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Voice Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      setRecordingSeconds(0);
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      toast.error('Microphone permission denied or not available');
+    }
+  };
+
+  const stopAndSendVoiceNote = () => {
+    if (!mediaRecorderRef.current) return;
+
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+    }
+
+    mediaRecorderRef.current.onstop = async () => {
+      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      const file = new File([audioBlob], `Voice_Note_${Date.now()}.webm`, { type: 'audio/webm' });
+
+      setUploading(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/conversations/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setAttachedFile({
+            url: data.url,
+            name: data.name,
+            size: data.size
+          });
+          toast.success('Voice note recorded');
+        }
+      } catch (err) {
+        toast.error('Failed to upload voice note');
+      } finally {
+        setUploading(false);
+      }
+
+      mediaRecorderRef.current?.stream.getTracks().forEach(track => track.stop());
+      setIsRecording(false);
+      setRecordingSeconds(0);
+    };
+
+    mediaRecorderRef.current.stop();
+  };
+
+  const cancelVoiceRecording = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+    }
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.onstop = null;
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+    setIsRecording(false);
+    setRecordingSeconds(0);
+    audioChunksRef.current = [];
+  };
+
+  const formatRecordingTime = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remainingSecs = secs % 60;
+    return `${mins.toString().padStart(2, '0')}:${remainingSecs.toString().padStart(2, '0')}`;
+  };
 
   // Create Group Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -161,14 +594,17 @@ export default function ConversationsClient({
     fetchGroups();
   }, []);
 
+const groupMessagesCache: Record<string, any[]> = {};
+
   // Fetch messages when a group is selected
   const fetchGroupMessages = async (groupId: string) => {
-    setMessagesLoading(true);
     try {
       const res = await fetch(`/api/conversations/groups/${groupId}/messages`);
       if (res.ok) {
         const data = await res.json();
-        setMessages(data.messages || []);
+        const newMsgs = data.messages || [];
+        groupMessagesCache[groupId] = newMsgs;
+        setMessages(newMsgs);
         // Refresh groups list to update unread badges
         fetchGroups();
       }
@@ -182,6 +618,13 @@ export default function ConversationsClient({
 
   useEffect(() => {
     if (selectedGroupId) {
+      if (groupMessagesCache[selectedGroupId]) {
+        setMessages(groupMessagesCache[selectedGroupId]);
+        setMessagesLoading(false);
+      } else {
+        setMessagesLoading(true);
+        setMessages([]);
+      }
       fetchGroupMessages(selectedGroupId);
     } else {
       setMessages([]);
@@ -200,9 +643,27 @@ export default function ConversationsClient({
   );
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  useEffect(() => {
     if (lastEvent && selectedGroupId) {
       if (lastEvent.event === 'message_sent' && lastEvent.payload.message) {
         const msg = lastEvent.payload.message;
+        if (msg.senderId !== currentUser.id) {
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            try {
+              new Notification(`New Message from ${msg.sender?.name || 'User'}`, {
+                body: msg.content || 'Sent an attachment',
+                icon: '/favicon.ico',
+              });
+            } catch {
+              /* ignore */
+            }
+          }
+        }
         if (msg.groupId === selectedGroupId) {
           setMessages(prev => {
             if (prev.some(m => m.id === msg.id)) return prev;
@@ -793,8 +1254,8 @@ export default function ConversationsClient({
                             {/* Content Bubble */}
                             <div className={`rounded-2xl px-4.5 py-3 text-sm shadow-sm relative ${
                               isCurrentUser
-                                ? 'bg-primary text-white rounded-tr-none'
-                                : 'bg-white dark:bg-[#202020] text-slate-800 dark:text-slate-200 rounded-tl-none border border-slate-100 dark:border-white/5'
+                                ? 'bg-[#16181a] text-white rounded-tr-none'
+                                : 'bg-[#e5e5ea] dark:bg-[#26262a] text-slate-900 dark:text-white rounded-tl-none border border-slate-300/30 dark:border-white/5'
                             }`}>
                               {/* Content text / Edit box */}
                               {editingMessageId === msg.id ? (
@@ -817,39 +1278,48 @@ export default function ConversationsClient({
                                 </div>
                               ) : (
                                 <>
-                                  {msg.content && <p className="whitespace-pre-wrap break-words leading-relaxed">{msg.content}</p>}
+                                  {msg.content && <p className="whitespace-pre-wrap break-words leading-relaxed">{renderFormattedMessageContent(msg.content)}</p>}
                                   {msg.isEdited && (
                                     <span className="text-[9px] opacity-60 absolute bottom-1 right-3">(edited)</span>
                                   )}
                                 </>
                               )}
 
-                              {/* Attachment File Card */}
+                              {/* Attachment File / Voice Note Card */}
                               {msg.fileUrl && (
-                                <div className={`flex items-center gap-3 p-3 mt-2 rounded-xl border max-w-sm ${
-                                  isCurrentUser
-                                    ? 'bg-primary-foreground/10 border-primary-foreground/20 text-white'
-                                    : 'bg-slate-50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 text-slate-800 dark:text-slate-200'
-                                }`}>
-                                  {getFileIcon(msg.fileName || 'file')}
-                                  <div className="min-w-0 flex-1">
-                                    <div className="font-bold text-xs truncate">{msg.fileName || 'Attached File'}</div>
-                                    <div className={`text-[10px] mt-0.5 ${isCurrentUser ? 'text-primary-foreground/70' : 'text-slate-400'}`}>
-                                      {formatFileSize(msg.fileSize || 0)}
+                                (msg.fileName?.includes('Voice_Note') || msg.fileUrl.match(/\.(webm|mp3|wav|ogg|m4a)$/i)) ? (
+                                  <VoiceNotePlayer
+                                    src={msg.fileUrl}
+                                    sender={msg.sender}
+                                    createdAt={msg.createdAt}
+                                    isCurrentUser={isCurrentUser}
+                                  />
+                                ) : (
+                                  <div className={`flex items-center gap-3 p-3 mt-2 rounded-xl border max-w-sm ${
+                                    isCurrentUser
+                                      ? 'bg-primary-foreground/10 border-primary-foreground/20 text-white'
+                                      : 'bg-slate-50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 text-slate-800 dark:text-slate-200'
+                                  }`}>
+                                    {getFileIcon(msg.fileName || 'file')}
+                                    <div className="min-w-0 flex-1">
+                                      <div className="font-bold text-xs truncate">{msg.fileName || 'Attached File'}</div>
+                                      <div className={`text-[10px] mt-0.5 ${isCurrentUser ? 'text-primary-foreground/70' : 'text-slate-400'}`}>
+                                        {formatFileSize(msg.fileSize || 0)}
+                                      </div>
                                     </div>
+                                    <a
+                                      href={msg.fileUrl}
+                                      download={msg.fileName || 'file'}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className={`p-1.5 rounded-lg transition-colors hover:bg-black/10 dark:hover:bg-white/10 ${
+                                        isCurrentUser ? 'text-white' : 'text-slate-500'
+                                      }`}
+                                    >
+                                      <Download size={15} />
+                                    </a>
                                   </div>
-                                  <a
-                                    href={msg.fileUrl}
-                                    download={msg.fileName || 'file'}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className={`p-1.5 rounded-lg transition-colors hover:bg-black/10 dark:hover:bg-white/10 ${
-                                      isCurrentUser ? 'text-white' : 'text-slate-500'
-                                    }`}
-                                  >
-                                    <Download size={15} />
-                                  </a>
-                                </div>
+                                )
                               )}
                               </div>
 
@@ -923,8 +1393,8 @@ export default function ConversationsClient({
                 </div>
 
                 {/* Message Input Bottom Bar */}
-                <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-[#181818] shrink-0">
-                  <form onSubmit={handleSendMessage} className="space-y-3">
+                <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-[#181818] shrink-0 relative z-30">
+                  <form onSubmit={handleSendMessage} className="space-y-3 relative">
                     {/* Replying quote preview */}
                     {replyingTo && (
                       <div className="flex items-center justify-between bg-slate-50 dark:bg-[#1f1f1f] rounded-2xl px-4 py-2 text-xs border border-slate-100 dark:border-slate-800">
@@ -964,51 +1434,183 @@ export default function ConversationsClient({
                       </div>
                     )}
 
-                    {/* Chat field, attachments, send */}
-                    <div className="flex items-end gap-2.5 relative">
+                    {/* Mention Suggestions Overlay */}
+                    {showMentionSuggestions && (
+                      <div className="absolute bottom-full mb-3 left-0 w-80 bg-white dark:bg-[#1f1f23] border border-slate-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-[100] animate-fade-in text-left">
+                        <div className="max-h-64 overflow-y-auto py-2 custom-scrollbar">
+                          {mentionMode === 'members' && (
+                            <div>
+                              <div className="px-3 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Group & Org Members (@)</div>
+                              {users
+                                .filter(u => u.name.toLowerCase().includes(mentionQuery) || u.email.toLowerCase().includes(mentionQuery))
+                                .map((u, idx) => {
+                                  const isHighlighted = idx === mentionHighlightedIndex;
+                                  return (
+                                    <div
+                                      key={u.id}
+                                      className={`px-4 py-2 cursor-pointer flex items-center justify-between transition-colors ${
+                                        isHighlighted ? 'bg-slate-100 dark:bg-white/10 font-bold' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                      }`}
+                                      onClick={() => insertGroupMention(u.name, '@')}
+                                    >
+                                      <div>
+                                        <p className="text-xs font-semibold text-slate-900 dark:text-white">@{u.name}</p>
+                                        <p className="text-[10px] text-slate-400">{u.email}</p>
+                                      </div>
+                                      <span className="text-[9px] font-bold uppercase text-slate-400">{u.role}</span>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          )}
+
+                          {mentionMode === 'projects' && (
+                            <div>
+                              <div className="px-3 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                                {getContextualProjects().length < projects.length ? 'User Projects (@@)' : 'All Projects (@@)'}
+                              </div>
+                              {getContextualProjects()
+                                .filter(p => p.name.toLowerCase().includes(mentionQuery))
+                                .map((p, idx) => {
+                                  const isHighlighted = idx === mentionHighlightedIndex;
+                                  return (
+                                    <div
+                                      key={p.id}
+                                      className={`px-4 py-2 cursor-pointer flex items-center justify-between transition-colors ${
+                                        isHighlighted ? 'bg-slate-100 dark:bg-white/10 font-bold' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                      }`}
+                                      onClick={() => insertGroupMention(p.name, '@@')}
+                                    >
+                                      <p className="text-xs font-semibold text-slate-900 dark:text-white">@@{p.name}</p>
+                                      <span className="text-[9px] font-bold uppercase text-primary">{p.priority}</span>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          )}
+
+                          {mentionMode === 'tasks' && (
+                            <div>
+                              <div className="px-3 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                                {getContextualTasks().length < allTasks.length ? 'Project Tasks (#)' : 'All Tasks (#)'}
+                              </div>
+                              {getContextualTasks()
+                                .filter(t => t.title.toLowerCase().includes(mentionQuery))
+                                .map((t, idx) => {
+                                  const isHighlighted = idx === mentionHighlightedIndex;
+                                  return (
+                                    <div
+                                      key={t.id}
+                                      className={`px-4 py-2 cursor-pointer flex items-center justify-between transition-colors ${
+                                        isHighlighted ? 'bg-slate-100 dark:bg-white/10 font-bold' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                      }`}
+                                      onClick={() => insertGroupMention(t.title, '#')}
+                                    >
+                                      <p className="text-xs font-semibold text-slate-900 dark:text-white truncate max-w-[180px]">#{t.title}</p>
+                                      {t.status?.name && (
+                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">{t.status.name}</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Chat field, attachments, send (Exact Mockup Layout) */}
+                    <div className="flex items-center gap-2.5">
                       <input
                         type="file"
                         ref={fileInputRef}
                         onChange={handleFileUpload}
                         className="hidden"
                       />
-                      <Button
+                      <button
                         type="button"
-                        variant="ghost"
                         disabled={uploading || isPendingInvitation}
                         onClick={triggerFileUpload}
-                        className="h-11 w-11 rounded-2xl p-0 shrink-0 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-primary"
-                        title="Attach standard file"
+                        className="w-9 h-9 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
+                        title="Add attachment"
                       >
                         {uploading ? (
-                          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
                         ) : (
-                          <Paperclip size={20} />
+                          <Plus size={18} />
                         )}
-                      </Button>
+                      </button>
 
-                      <div className="flex-1 relative">
-                        <Input
-                          placeholder={isPendingInvitation ? "Waiting for acceptance request to be approved..." : "Type a message..."}
-                          value={messageContent}
-                          onChange={e => setMessageContent(e.target.value)}
-                          disabled={isPendingInvitation}
-                          className="w-full bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800/80 focus-visible:ring-primary pr-12 h-11 rounded-2xl text-sm"
-                        />
-                      </div>
+                      {isRecording ? (
+                        <div className="flex-1 flex items-center justify-between gap-3 bg-red-500/10 border border-red-500/30 rounded-full px-4 py-1.5 animate-pulse">
+                          <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-bold text-xs">
+                            <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping shrink-0" />
+                            <span>Recording Voice Note ({formatRecordingTime(recordingSeconds)})</span>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={cancelVoiceRecording}
+                              className="h-7 px-2 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                            >
+                              <X size={14} className="mr-1" /> Cancel
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={stopAndSendVoiceNote}
+                              className="h-7 px-3 text-xs bg-red-600 hover:bg-red-700 text-white font-bold rounded-full shadow-2xs"
+                            >
+                              <Check size={14} className="mr-1" /> Send Voice
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex-1 flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-800 bg-[#fbfaf7] dark:bg-slate-900/50 px-4 py-1.5 focus-within:ring-2 focus-within:ring-primary/40 transition-all">
+                          <Input
+                            placeholder={isPendingInvitation ? "Waiting for acceptance request to be approved..." : "Write a message... @ (members), @@ (projects), # (tasks)"}
+                            value={messageContent}
+                            onChange={handleMessageInputChange}
+                            onKeyDown={handleComposerKeyDown}
+                            disabled={isPendingInvitation}
+                            className="w-full bg-transparent border-none shadow-none focus-visible:ring-0 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 p-0 h-7"
+                          />
+
+                          {/* Inline Action Icons Inside Composer Input */}
+                          <div className="flex items-center gap-1 text-slate-400 shrink-0">
+                            <button
+                              type="button"
+                              onClick={startVoiceRecording}
+                              disabled={isPendingInvitation}
+                              className="hover:text-primary transition-colors p-1"
+                              title="Record Voice Note"
+                            >
+                              <Mic size={17} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={triggerFileUpload}
+                              disabled={isPendingInvitation}
+                              className="hover:text-slate-700 dark:hover:text-white transition-colors p-1"
+                              title="Attach File"
+                            >
+                              <Paperclip size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       <Button
                         type="submit"
                         disabled={isSending || isPendingInvitation || (!messageContent.trim() && !attachedFile)}
-                        className="bg-primary hover:bg-primary/95 text-white h-11 px-5 rounded-2xl flex items-center justify-center gap-1.5 shadow-sm transition-all shrink-0"
+                        className="h-9 w-9 rounded-full shrink-0 shadow-sm flex items-center justify-center p-0 bg-primary hover:bg-primary/90 text-white"
                       >
                         {isSending ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <>
-                            <Send size={15} />
-                            <span className="hidden sm:inline font-semibold">Send</span>
-                          </>
+                          <Send size={15} />
                         )}
                       </Button>
                     </div>

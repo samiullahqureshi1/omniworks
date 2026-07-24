@@ -11,13 +11,14 @@ export default async function ConversationsPage() {
   // Fetch projects matching the user's access
   const projects = await prisma.project.findMany({
     where: {
-      organizationId: session.organizationId,
-      ...(session.role === 'CLIENT' ? { clientId: session.userId } : {}),
-      ...(session.role === 'MEMBER' ? {
+      OR: [
+        { organizationId: session.organizationId },
+        { organization: { parentOrganizationId: session.organizationId } }
+      ],
+      ...(session.role === 'CLIENT' ? {
         OR: [
-          { assignees: { some: { userId: session.userId } } },
-          { tasks: { some: { assignees: { some: { userId: session.userId } } } } },
-          { projectManagerId: session.userId }
+          { clientId: session.userId },
+          { assignees: { some: { userId: session.userId } } }
         ]
       } : {})
     },

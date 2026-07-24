@@ -664,6 +664,7 @@ export async function getPlannerCalendarAction(fromIso: string, toIso: string) {
         where: {
           organizationId,
           startTime: { gte: from, lte: to },
+          status: { notIn: ['COMPLETED', 'POSTPONED'] },
           OR: [{ pmId: userId }, { project: { projectManagerId: userId } }],
         },
         include: { project: { select: { id: true, name: true } } },

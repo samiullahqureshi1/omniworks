@@ -33,20 +33,11 @@ export async function GET(request: Request, context: { params: Promise<{ project
       return NextResponse.json({ error: 'Project not found or access denied' }, { status: 404 });
     }
 
-    // Determine users we can mention
+    // Determine users we can mention (Project Manager, Project Assignees, Client, and Task Assignees of this project)
     const users = [];
 
-    // Admins/Owners in organization
-    const owners = await prisma.user.findMany({
-      where: { organizationId: session.organizationId, role: 'OWNER', status: 'ACTIVE' },
-      select: { id: true, name: true, role: true }
-    });
-    users.push(...owners);
-
     if (project.projectManager) users.push(project.projectManager);
-    users.push(...project.assignees.map(a => a.user));
-    
-    // Include client if we want them to be mentionable (usually yes, if message is public)
+    if (project.assignees) users.push(...project.assignees.map(a => a.user));
     if (project.client) users.push(project.client);
 
     // Fetch all task assignees for tasks in this project
@@ -75,7 +66,7 @@ export async function GET(request: Request, context: { params: Promise<{ project
       select: { id: true, title: true, status: { select: { name: true } } }
     });
 
-    return NextResponse.json({ users: uniqueUsers, tasks });
+    return NextResponse.json({ users: uniqueUsers, tasks, projectName: project.name });
   } catch (error: any) {
     console.error('Fetch mention suggestions error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
