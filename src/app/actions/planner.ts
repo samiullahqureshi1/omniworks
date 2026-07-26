@@ -630,7 +630,7 @@ export async function deletePlannerEventAction(id: string) {
 
 export type CalendarItem = {
   id: string;
-  kind: 'task' | 'meeting' | 'project';
+  kind: 'meeting' | 'event' | 'reminder';
   title: string;
   date: string; // ISO
   end?: string | null;
@@ -646,20 +646,11 @@ export async function getPlannerCalendarAction(fromIso: string, toIso: string) {
     if (!session) return { error: 'Unauthorized' };
     if (session.role === 'CLIENT') return { error: 'Not available for clients.' };
 
-    const { userId, organizationId, role } = session;
+    const { userId, organizationId } = session;
     const from = new Date(fromIso);
     const to = new Date(toIso);
-    const canReschedule = role === 'OWNER' || role === 'MEMBER';
 
-    const [tasks, meetings, projects] = await Promise.all([
-      prisma.task.findMany({
-        where: {
-          organizationId,
-          dueDate: { gte: from, lte: to },
-          assignees: { some: { userId } },
-        },
-        include: { project: { select: { id: true, name: true } }, status: true },
-      }),
+    const [meetings, plannerEvents] = await Promise.all([
       prisma.meeting.findMany({
         where: {
           organizationId,
@@ -669,38 +660,20 @@ export async function getPlannerCalendarAction(fromIso: string, toIso: string) {
         },
         include: { project: { select: { id: true, name: true } } },
       }),
-      // Projects the user manages or is assigned to, shown by their due (end) date.
-      // Owners and Master Admins can see all organization projects on the calendar.
-      prisma.project.findMany({
+      prisma.plannerEvent.findMany({
         where: {
           organizationId,
-          endDate: { gte: from, lte: to },
-          ...(role === 'OWNER' || role === 'MASTER_ADMIN'
-            ? {}
-            : {
-                OR: [
-                  { projectManagerId: userId },
-                  { assignees: { some: { userId } } },
-                ],
-              }),
+          startDate: { gte: from, lte: to },
+          OR: [
+            { assignedToId: userId },
+            { assignedToId: null }
+          ]
         },
-        include: { status: true },
-      }),
+        include: { project: { select: { id: true, name: true } } }
+      })
     ]);
 
     const items: CalendarItem[] = [
-      ...tasks
-        .filter((t) => t.dueDate)
-        .map((t) => ({
-          id: `task-${t.id}`,
-          kind: 'task' as const,
-          title: t.title,
-          date: t.dueDate!.toISOString(),
-          meta: t.project?.name || null,
-          href: `/workspace/tasks?taskId=${t.id}`,
-          status: t.status?.name || null,
-          draggable: canReschedule,
-        })),
       ...meetings.map((m) => ({
         id: `meeting-${m.id}`,
         kind: 'meeting' as const,
@@ -711,21 +684,24 @@ export async function getPlannerCalendarAction(fromIso: string, toIso: string) {
         href: '/workspace/planner/meetings',
         draggable: false,
       })),
-      ...projects
-        .filter((p) => p.endDate)
-        .map((p) => ({
-          id: `project-${p.id}`,
-          kind: 'project' as const,
-          title: p.name,
-          date: p.endDate!.toISOString(),
-          meta: 'Project due',
-          href: `/workspace/projects/${p.id}`,
-          status: p.status?.name || null,
+      ...plannerEvents.map((ev) => {
+        const isReminder = ev.title.toLowerCase().includes('reminder') || (ev as any).type === 'REMINDER';
+        const kind = isReminder ? ('reminder' as const) : ('event' as const);
+        return {
+          id: `event-${ev.id}`,
+          kind,
+          title: ev.title,
+          date: ev.startDate.toISOString(),
+          end: ev.endDate ? ev.endDate.toISOString() : null,
+          meta: ev.project?.name || null,
+          href: isReminder ? '/workspace/planner/reminders' : '/workspace/planner/events',
+          status: ev.status || null,
           draggable: false,
-        })),
+        };
+      })
     ];
 
-    return { success: true, items, canReschedule };
+    return { success: true, items, canReschedule: false };
   } catch (error: any) {
     return { error: error.message || 'Failed to load calendar.' };
   }

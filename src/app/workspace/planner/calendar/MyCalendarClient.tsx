@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   DndContext, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, type DragEndEvent,
 } from '@dnd-kit/core';
-import { Calendar as CalIcon, ChevronLeft, ChevronRight, Loader2, Video, CheckSquare, FolderKanban } from 'lucide-react';
+import { Calendar as CalIcon, ChevronLeft, ChevronRight, Loader2, Video, Sparkles, Clock } from 'lucide-react';
 import { getPlannerCalendarAction, rescheduleTaskAction, type CalendarItem } from '@/app/actions/planner';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -30,14 +30,14 @@ function monthMatrix(view: Date) {
 
 const CHIP_STYLES: Record<CalendarItem['kind'], string> = {
   meeting: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
-  project: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
-  task: 'bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-200',
+  event: 'bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300',
+  reminder: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
 };
 
 function ChipIcon({ kind }: { kind: CalendarItem['kind'] }) {
   if (kind === 'meeting') return <Video size={11} className="shrink-0" />;
-  if (kind === 'project') return <FolderKanban size={11} className="shrink-0" />;
-  return <CheckSquare size={11} className="shrink-0" />;
+  if (kind === 'event') return <Sparkles size={11} className="shrink-0" />;
+  return <Clock size={11} className="shrink-0" />;
 }
 
 function TaskChip({ item, draggable }: { item: CalendarItem; draggable: boolean }) {
@@ -48,9 +48,9 @@ function TaskChip({ item, draggable }: { item: CalendarItem; draggable: boolean 
       {...(draggable ? listeners : {})}
       {...(draggable ? attributes : {})}
       className={`flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium truncate ${
-        CHIP_STYLES[item.kind]
+        CHIP_STYLES[item.kind] || 'bg-slate-100 text-slate-700'
       } ${draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${isDragging ? 'opacity-40' : ''}`}
-      title={item.kind === 'project' ? `${item.title} (project due)` : item.title}
+      title={item.title}
     >
       <ChipIcon kind={item.kind} />
       <span className="truncate">{item.title}</span>
@@ -119,24 +119,9 @@ export default function MyCalendarClient() {
     return map;
   }, [items]);
 
-  const onDragEnd = async (e: DragEndEvent) => {
-    const overKey = e.over?.id as string | undefined;
-    const activeId = e.active?.id as string | undefined;
-    if (!overKey || !activeId) return;
-    const item = items.find((i) => i.id === activeId);
-    if (!item || !item.draggable || item.kind !== 'task') return;
-    if (keyFromIso(item.date) === overKey) return;
-
-    const [y, m, d] = overKey.split('-').map(Number);
-    const orig = new Date(item.date);
-    const next = new Date(y, m - 1, d, orig.getHours(), orig.getMinutes());
-    const prev = items;
-    setItems((list) => list.map((i) => (i.id === activeId ? { ...i, date: next.toISOString() } : i)));
-
-    const taskId = activeId.replace('task-', '');
-    const res = await rescheduleTaskAction(taskId, next.toISOString());
-    if (res.error) { setItems(prev); toast.error(res.error); }
-    else toast.success('Task rescheduled');
+  const onDragEnd = async (_e: DragEndEvent) => {
+    // Tasks are not displayed on My Calendar
+    return;
   };
 
   const monthLabel = view.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
@@ -182,7 +167,7 @@ export default function MyCalendarClient() {
       </div>
 
       <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-3">
-        {canReschedule ? 'Drag a task to another day to reschedule its due date.' : 'Tasks and meetings assigned to you. Rescheduling is available to owners and project managers.'}
+        Events, reminders, and meetings scheduled for your organization.
       </p>
     </div>
   );
