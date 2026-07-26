@@ -87,7 +87,8 @@ export default function WorkspaceLayoutClient({
     if (path.startsWith('/workspace/rules')) return 'rules';
     if (path.startsWith('/workspace/teamops')) return 'teams';
     if (path.startsWith('/workspace/conversations')) return 'conversations';
-    if (path.startsWith('/workspace/planner')) return 'calendar';
+    if (path.startsWith('/workspace/calendar')) return 'calendar';
+    if (path.startsWith('/workspace/planner')) return 'planner';
     return 'home';
   };
 
@@ -351,7 +352,7 @@ export default function WorkspaceLayoutClient({
 
             {/* Desktop Secondary Sidebar (joined inside the card) — hidden on the
                 Planner tab until the org connects Google Calendar. */}
-            {!plannerGate && (
+            {!plannerGate && !pathname.startsWith('/workspace/calendar') && (
             <motion.div
               initial={false}
               animate={{

@@ -250,20 +250,31 @@ export default function EventsClient({
     setModalOpen(true);
   };
 
+  const safeDateStr = (val: any) => {
+    if (!val) return '';
+    try {
+      if (typeof val === 'string') return val.slice(0, 10);
+      if (val instanceof Date) return val.toISOString().slice(0, 10);
+      return new Date(val).toISOString().slice(0, 10);
+    } catch {
+      return '';
+    }
+  };
+
   const openEdit = (e: Ev) => {
     setEditId(e.id);
     setForm({
       title: e.title,
       type: e.type as any,
-      startDate: e.startDate.slice(0, 10),
-      endDate: e.endDate ? e.endDate.slice(0, 10) : '',
+      startDate: safeDateStr(e.startDate),
+      endDate: safeDateStr(e.endDate),
       projectId: e.project?.id || '',
       assignedToId: e.assignedTo?.id || '',
       visibility: e.visibility as any,
       status: e.status,
       isRepeated: e.isRepeated || false,
       repeatFrequency: (e.repeatFrequency as any) || null,
-      repeatEndsAt: '',
+      repeatEndsAt: safeDateStr((e as any).repeatEndsAt),
     });
     setModalOpen(true);
   };

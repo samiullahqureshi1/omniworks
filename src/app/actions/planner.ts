@@ -630,7 +630,7 @@ export async function deletePlannerEventAction(id: string) {
 
 export type CalendarItem = {
   id: string;
-  kind: 'meeting' | 'event' | 'reminder';
+  kind: 'meeting' | 'event' | 'reminder' | 'task' | 'project';
   title: string;
   date: string; // ISO
   end?: string | null;
@@ -640,17 +640,29 @@ export type CalendarItem = {
   draggable?: boolean;
 };
 
-export async function getPlannerCalendarAction(fromIso: string, toIso: string) {
+export async function getPlannerCalendarAction(fromIso: string, toIso: string, mode: 'all' | 'plannerOnly' = 'all') {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
     if (session.role === 'CLIENT') return { error: 'Not available for clients.' };
 
-    const { userId, organizationId } = session;
+    const { userId, organizationId, role } = session;
     const from = new Date(fromIso);
     const to = new Date(toIso);
+    const canReschedule = role === 'OWNER' || role === 'MEMBER';
+    const showAll = mode === 'all';
 
-    const [meetings, plannerEvents] = await Promise.all([
+    const [tasks, meetings, projects, plannerEvents] = await Promise.all([
+      showAll
+        ? prisma.task.findMany({
+            where: {
+              organizationId,
+              dueDate: { gte: from, lte: to },
+              assignees: { some: { userId } },
+            },
+            include: { project: { select: { id: true, name: true } }, status: true },
+          })
+        : Promise.resolve([]),
       prisma.meeting.findMany({
         where: {
           organizationId,
@@ -660,6 +672,23 @@ export async function getPlannerCalendarAction(fromIso: string, toIso: string) {
         },
         include: { project: { select: { id: true, name: true } } },
       }),
+      showAll
+        ? prisma.project.findMany({
+            where: {
+              organizationId,
+              endDate: { gte: from, lte: to },
+              ...(role === 'OWNER' || role === 'MASTER_ADMIN'
+                ? {}
+                : {
+                    OR: [
+                      { projectManagerId: userId },
+                      { assignees: { some: { userId } } },
+                    ],
+                  }),
+            },
+            include: { status: true },
+          })
+        : Promise.resolve([]),
       prisma.plannerEvent.findMany({
         where: {
           organizationId,
@@ -674,6 +703,18 @@ export async function getPlannerCalendarAction(fromIso: string, toIso: string) {
     ]);
 
     const items: CalendarItem[] = [
+      ...tasks
+        .filter((t) => t.dueDate)
+        .map((t) => ({
+          id: `task-${t.id}`,
+          kind: 'task' as const,
+          title: t.title,
+          date: t.dueDate!.toISOString(),
+          meta: t.project?.name || null,
+          href: `/workspace/tasks?taskId=${t.id}`,
+          status: t.status?.name || null,
+          draggable: canReschedule,
+        })),
       ...meetings.map((m) => ({
         id: `meeting-${m.id}`,
         kind: 'meeting' as const,
@@ -684,6 +725,18 @@ export async function getPlannerCalendarAction(fromIso: string, toIso: string) {
         href: '/workspace/planner/meetings',
         draggable: false,
       })),
+      ...projects
+        .filter((p) => p.endDate)
+        .map((p) => ({
+          id: `project-${p.id}`,
+          kind: 'project' as const,
+          title: p.name,
+          date: p.endDate!.toISOString(),
+          meta: 'Project due',
+          href: `/workspace/projects/${p.id}`,
+          status: p.status?.name || null,
+          draggable: false,
+        })),
       ...plannerEvents.map((ev) => {
         const isReminder = ev.title.toLowerCase().includes('reminder') || (ev as any).type === 'REMINDER';
         const kind = isReminder ? ('reminder' as const) : ('event' as const);
@@ -701,7 +754,7 @@ export async function getPlannerCalendarAction(fromIso: string, toIso: string) {
       })
     ];
 
-    return { success: true, items, canReschedule: false };
+    return { success: true, items, canReschedule: showAll ? canReschedule : false };
   } catch (error: any) {
     return { error: error.message || 'Failed to load calendar.' };
   }

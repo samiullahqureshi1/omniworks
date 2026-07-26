@@ -3,6 +3,7 @@ import {
   Cpu,
   Users as UsersIcon,
   Calendar,
+  CalendarDays,
   Video,
   Bot,
   LayoutDashboard,
@@ -55,8 +56,8 @@ export interface SecondarySection {
 
 export const mainSidebarItems: MainSidebarItem[] = [
   { id: 'home', name: 'Home', icon: Home },
-  { id: 'calendar', name: 'Planner', icon: Calendar },
-  { id: 'agents', name: 'AI', icon: Bot },
+  { id: 'planner', name: 'Planner', icon: CalendarDays },
+  { id: 'calendar', name: 'Calendar', icon: Calendar },
   { id: 'conversations', name: 'Chat', icon: MessageSquare },
   { id: 'more', name: 'More', icon: LayoutGrid },
 ];
@@ -113,6 +114,24 @@ export const secondaryNavigation: Record<string, SecondarySection[]> = {
         { name: 'All Internal Projects', href: '/workspace/teamops?tab=projects', icon: FolderKanban, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
         { name: 'Templates', href: '/workspace/teamops?tab=templates', icon: FileText, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
         { name: 'Members', href: '/workspace/users', icon: UsersIcon, exact: false, roles: ['OWNER'] },
+      ],
+    },
+  ],
+  planner: [
+    {
+      title: 'Planner',
+      items: [
+        { name: 'My Calendar', href: '/workspace/planner/calendar', icon: Calendar, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
+        { name: 'Meetings', href: '/workspace/planner/meetings', icon: Video, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
+        { name: 'Events', href: '/workspace/planner/events', icon: Sparkles, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
+        { name: 'Reminders', href: '/workspace/planner/reminders', icon: Timer, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
+        { name: 'Contacts', href: '/workspace/planner/contacts', icon: UsersIcon, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
+      ],
+    },
+    {
+      title: 'Configuration',
+      items: [
+        { name: 'Booking Availability', href: '/workspace/planner/settings', icon: Settings, exact: true, roles: ['OWNER'] },
       ],
     },
   ],

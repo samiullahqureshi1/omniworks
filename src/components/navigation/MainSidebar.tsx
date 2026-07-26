@@ -35,9 +35,10 @@ export function MainSidebar({
 
   const itemRoutes: Record<string, string> = {
     home: '/workspace',
+    planner: '/workspace/planner/events',
     teams: '/workspace/teamops?tab=dashboard',
     conversations: '/workspace/conversations',
-    calendar: '/workspace/planner',
+    calendar: '/workspace/calendar',
   };
 
   const activeMainIconTab = ['rules', 'meeting', 'more'].includes(activeTab) ? 'more' : activeTab;
