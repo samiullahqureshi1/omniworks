@@ -11,7 +11,7 @@ import {
   LayoutDashboard, CheckSquare, Users, Timer, Activity,
   Briefcase, MessageSquare, GripVertical, Plus, ShieldAlert,
   Search, Check, X, Hash, Trash2, Repeat, ChevronDown, Award, UserCheck, CalendarDays, Globe, Mail, Phone, Type,
-  FolderKanban, Star, PhoneCall, Sparkles, Zap, Brain, UserPlus
+  FolderKanban, Star, PhoneCall, Sparkles, Zap, Brain, UserPlus, Target, Edit2, Eye, EyeOff, TrendingUp, Flag
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 import { createTaskAction, updateTaskAction, deleteTaskAction } from '@/app/actions/tasks';
 import { updateProjectAction } from '@/app/actions/projects';
 import { getRulesAction, createRuleAction } from '@/app/actions/rules';
+import { createMilestoneAction, updateMilestoneAction, deleteMilestoneAction } from '@/app/actions/milestones';
 import ProjectConversation, { ProjectConversationRef } from './ProjectConversation';
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { useRealtime } from '@/hooks/useRealtime';
@@ -60,7 +61,7 @@ const renderTrackedTime = (hours: number) => {
   );
 };
 
-export default function ProjectDetailClient({ project, currentUser, users = [], taskStatuses = [], projectStatuses = [] }: { project: any, currentUser: any, users?: any[], taskStatuses?: any[], projectStatuses?: any[] }) {
+export default function ProjectDetailClient({ project, currentUser, users = [], taskStatuses = [], projectStatuses = [], milestones: initialMilestones = [] }: { project: any, currentUser: any, users?: any[], taskStatuses?: any[], projectStatuses?: any[], milestones?: any[] }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -72,8 +73,31 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
   const [newTaskPriority, setNewTaskPriority] = useState('MEDIUM');
   const [newTaskHours, setNewTaskHours] = useState('');
   const [newTaskAssignees, setNewTaskAssignees] = useState<string[]>([]);
+  const [newTaskMilestoneId, setNewTaskMilestoneId] = useState('');
   const [isAssigneeModalOpen, setIsAssigneeModalOpen] = useState(false);
   const [assigneeSearchQuery, setAssigneeSearchQuery] = useState('');
+
+  // Milestone State
+  const [milestones, setMilestones] = useState<any[]>(initialMilestones);
+  const [isCreateMilestoneOpen, setIsCreateMilestoneOpen] = useState(false);
+  const [isEditMilestoneOpen, setIsEditMilestoneOpen] = useState(false);
+  const [editingMilestone, setEditingMilestone] = useState<any>(null);
+  // Create milestone form
+  const [mTitle, setMTitle] = useState('');
+  const [mDescription, setMDescription] = useState('');
+  const [mDueDate, setMDueDate] = useState('');
+  const [mStatus, setMStatus] = useState('NOT_STARTED');
+  const [mProgress, setMProgress] = useState(0);
+  const [mClientVisible, setMClientVisible] = useState(false);
+  const [mAutoComplete, setMAutoComplete] = useState(false);
+  // Edit milestone form
+  const [emTitle, setEmTitle] = useState('');
+  const [emDescription, setEmDescription] = useState('');
+  const [emDueDate, setEmDueDate] = useState('');
+  const [emStatus, setEmStatus] = useState('NOT_STARTED');
+  const [emProgress, setEmProgress] = useState(0);
+  const [emClientVisible, setEmClientVisible] = useState(false);
+  const [emAutoComplete, setEmAutoComplete] = useState(false);
   
   // Project Edit
   const [isEditProjectOpen, setIsEditProjectOpen] = useState(false);
@@ -402,7 +426,11 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
         hours,
         undefined, // dueDate
         undefined, // statusId
-        newTaskAssignees
+        newTaskAssignees,
+        undefined, // customFields
+        undefined, // isRepeated
+        undefined, // repeatSettings
+        newTaskMilestoneId || undefined, // milestoneId
       );
       if (res.error) {
         toast.error(res.error);
@@ -413,6 +441,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
         setNewTaskHours('');
         setNewTaskPriority('MEDIUM');
         setNewTaskAssignees([]);
+        setNewTaskMilestoneId('');
         setIsNewTaskModalOpen(false);
         router.refresh();
       }
@@ -440,13 +469,99 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
     return '';
   };
 
+  const getMilestoneStatusColor = (status: string) => {
+    switch (status) {
+      case 'NOT_STARTED': return { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-700', dot: 'bg-slate-400' };
+      case 'IN_PROGRESS': return { bg: 'bg-blue-50 dark:bg-blue-950/40', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800', dot: 'bg-blue-500' };
+      case 'COMPLETED': return { bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800', dot: 'bg-emerald-500' };
+      case 'ON_HOLD': return { bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800', dot: 'bg-amber-500' };
+      default: return { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-600 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-700', dot: 'bg-slate-400' };
+    }
+  };
+
+  const handleCreateMilestone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mTitle.trim()) return;
+    startTransition(async () => {
+      const res = await createMilestoneAction(project.id, {
+        title: mTitle,
+        description: mDescription || undefined,
+        dueDate: mDueDate || undefined,
+        status: mStatus,
+        progress: mProgress,
+        clientVisible: mClientVisible,
+        autoComplete: mAutoComplete,
+      });
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success('Milestone created!');
+        setMilestones(prev => [...prev, res.milestone]);
+        setMTitle(''); setMDescription(''); setMDueDate('');
+        setMStatus('NOT_STARTED'); setMProgress(0);
+        setMClientVisible(false); setMAutoComplete(false);
+        setIsCreateMilestoneOpen(false);
+      }
+    });
+  };
+
+  const openEditMilestone = (milestone: any) => {
+    setEditingMilestone(milestone);
+    setEmTitle(milestone.title);
+    setEmDescription(milestone.description || '');
+    setEmDueDate(milestone.dueDate ? milestone.dueDate.slice(0, 10) : '');
+    setEmStatus(milestone.status);
+    setEmProgress(milestone.progress);
+    setEmClientVisible(milestone.clientVisible);
+    setEmAutoComplete(milestone.autoComplete);
+    setIsEditMilestoneOpen(true);
+  };
+
+  const handleEditMilestone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMilestone) return;
+    startTransition(async () => {
+      const res = await updateMilestoneAction(editingMilestone.id, {
+        title: emTitle,
+        description: emDescription || undefined,
+        dueDate: emDueDate || undefined,
+        status: emStatus,
+        progress: emProgress,
+        clientVisible: emClientVisible,
+        autoComplete: emAutoComplete,
+      });
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success('Milestone updated!');
+        setMilestones(prev => prev.map(m => m.id === editingMilestone.id ? res.milestone : m));
+        setIsEditMilestoneOpen(false);
+        setEditingMilestone(null);
+      }
+    });
+  };
+
+  const handleDeleteMilestone = async (milestoneId: string) => {
+    if (!confirm('Delete this milestone? Tasks linked to it will be unlinked.')) return;
+    startTransition(async () => {
+      const res = await deleteMilestoneAction(milestoneId);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success('Milestone deleted');
+        setMilestones(prev => prev.filter(m => m.id !== milestoneId));
+        router.refresh();
+      }
+    });
+  };
+
   const getPriorityColor = (priority: string) => {
     switch(priority) {
       case 'LOW': return 'text-slate-500 bg-slate-100 dark:bg-slate-800';
       case 'MEDIUM': return 'text-blue-500 bg-blue-100 dark:bg-blue-900/30';
       case 'HIGH': return 'text-orange-500 bg-orange-100 dark:bg-orange-900/30';
       case 'CRITICAL': return 'text-red-500 bg-red-100 dark:bg-red-900/30 font-bold';
-  default: return 'text-slate-500';
+      default: return 'text-slate-500';
     }
   };
 
@@ -497,6 +612,22 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
             <span>Tasks</span>
             <span className="px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-white/20 text-[10px] font-black">
               {project.tasks?.length || 0}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('milestones')}
+            className={`px-3.5 py-1.5 rounded-[8px] text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'milestones'
+                ? 'bg-slate-100 dark:bg-white/10 text-slate-900 dark:text-white border border-slate-200/80 dark:border-white/10 shadow-2xs'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+            }`}
+          >
+            <Target size={14} />
+            <span>Milestones</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-white/20 text-[10px] font-black">
+              {milestones.length}
             </span>
           </button>
 
@@ -716,7 +847,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
               />
             </div>
           </div>
-        ) : (
+        ) : activeTab === 'tasks' ? (
           /* TASKS TAB CONTENT */
           <div className="flex-1 overflow-y-auto p-6 w-full custom-scrollbar space-y-6">
             {canManageTasks && (
@@ -798,6 +929,21 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                         )}
                       </div>
                     </div>
+                    {milestones.length > 0 && (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Link to Milestone <span className="text-muted-foreground font-normal">(optional)</span></label>
+                        <select
+                          className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                          value={newTaskMilestoneId}
+                          onChange={e => setNewTaskMilestoneId(e.target.value)}
+                        >
+                          <option value="">No milestone</option>
+                          {milestones.map((m: any) => (
+                            <option key={m.id} value={m.id}>{m.title}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                     <div className="flex justify-end gap-2 pt-4">
                       <Button type="button" variant="outline" onClick={() => setIsNewTaskModalOpen(false)}>Cancel</Button>
                       <Button type="submit" disabled={isPending || !newTaskName.trim()}>Create Task</Button>
@@ -843,13 +989,19 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                                 <p className="text-sm font-medium leading-snug">{t.title}</p>
                                 {t.description && <p className="text-[10px] text-muted-foreground line-clamp-2 mt-1">{t.description}</p>}
                                 {t.allocatedHours && <p className="text-[10px] text-primary/80 font-medium mt-1">{t.allocatedHours} hrs allocated</p>}
+                                {t.milestone && (
+                                  <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-200 text-[9px] font-semibold border border-slate-200 dark:border-white/10">
+                                    <Target size={9} />
+                                    {t.milestone.title}
+                                  </span>
+                                )}
                               </div>
                             </div>
                             <Badge variant="outline" className={`text-[8px] px-1 py-0 h-4 border leading-none shrink-0 ${
                               t.priority === 'CRITICAL' ? 'bg-red-50 text-red-700 border-red-200' : 
                               t.priority === 'HIGH' ? 'bg-orange-50 text-orange-700 border-orange-200' :
                               t.priority === 'MEDIUM' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                              'bg-\[#fbfaf7\] text-slate-600 border-slate-200'
+                              'bg-[#fbfaf7] text-slate-600 border-slate-200'
                             }`}>{t.priority}</Badge>
                           </div>
                           
@@ -882,6 +1034,311 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
             })}
           </div>
         </div>
+      ) : activeTab === 'milestones' ? (
+        /* ======= MILESTONES TAB ======= */
+        <div className="flex-1 overflow-y-auto p-6 w-full custom-scrollbar">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <Target size={20} className="text-slate-700 dark:text-slate-300" />
+                Milestones
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {isClient ? 'Track project milestones and deliverables.' : 'Manage project milestones. Clients see only client-visible milestones.'}
+              </p>
+            </div>
+            {(isOwner || isPM) && (
+              <Button
+                onClick={() => setIsCreateMilestoneOpen(true)}
+                className="flex items-center gap-2 rounded-[8px]"
+              >
+                <Plus size={16} />
+                Add Milestone
+              </Button>
+            )}
+          </div>
+
+          {/* Milestone Cards */}
+          {milestones.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl gap-3">
+              <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center">
+                <Target size={28} className="text-slate-500 dark:text-slate-400" />
+              </div>
+              <div className="text-center">
+                <p className="font-bold text-slate-700 dark:text-slate-200">No milestones yet</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {(isOwner || isPM) ? 'Create the first milestone to track major deliverables.' : 'No milestones have been shared yet.'}
+                </p>
+              </div>
+              {(isOwner || isPM) && (
+                <Button variant="outline" className="rounded-[8px]" onClick={() => setIsCreateMilestoneOpen(true)}>
+                  <Plus size={14} className="mr-1.5" /> Create Milestone
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+              {milestones.map((milestone: any) => {
+                const sc = getMilestoneStatusColor(milestone.status);
+                const dueDate = milestone.dueDate ? new Date(milestone.dueDate) : null;
+                const isOverdue = dueDate && dueDate < new Date() && milestone.status !== 'COMPLETED';
+                return (
+                  <div
+                    key={milestone.id}
+                    className="group relative flex flex-col bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all gap-4"
+                  >
+                    {/* Top row: status + actions */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${sc.bg} ${sc.text} ${sc.border}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
+                          {milestone.status.replace('_', ' ')}
+                        </span>
+                        {milestone.clientVisible && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+                            <Eye size={9} /> Client
+                          </span>
+                        )}
+                        {isOverdue && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800">
+                            Overdue
+                          </span>
+                        )}
+                      </div>
+                      {(isOwner || isPM) && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10">
+                              <MoreHorizontal size={16} className="text-slate-500" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuItem onClick={() => openEditMilestone(milestone)} className="gap-2">
+                              <Edit2 size={14} /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteMilestone(milestone.id)}
+                              className="gap-2 text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 size={14} /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
+
+                    {/* Title & Description */}
+                    <div>
+                      <h3 className="font-black text-slate-900 dark:text-white text-sm leading-snug">{milestone.title}</h3>
+                      {milestone.description && (
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{milestone.description}</p>
+                      )}
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Progress</span>
+                        <span className="text-xs font-black text-slate-900 dark:text-white">{milestone.progress}%</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${Math.min(100, milestone.progress)}%`,
+                            background: milestone.progress === 100
+                              ? 'linear-gradient(90deg, #10b981, #059669)'
+                              : 'linear-gradient(90deg, #334155, #0f172a)'
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Footer: due date + linked tasks */}
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-white/5">
+                      <div className="flex items-center gap-1.5">
+                        {dueDate ? (
+                          <span className={`text-[10px] font-bold flex items-center gap-1 ${isOverdue ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>
+                            <Calendar size={11} />
+                            {dueDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">No due date</span>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                        <CheckSquare size={11} />
+                        {milestone.tasks?.length || 0} task{milestone.tasks?.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Create Milestone Dialog */}
+          <Dialog open={isCreateMilestoneOpen} onOpenChange={setIsCreateMilestoneOpen}>
+            <DialogContent className="sm:max-w-[520px] p-0 overflow-hidden flex flex-col">
+              <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shadow-sm">
+                <DialogTitle className="flex items-center gap-2"><Target size={18} className="text-slate-700 dark:text-slate-300" />New Milestone</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleCreateMilestone} className="overflow-y-auto custom-scrollbar">
+                <div className="px-6 py-5 space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold">Title <span className="text-red-500">*</span></label>
+                    <Input placeholder="e.g. Design Phase Complete" value={mTitle} onChange={e => setMTitle(e.target.value)} required className="rounded-xl" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold">Description</label>
+                    <textarea
+                      placeholder="Describe what this milestone represents..."
+                      className="flex min-h-[80px] w-full rounded-xl border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={mDescription}
+                      onChange={e => setMDescription(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-semibold">Due Date</label>
+                      <Input type="date" value={mDueDate} onChange={e => setMDueDate(e.target.value)} className="rounded-xl" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-semibold">Status</label>
+                      <select className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" value={mStatus} onChange={e => setMStatus(e.target.value)}>
+                        <option value="NOT_STARTED">Not Started</option>
+                        <option value="IN_PROGRESS">In Progress</option>
+                        <option value="ON_HOLD">On Hold</option>
+                        <option value="COMPLETED">Completed</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold">Progress: {mProgress}%</label>
+                    <input
+                      type="range" min={0} max={100} step={5}
+                      value={mProgress}
+                      onChange={e => setMProgress(Number(e.target.value))}
+                      className="w-full accent-slate-900 dark:accent-slate-100"
+                    />
+                    <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
+                      <div className="h-full rounded-full bg-slate-800 dark:bg-slate-200 transition-all" style={{ width: `${mProgress}%` }} />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6 pt-2">
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                      <div
+                        onClick={() => setMClientVisible(v => !v)}
+                        className={`relative w-10 h-5 rounded-full transition-colors ${mClientVisible ? 'bg-sky-500' : 'bg-slate-200 dark:bg-slate-700'}`}
+                      >
+                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${mClientVisible ? 'translate-x-5' : ''}`} />
+                      </div>
+                      <span className="text-sm font-medium flex items-center gap-1"><Eye size={14} /> Client Visible</span>
+                    </label>
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                      <div
+                        onClick={() => setMAutoComplete(v => !v)}
+                        className={`relative w-10 h-5 rounded-full transition-colors ${mAutoComplete ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'}`}
+                      >
+                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${mAutoComplete ? 'translate-x-5' : ''}`} />
+                      </div>
+                      <span className="text-sm font-medium flex items-center gap-1"><TrendingUp size={14} /> Auto-Complete at 100%</span>
+                    </label>
+                  </div>
+                </div>
+                <div className="px-6 py-4 border-t bg-slate-50/50 dark:bg-white/[0.02] flex justify-end gap-2">
+                  <Button type="button" variant="outline" className="rounded-[8px]" onClick={() => setIsCreateMilestoneOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={isPending || !mTitle.trim()} className="rounded-[8px] bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900">
+                    <Flag size={14} className="mr-1.5" /> Create Milestone
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Edit Milestone Dialog */}
+          <Dialog open={isEditMilestoneOpen} onOpenChange={setIsEditMilestoneOpen}>
+            <DialogContent className="sm:max-w-[520px] p-0 overflow-hidden flex flex-col">
+              <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shadow-sm">
+                <DialogTitle className="flex items-center gap-2"><Edit2 size={18} className="text-slate-700 dark:text-slate-300" />Edit Milestone</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleEditMilestone} className="overflow-y-auto custom-scrollbar">
+                <div className="px-6 py-5 space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold">Title <span className="text-red-500">*</span></label>
+                    <Input value={emTitle} onChange={e => setEmTitle(e.target.value)} required className="rounded-xl" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold">Description</label>
+                    <textarea
+                      className="flex min-h-[80px] w-full rounded-xl border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={emDescription}
+                      onChange={e => setEmDescription(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-semibold">Due Date</label>
+                      <Input type="date" value={emDueDate} onChange={e => setEmDueDate(e.target.value)} className="rounded-xl" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-semibold">Status</label>
+                      <select className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" value={emStatus} onChange={e => setEmStatus(e.target.value)}>
+                        <option value="NOT_STARTED">Not Started</option>
+                        <option value="IN_PROGRESS">In Progress</option>
+                        <option value="ON_HOLD">On Hold</option>
+                        <option value="COMPLETED">Completed</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold">Progress: {emProgress}%</label>
+                    <input
+                      type="range" min={0} max={100} step={5}
+                      value={emProgress}
+                      onChange={e => setEmProgress(Number(e.target.value))}
+                      className="w-full accent-slate-900 dark:accent-slate-100"
+                    />
+                    <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
+                      <div className="h-full rounded-full bg-slate-800 dark:bg-slate-200 transition-all" style={{ width: `${emProgress}%` }} />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6 pt-2">
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                      <div
+                        onClick={() => setEmClientVisible(v => !v)}
+                        className={`relative w-10 h-5 rounded-full transition-colors ${emClientVisible ? 'bg-sky-500' : 'bg-slate-200 dark:bg-slate-700'}`}
+                      >
+                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${emClientVisible ? 'translate-x-5' : ''}`} />
+                      </div>
+                      <span className="text-sm font-medium flex items-center gap-1"><Eye size={14} /> Client Visible</span>
+                    </label>
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                      <div
+                        onClick={() => setEmAutoComplete(v => !v)}
+                        className={`relative w-10 h-5 rounded-full transition-colors ${emAutoComplete ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'}`}
+                      >
+                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${emAutoComplete ? 'translate-x-5' : ''}`} />
+                      </div>
+                      <span className="text-sm font-medium flex items-center gap-1"><TrendingUp size={14} /> Auto-Complete at 100%</span>
+                    </label>
+                  </div>
+                </div>
+                <div className="px-6 py-4 border-t bg-slate-50/50 dark:bg-white/[0.02] flex justify-end gap-2">
+                  <Button type="button" variant="outline" className="rounded-[8px]" onClick={() => setIsEditMilestoneOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={isPending || !emTitle.trim()} className="rounded-[8px] bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900">
+                    Save Changes
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+      ) : (
+        /* ======= FALLBACK (empty) ======= */
+        <div />
       )}
 
       {/* Assignee Selection Modal */}

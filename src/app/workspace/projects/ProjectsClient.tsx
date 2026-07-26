@@ -39,6 +39,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
     CheckCircle2,
     Circle,
     Flag,
+    Target,
     Settings,
     DollarSign,
     MessageSquare,
@@ -932,8 +933,22 @@ const [isPMOpen, setIsPMOpen] = useState(false);
       status: string;
       priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
       assigneeId: string;
+      milestoneId?: string;
     };
     const [projectTasks, setProjectTasks] = useState<DraftTask[]>([]);
+
+    type DraftMilestone = {
+      id: string;
+      title: string;
+      description: string;
+      dueDate: string;
+      status: string;
+      progress: number;
+      clientVisible: boolean;
+      autoComplete: boolean;
+    };
+    const [isMilestonesEnabled, setIsMilestonesEnabled] = useState(false);
+    const [projectMilestones, setProjectMilestones] = useState<DraftMilestone[]>([]);
     const [customFields, setCustomFields] = useState<
       { name: string; type: string; value: any; options?: string[] }[]
     >([]);
@@ -1799,7 +1814,22 @@ const [isPMOpen, setIsPMOpen] = useState(false);
             priority: t.priority as any,
             statusId: t.status as string,
             assigneeIds: t.assigneeId ? [t.assigneeId] : [],
+            milestoneId: t.milestoneId || undefined,
           })),
+        milestones: isMilestonesEnabled
+          ? projectMilestones
+              .filter((m) => m.title.trim() !== "")
+              .map((m) => ({
+                id: m.id,
+                title: m.title,
+                description: m.description,
+                dueDate: m.dueDate,
+                status: m.status,
+                progress: m.progress,
+                clientVisible: m.clientVisible,
+                autoComplete: m.autoComplete,
+              }))
+          : undefined,
         ruleIds: attachedRuleIds,
       };
 
@@ -1825,6 +1855,8 @@ const [isPMOpen, setIsPMOpen] = useState(false);
             setIsEditMode(false);
             setEditProjectId(null);
             setProjectTasks([]);
+            setIsMilestonesEnabled(false);
+            setProjectMilestones([]);
             setCustomFields([]);
             setFormName("");
             setFormClientId("");
@@ -1849,6 +1881,8 @@ const [isPMOpen, setIsPMOpen] = useState(false);
             setIsEditMode(false);
             setEditProjectId(null);
             setProjectTasks([]);
+            setIsMilestonesEnabled(false);
+            setProjectMilestones([]);
             setCustomFields([]);
             setFormName("");
             setFormClientId("");
@@ -2507,7 +2541,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
           }
         }}>
         <DialogContent
-    className="w-[calc(100%-2rem)] sm:max-w-[1000px] h-[82vh] min-h-[580px] max-h-[760px] p-0 flex flex-col overflow-hidden rounded-[8px] sm:rounded-[8px] [&>button]:hidden"
+    className="w-[calc(100%-2rem)] sm:max-w-[1200px] h-[82vh] min-h-[580px] max-h-[760px] p-0 flex flex-col overflow-hidden rounded-[8px] sm:rounded-[8px] [&>button]:hidden"
 
     onInteractOutside={(e) => {
       e.preventDefault();
@@ -2644,9 +2678,9 @@ const [isPMOpen, setIsPMOpen] = useState(false);
     <DropdownMenuContent
   align="start"
   className="
-    w-[240px]
+    w-[280px]
     p-1.5
-    rounded-xl
+    rounded-[8px]
     bg-white
     dark:bg-[#1C1C1C]
     shadow-lg
@@ -2657,7 +2691,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
         {/* Search */}
         <Input
           placeholder="Search clients..."
-          className="mb-2 h-9"
+          className="mb-2 h-9 rounded-[8px]"
         />
 
 
@@ -2669,7 +2703,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
               onSelect={() => {
                 setFormClientId(client.id);
               }}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer"
+              className="flex items-center gap-3 px-3 py-2 rounded-[8px] cursor-pointer"
             >
 
 <Avatar className="h-6 w-6"><AvatarFallback className="text-[10px] bg-slate-500 text-white">                  {client.name.substring(0,2).toUpperCase()}
@@ -2709,7 +2743,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
       gap-2
       px-3
       py-2
-      rounded-lg
+      rounded-[8px]
       text-sm
       font-medium
       hover:bg-slate-100
@@ -2792,9 +2826,9 @@ const [isPMOpen, setIsPMOpen] = useState(false);
    <DropdownMenuContent
   align="start"
   className="
-    w-[240px]
-    p-1
-    rounded-xl
+    w-[260px]
+    p-1.5
+    rounded-[8px]
     bg-white
     dark:bg-[#1C1C1C]
     shadow-lg
@@ -2807,7 +2841,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
         className="
           h-8
           text-sm
-          rounded-lg
+          rounded-[8px]
           mb-1.5
         "
       />
@@ -2828,7 +2862,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
     gap-2
     px-2
     py-1.5
-    rounded-lg
+    rounded-[8px]
     cursor-pointer
     hover:bg-slate-100
     dark:hover:bg-white/5
@@ -2979,7 +3013,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
         overflow-y-auto
         bg-white
         dark:bg-[#1C1C1C]
-        rounded-xl
+        rounded-[8px]
         shadow-lg
         border
         p-1.5
@@ -3028,7 +3062,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 
               className="
                 cursor-pointer
-                rounded-lg
+                rounded-[8px]
                 px-2
                 py-1.5
                 flex
@@ -3167,7 +3201,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
       className="
         w-[220px]
         p-1.5
-        rounded-xl
+        rounded-[8px]
         bg-white
         dark:bg-[#1C1C1C]
         shadow-lg
@@ -3181,7 +3215,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
         className="
           h-8
           text-sm
-          rounded-lg
+          rounded-[8px]
           mb-2
         "
       />
@@ -3209,7 +3243,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
               justify-between
               px-2.5
               py-2
-              rounded-lg
+              rounded-[8px]
               cursor-pointer
               ${
                 selected
@@ -3244,7 +3278,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 
               <Check
                 size={15}
-                className="text-slate-700 dark:text-white"
+                className="text-slate-600 dark:text-slate-300"
               />
 
             )}
@@ -3257,6 +3291,28 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 
       })}
 
+<div className="border-t my-1" />
+
+<button
+  type="button"
+  onClick={() => setIsCreateStatusOpen(true)}
+  className="
+    w-full
+    flex
+    items-center
+    gap-2
+    px-2.5
+    py-2
+    rounded-[8px]
+    text-sm
+    font-medium
+    hover:bg-slate-100
+    dark:hover:bg-white/5
+  "
+>
+  <Plus size={14} />
+  Add Status
+</button>
 
     </DropdownMenuContent>
 
@@ -3357,7 +3413,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
       className="
         w-[220px]
         p-1.5
-        rounded-xl
+        rounded-[8px]
         bg-white
         dark:bg-[#1C1C1C]
         shadow-lg
@@ -3404,7 +3460,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
             key={item.value}
 
             onSelect={() => {
-              setFormPriority(item.value);
+              setFormPriority(item.value as any);
             }}
 
             className={`
@@ -3413,7 +3469,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
               justify-between
               px-2.5
               py-2
-              rounded-lg
+              rounded-[8px]
               cursor-pointer
               ${
                 selected
@@ -3558,6 +3614,36 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                       Make this project repeat
                     </label>
                   </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="milestones-enabled-checkbox"
+                      checked={isMilestonesEnabled}
+                      onChange={(e) => {
+                        const newVal = e.target.checked;
+                        setIsMilestonesEnabled(newVal);
+                        if (newVal && projectMilestones.length === 0) {
+                          setProjectMilestones([
+                            {
+                              id: 'm_' + Date.now(),
+                              title: '',
+                              description: '',
+                              dueDate: '',
+                              status: 'NOT_STARTED',
+                              progress: 0,
+                              clientVisible: false,
+                              autoComplete: false,
+                            },
+                          ]);
+                        }
+                      }}
+                      className="rounded border-slate-300 text-slate-600 focus:ring-slate-500 h-4 w-4 cursor-pointer"
+                    />
+                    <label htmlFor="milestones-enabled-checkbox" className="text-[13px] font-medium text-slate-500 dark:text-slate-400 cursor-pointer select-none">
+                      Add milestones to project
+                    </label>
+                  </div>
                 </div>
 
                 {/* Row 5: project budget | project allocated hour */}
@@ -3632,6 +3718,102 @@ const [isPMOpen, setIsPMOpen] = useState(false);
               </div>
             </div>
 
+            {/* Milestones Section (Above Description) */}
+            {isMilestonesEnabled && (
+              <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-white/5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Target size={16} className="text-slate-700 dark:text-slate-300" />
+                      Project Milestones
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Define milestones for this project.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProjectMilestones((prev) => [
+                        ...prev,
+                        {
+                          id: 'm_' + Date.now() + Math.random().toString(36).substring(2, 5),
+                          title: '',
+                          description: '',
+                          dueDate: '',
+                          status: 'NOT_STARTED',
+                          progress: 0,
+                          clientVisible: false,
+                          autoComplete: false,
+                        },
+                      ]);
+                    }}
+                    className="text-xs font-semibold text-slate-900 dark:text-white hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus size={14} /> Add Milestone
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {projectMilestones.map((m, idx) => (
+                    <div key={m.id} className="p-4 bg-muted/30 rounded-lg border space-y-3">
+                      <div className="flex items-center justify-between gap-2 border-b border-slate-200/60 dark:border-white/10 pb-2">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Milestone #{idx + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => setProjectMilestones((prev) => prev.filter((item) => item.id !== m.id))}
+                          className="text-slate-400 hover:text-red-500 p-1 cursor-pointer"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                        <div className="grid grid-cols-[130px_1fr] items-center gap-2">
+                          <label className="text-[13px] font-medium text-slate-500 dark:text-slate-400">milestone title <span className="text-destructive">*</span></label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Design Phase"
+                            value={m.title}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setProjectMilestones((prev) => prev.map((item) => (item.id === m.id ? { ...item, title: val } : item)));
+                            }}
+                            className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none placeholder:text-slate-400/80"
+                          />
+                        </div>
+                        <div className="grid grid-cols-[130px_1fr] items-center gap-2">
+                          <label className="text-[13px] font-medium text-slate-500 dark:text-slate-400">due date</label>
+                          <input
+                            type="date"
+                            value={m.dueDate}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setProjectMilestones((prev) => prev.map((item) => (item.id === m.id ? { ...item, dueDate: val } : item)));
+                            }}
+                            className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none cursor-pointer"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 pt-1">
+                        <label className="flex items-center gap-2 cursor-pointer text-[13px] font-medium text-slate-500 dark:text-slate-400 select-none">
+                          <input
+                            type="checkbox"
+                            checked={m.clientVisible}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setProjectMilestones((prev) => prev.map((item) => (item.id === m.id ? { ...item, clientVisible: checked } : item)));
+                            }}
+                            className="rounded border-slate-300 text-slate-600 focus:ring-slate-500 h-4 w-4 cursor-pointer"
+                          />
+                          Visible to Client
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-3 pt-5">
               <div>
                 <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Description</h3>
@@ -3645,6 +3827,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                 plain
               />
             </div>
+
 
 
 
@@ -4061,7 +4244,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 
             {/* Quick Create Client Modal */}
             <Dialog open={isQuickClientOpen} onOpenChange={setIsQuickClientOpen}>
-              <DialogContent className="sm:max-w-[400px] ">
+              <DialogContent className="sm:max-w-[400px] rounded-[8px] sm:rounded-[8px]">
                 <DialogHeader>
                   <DialogTitle>Quick Add Client</DialogTitle>
                   <DialogDescription>
@@ -4074,7 +4257,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                 >
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Client Name</label>
-                    <Input name="name" required placeholder="Acme Corp" />
+                    <Input name="name" required placeholder="Acme Corp" className="rounded-[8px]" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Client Email</label>
@@ -4083,17 +4266,19 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                       type="email"
                       required
                       placeholder="contact@acme.com"
+                      className="rounded-[8px]"
                     />
                   </div>
                   <DialogFooter className="pt-4">
                     <Button
                       type="button"
                       variant="outline"
+                      className="rounded-[8px]"
                       onClick={() => setIsQuickClientOpen(false)}
                     >
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={isPending}>
+                    <Button type="submit" disabled={isPending} className="rounded-[8px]">
                       {isPending ? "Adding..." : "Add Client"}
                     </Button>
                   </DialogFooter>

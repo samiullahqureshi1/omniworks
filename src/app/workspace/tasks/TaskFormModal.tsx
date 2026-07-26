@@ -17,12 +17,13 @@ import { DocumentsPanel, DraftDocument } from "@/components/documents/DocumentsP
 import { createDocumentAction } from "@/app/actions/documents";
 import { Badge } from "@/components/ui/badge";
 import {
-  Plus, Trash2, Hash, Globe, Mail, Phone, Tags, CheckSquare, CircleDashed, Type, EyeOff, Settings, X, ChevronDown, AlignLeft, Sparkles, Smile, List as ListIcon, Calendar as CalendarIcon, PlusSquare, Wand2, Save, RefreshCw, Search, Repeat, Star, Paperclip, Check
+  Plus, Trash2, Hash, Globe, Mail, Phone, Tags, CheckSquare, CircleDashed, Type, EyeOff, Settings, X, ChevronDown, AlignLeft, Sparkles, Smile, List as ListIcon, Calendar as CalendarIcon, PlusSquare, Wand2, Save, RefreshCw, Search, Repeat, Star, Paperclip, Check, Target
 } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { toast } from "sonner";
 import { createTaskAction, updateTaskAction, createTaskTemplateAction, getTaskTemplatesAction, deleteTaskTemplateAction, updateTaskTemplateAction } from "@/app/actions/tasks";
 import { quickCreateProjectAction } from "@/app/actions/projects";
+import { getMilestonesAction, createMilestoneAction } from "@/app/actions/milestones";
 import { ProjectDescriptionEditor } from "@/components/ui/RichTextEditor";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import {
@@ -41,6 +42,7 @@ type TaskInput = {
   dueDate: string;
   allocatedHours: string;
   assignees: string[];
+  milestoneId?: string;
   customFields?: { name: string; type: string; value: any; options?: string[] }[];
 };
 
@@ -89,6 +91,7 @@ export default function TaskFormModal({
             : "",
           allocatedHours: task.allocatedHours?.toString() || "",
           assignees: task.assignees.map((a: any) => a.userId),
+          milestoneId: task.milestoneId || "",
           customFields: (task.customFields as any) || [],
         },
       ];
@@ -104,6 +107,7 @@ export default function TaskFormModal({
           dueDate: initialTemplateConfig.dueDate || "",
           allocatedHours: initialTemplateConfig.allocatedHours?.toString() || "",
           assignees: initialTemplateConfig.assigneeIds || [],
+          milestoneId: initialTemplateConfig.milestoneId || "",
           customFields: initialTemplateConfig.customFields || [],
         }
       ];
@@ -118,6 +122,7 @@ export default function TaskFormModal({
         dueDate: "",
         allocatedHours: "",
         assignees: [],
+        milestoneId: "",
         customFields: [],
       },
     ];
@@ -130,6 +135,25 @@ export default function TaskFormModal({
   // Modals state
   const [isQuickProjectOpen, setIsQuickProjectOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
+
+  // Milestones State
+  const [milestones, setMilestones] = useState<any[]>([]);
+  const [isQuickMilestoneOpen, setIsQuickMilestoneOpen] = useState(false);
+  const [newMilestoneTitle, setNewMilestoneTitle] = useState("");
+
+  React.useEffect(() => {
+    if (projectId) {
+      getMilestonesAction(projectId).then((res) => {
+        if (res.success && res.milestones) {
+          setMilestones(res.milestones);
+        } else {
+          setMilestones([]);
+        }
+      }).catch(() => setMilestones([]));
+    } else {
+      setMilestones([]);
+    }
+  }, [projectId]);
 
   const [activeTaskAssigneeIndex, setActiveTaskAssigneeIndex] = useState<
     number | null
@@ -422,6 +446,26 @@ export default function TaskFormModal({
     });
   };
 
+  const handleQuickCreateMilestone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMilestoneTitle.trim() || !projectId) return;
+
+    startTransition(async () => {
+      const res = await createMilestoneAction(projectId, {
+        title: newMilestoneTitle.trim(),
+      });
+      if (res.error) {
+        toast.error(res.error);
+      } else if (res.milestone) {
+        toast.success("Milestone created");
+        setMilestones((prev) => [...prev, res.milestone]);
+        updateTaskInput(0, "milestoneId", res.milestone.id);
+        setIsQuickMilestoneOpen(false);
+        setNewMilestoneTitle("");
+      }
+    });
+  };
+
   const updateTaskInput = (
     index: number,
     field: keyof TaskInput,
@@ -501,6 +545,7 @@ export default function TaskFormModal({
             trackedHours: trackedHours ? parseFloat(trackedHours) : 0,
             dueDate: tInput.dueDate || undefined,
             assigneeIds: tInput.assignees,
+            milestoneId: tInput.milestoneId || null,
             customFields: tInput.customFields || [],
           });
         }
@@ -529,7 +574,8 @@ export default function TaskFormModal({
               frequency: repeatFrequency,
               startDate: repeatStartDate,
               endDate: repeatEndDate,
-            }
+            },
+            tInput.milestoneId || undefined
           );
 
           if (res.error) {
@@ -559,6 +605,9 @@ export default function TaskFormModal({
             tInput.statusId || undefined,
             tInput.assignees,
             tInput.customFields || [],
+            false,
+            undefined,
+            tInput.milestoneId || undefined
           );
           if (res.error) {
             toast.error(`Error creating "${tInput.title}": ${res.error}`);
@@ -1141,6 +1190,46 @@ export default function TaskFormModal({
                                   placeholder="e.g. 5.5"
                                   className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none placeholder:text-slate-400/80"
                                 />
+                              </div>
+
+                              {/* Milestone Selection */}
+                              <div className="space-y-2 col-span-2 sm:col-span-1">
+                                <div className="flex items-center justify-between">
+                                  <label className="text-sm font-medium">Milestone</label>
+                                  {(isOwner || isPM) && projectId && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setIsQuickMilestoneOpen(true)}
+                                      className="text-xs text-slate-900 dark:text-white font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Plus size={12} /> Create Milestone
+                                    </button>
+                                  )}
+                                </div>
+                                <select
+                                  value={tInput.milestoneId || ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === "NEW_MILESTONE") {
+                                      setIsQuickMilestoneOpen(true);
+                                    } else {
+                                      updateTaskInput(index, "milestoneId", val);
+                                    }
+                                  }}
+                                  className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none cursor-pointer"
+                                >
+                                  <option value="">No Milestone</option>
+                                  {milestones.map((m) => (
+                                    <option key={m.id} value={m.id}>
+                                      {m.title}
+                                    </option>
+                                  ))}
+                                  {(isOwner || isPM) && (
+                                    <option value="NEW_MILESTONE" className="font-bold text-slate-900">
+                                      + Create New Milestone
+                                    </option>
+                                  )}
+                                </select>
                               </div>
 
                               {/* Make This Task Repeat */}
@@ -2093,6 +2182,45 @@ export default function TaskFormModal({
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
       </DialogPrimitive.Root>
+      {/* Quick Create Milestone Modal */}
+      <Dialog open={isQuickMilestoneOpen} onOpenChange={setIsQuickMilestoneOpen}>
+        <DialogContent className="sm:max-w-[400px] rounded-[8px] sm:rounded-[8px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
+              <Target size={18} className="text-slate-700 dark:text-slate-300" />
+              Quick Create Milestone
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Create a new milestone for this project.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleQuickCreateMilestone} className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Milestone Title <span className="text-destructive">*</span></label>
+              <Input
+                value={newMilestoneTitle}
+                onChange={(e) => setNewMilestoneTitle(e.target.value)}
+                placeholder="e.g. Phase 1 Release"
+                required
+                className="rounded-[8px]"
+              />
+            </div>
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-[8px]"
+                onClick={() => setIsQuickMilestoneOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending || !newMilestoneTitle.trim()} className="rounded-[8px] bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900">
+                {isPending ? "Creating..." : "Create Milestone"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

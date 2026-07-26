@@ -175,7 +175,8 @@ export async function createTaskAction(
     frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY';
     startDate: string;
     endDate: string;
-  }
+  },
+  milestoneId?: string
 ) {
   try {
     const session = await getSession();
@@ -258,6 +259,7 @@ export async function createTaskAction(
               statusId: statusId || null,
               customFields: customFields || null,
               isRepeated: true,
+              milestoneId: milestoneId || null,
               assignees: {
                 create: assigneeIds.map((userId) => ({
                   userId,
@@ -322,6 +324,7 @@ export async function createTaskAction(
         statusId: statusId || null,
         customFields: customFields || null,
         isRepeated: isRepeated || false,
+        milestoneId: milestoneId || null,
         assignees: {
           create: assigneeIds.map((userId) => ({
             userId,
@@ -371,6 +374,7 @@ export async function updateTaskAction(
     statusId?: string;
     assigneeIds?: string[];
     customFields?: any;
+    milestoneId?: string | null;
   }
 ) {
   try {
@@ -466,6 +470,7 @@ export async function updateTaskAction(
       if (data.dueDate !== undefined) updateData.dueDate = data.dueDate ? new Date(data.dueDate) : null;
       if (data.statusId !== undefined) updateData.statusId = data.statusId;
       if (data.customFields !== undefined) updateData.customFields = data.customFields;
+      if (data.milestoneId !== undefined) updateData.milestoneId = data.milestoneId || null;
       
       if (data.assigneeIds) {
         await prisma.taskAssignee.deleteMany({ where: { taskId } });

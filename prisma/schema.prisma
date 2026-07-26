@@ -45,6 +45,7 @@ model Organization {
   leads            Lead[]
   meetings         Meeting[]
   plannerEvents    PlannerEvent[]
+  milestones       Milestone[]
 }
 
 enum Role {
@@ -102,6 +103,7 @@ model User {
   meetingsAsAttendee    Meeting[]                @relation("MeetingAttendee")
   meetingsAsClient      Meeting[]                @relation("MeetingClient")
   plannerEventsAssigned PlannerEvent[]           @relation("PlannerEventAssignee")
+  createdMilestones     Milestone[]              @relation("MilestoneCreator")
 
   @@unique([email, organizationId])
   @@index([organizationId])
@@ -170,6 +172,7 @@ model Project {
   // Relations
   assignees       ProjectAssignee[]
   tasks           Task[]
+  milestones      Milestone[]
   timeEntries     TimeEntry[]
   activeTimers    ActiveTimer[]
   timeScreenshots TimeScreenshot[]
@@ -224,6 +227,8 @@ model Task {
   dueDate        DateTime?
   statusId       String?
   status         TaskStatus?  @relation(fields: [statusId], references: [id], onDelete: SetNull)
+  milestoneId    String?
+  milestone      Milestone?   @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
   priority       Priority     @default(MEDIUM)
   customFields   Json?
   isRepeated     Boolean      @default(false)
@@ -243,6 +248,7 @@ model Task {
   @@index([organizationId])
   @@index([projectId])
   @@index([statusId])
+  @@index([milestoneId])
 }
 
 model TaskAssignee {
@@ -850,4 +856,29 @@ model UserViewPreference {
   updatedAt   DateTime @updatedAt
 
   @@unique([userId, viewKey])
+}
+
+model Milestone {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  dueDate        DateTime?
+  status         String       @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, COMPLETED, ON_HOLD
+  progress       Int          @default(0)             // 0-100
+  clientVisible  Boolean      @default(false)
+  autoComplete   Boolean      @default(false)
+  completedAt    DateTime?
+  createdById    String?
+  createdBy      User?        @relation("MilestoneCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  tasks          Task[]
+
+  @@index([organizationId])
+  @@index([projectId])
 }

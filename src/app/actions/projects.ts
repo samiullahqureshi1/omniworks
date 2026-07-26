@@ -177,6 +177,17 @@ export async function createProjectAction(data: {
     priority: Prisma.ProjectCreateInput["priority"];
     statusId?: string;
     assigneeIds: string[];
+    milestoneId?: string;
+  }[];
+  milestones?: {
+    id?: string;
+    title: string;
+    description?: string;
+    dueDate?: string;
+    status?: string;
+    progress?: number;
+    clientVisible?: boolean;
+    autoComplete?: boolean;
   }[];
   ruleIds?: string[];
 }) {
@@ -204,6 +215,7 @@ export async function createProjectAction(data: {
       isRepeated,
       repeatSettings,
       tasks,
+      milestones,
       ruleIds,
     } = data;
 
@@ -349,25 +361,63 @@ export async function createProjectAction(data: {
             userId,
           })),
         },
-        tasks: {
-          create: tasks?.map((task) => ({
-            title: task.title,
-            description: task.description || null,
-            priority: task.priority,
-            statusId: task.statusId || null,
-            organizationId: session.organizationId,
-            assignees: {
-              create: task.assigneeIds.map((userId) => ({
-                userId,
-              })),
-            },
-          })) || [],
-        },
         rules: ruleIds && ruleIds.length > 0 ? {
           create: ruleIds.map(ruleId => ({ ruleId }))
         } : undefined,
       },
     });
+
+    // Create Milestones and map temp IDs
+    const milestoneIdMap = new Map<string, string>();
+    if (milestones && milestones.length > 0) {
+      for (const m of milestones) {
+        if (!m.title?.trim()) continue;
+        const createdMilestone = await prisma.milestone.create({
+          data: {
+            organizationId: session.organizationId,
+            projectId: project.id,
+            title: m.title.trim(),
+            description: m.description || null,
+            dueDate: m.dueDate ? new Date(m.dueDate) : null,
+            status: m.status || 'NOT_STARTED',
+            progress: m.progress ?? 0,
+            clientVisible: m.clientVisible ?? false,
+            autoComplete: m.autoComplete ?? false,
+            createdById: session.userId,
+          },
+        });
+        if (m.id) {
+          milestoneIdMap.set(m.id, createdMilestone.id);
+        }
+      }
+    }
+
+    // Create Tasks and link to milestones if specified
+    if (tasks && tasks.length > 0) {
+      for (const task of tasks) {
+        if (!task.title?.trim()) continue;
+        const resolvedMilestoneId = task.milestoneId
+          ? (milestoneIdMap.get(task.milestoneId) || task.milestoneId)
+          : null;
+
+        await prisma.task.create({
+          data: {
+            organizationId: session.organizationId,
+            projectId: project.id,
+            title: task.title,
+            description: task.description || null,
+            priority: task.priority,
+            statusId: task.statusId || null,
+            milestoneId: resolvedMilestoneId,
+            assignees: {
+              create: (task.assigneeIds || []).map((userId) => ({
+                userId,
+              })),
+            },
+          },
+        });
+      }
+    }
 
     await createNotification({
       organizationId: session.organizationId,

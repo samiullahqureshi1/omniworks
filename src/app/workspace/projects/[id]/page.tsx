@@ -43,7 +43,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           assignees: {
             include: { user: { select: { id: true, name: true } } }
           },
-          status: true
+          status: true,
+          milestone: { select: { id: true, title: true } },
         }
       },
       timeEntries: {
@@ -65,6 +66,20 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const projectStatuses = await prisma.projectStatus.findMany({
     where: { organizationId: session.organizationId },
     orderBy: { order: 'asc' }
+  });
+
+  // Fetch project milestones (role-filtered)
+  const milestonesWhere: any = { projectId: id, organizationId: session.organizationId };
+  if (session.role === 'CLIENT') {
+    milestonesWhere.clientVisible = true;
+  }
+  const milestones = await prisma.milestone.findMany({
+    where: milestonesWhere,
+    include: {
+      createdBy: { select: { id: true, name: true } },
+      tasks: { select: { id: true, title: true, status: { select: { name: true, color: true } } } },
+    },
+    orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
   });
 
   if (!project) {
@@ -97,5 +112,5 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     orderBy: { order: 'asc' }
   });
 
-  return <ProjectDetailClient project={project} currentUser={session} users={users} taskStatuses={taskStatuses} projectStatuses={projectStatuses} />;
+  return <ProjectDetailClient project={project} currentUser={session} users={users} taskStatuses={taskStatuses} projectStatuses={projectStatuses} milestones={milestones} />;
 }
