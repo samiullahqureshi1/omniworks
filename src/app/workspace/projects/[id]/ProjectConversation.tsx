@@ -13,6 +13,7 @@ import {
   Phone, Paperclip, Search, MoreHorizontal, Smile, Video, Plus, Underline,
   Mic, Play, Pause
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface ProjectConversationProps {
   projectId: string;
@@ -41,19 +42,44 @@ const VoiceNotePlayer = ({
   const [duration, setDuration] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     if (!audioRef.current) return;
-    if (isPlaying) {
-      audioRef.current.pause();
+    try {
+      if (isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        setIsPlaying(true);
+        await audioRef.current.play();
+      }
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        console.error('Audio playback error:', err);
+      }
       setIsPlaying(false);
-    } else {
-      audioRef.current.play();
-      setIsPlaying(true);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (!audioRef.current) return;
+    const dur = audioRef.current.duration;
+    if (dur && isFinite(dur)) {
+      setDuration(dur);
+    } else if (audioRef.current) {
+      audioRef.current.currentTime = 1e101;
+      audioRef.current.ontimeupdate = () => {
+        if (!audioRef.current) return;
+        audioRef.current.ontimeupdate = null;
+        if (isFinite(audioRef.current.duration)) {
+          setDuration(audioRef.current.duration);
+        }
+        audioRef.current.currentTime = 0;
+      };
     }
   };
 
   const formatAudioTime = (time: number) => {
-    if (isNaN(time) || time === 0) return '0:00';
+    if (!time || isNaN(time) || !isFinite(time) || time <= 0) return '0:00';
     const mins = Math.floor(time / 60);
     const secs = Math.floor(time % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -68,7 +94,8 @@ const VoiceNotePlayer = ({
     40, 60, 90, 50, 80, 65, 35, 75, 100, 45, 85, 60, 40, 90, 50
   ];
 
-  const progressPercent = duration > 0 ? (currentTime / duration) : 0;
+  const validDuration = (duration && isFinite(duration)) ? duration : 0;
+  const progressPercent = validDuration > 0 ? (currentTime / validDuration) : 0;
   const activeBarIndex = Math.floor(progressPercent * waveformHeights.length);
 
   return (
@@ -79,9 +106,21 @@ const VoiceNotePlayer = ({
     }`}>
       <audio
         ref={audioRef}
-        src={src}
-        onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
-        onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
+        src={src || undefined}
+        preload="metadata"
+        onTimeUpdate={() => {
+          if (!audioRef.current) return;
+          setCurrentTime(audioRef.current.currentTime || 0);
+          if ((!duration || !isFinite(duration)) && isFinite(audioRef.current.duration)) {
+            setDuration(audioRef.current.duration);
+          }
+        }}
+        onLoadedMetadata={handleLoadedMetadata}
+        onDurationChange={() => {
+          if (audioRef.current && isFinite(audioRef.current.duration)) {
+            setDuration(audioRef.current.duration);
+          }
+        }}
         onEnded={() => { setIsPlaying(false); setCurrentTime(0); }}
         className="hidden"
       />
@@ -121,15 +160,16 @@ const VoiceNotePlayer = ({
 
           {waveformHeights.map((h, idx) => {
             const isPassed = idx <= activeBarIndex;
+            const barHeightPx = Math.max(4, Math.round((h / 100) * 24));
             return (
               <span
                 key={idx}
-                className={`flex-1 rounded-full transition-colors duration-150 ${
+                className={`inline-block w-[3px] rounded-full shrink-0 transition-colors duration-150 ${
                   isPassed
                     ? (isCurrentUser ? 'bg-white' : 'bg-slate-900 dark:bg-white')
-                    : (isCurrentUser ? 'bg-white/30' : 'bg-slate-400/50 dark:bg-white/30')
+                    : (isCurrentUser ? 'bg-white/40' : 'bg-slate-400 dark:bg-white/40')
                 }`}
-                style={{ height: `${h}%` }}
+                style={{ height: `${barHeightPx}px` }}
               />
             );
           })}
@@ -173,6 +213,12 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   const [editContent, setEditContent] = useState('');
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
   
+  // File attachments & Lightbox state
+  const [uploading, setUploading] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<Array<{ url: string; name: string; size: number }>>([]);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   // Mentions state
   const [suggestions, setSuggestions] = useState<{ users: any[], tasks: any[] }>(() => ({
     users: projectDetailsCache[projectId]?.users || [],
@@ -195,17 +241,25 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   const startVoiceRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/mp4')
+        ? 'audio/mp4'
+        : '';
+
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
 
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
+        if (e.data && e.data.size > 0) {
           audioChunksRef.current.push(e.data);
         }
       };
 
-      recorder.start();
+      recorder.start(100);
       setIsRecording(true);
       setRecordingSeconds(0);
 
@@ -213,45 +267,208 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
         setRecordingSeconds(prev => prev + 1);
       }, 1000);
     } catch (err) {
-      /* mic permission denied */
+      console.error('Mic permission denied or error:', err);
+      toast.error('Could not access microphone');
     }
   };
 
   const stopAndSendVoiceNote = () => {
-    if (!mediaRecorderRef.current) return;
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) return;
 
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
     }
 
-    mediaRecorderRef.current.onstop = async () => {
-      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-      const file = new File([audioBlob], `Voice_Note_${Date.now()}.webm`, { type: 'audio/webm' });
+    try {
+      if (recorder.state === 'recording') {
+        recorder.requestData();
+      }
+    } catch (e) {
+      console.warn('requestData error:', e);
+    }
 
+    recorder.onstop = async () => {
+      recorder.stream.getTracks().forEach(track => track.stop());
+      setIsRecording(false);
+      setRecordingSeconds(0);
+
+      if (audioChunksRef.current.length === 0) {
+        toast.error('No audio recorded');
+        return;
+      }
+
+      const mimeType = recorder.mimeType || 'audio/webm';
+      const ext = mimeType.includes('mp4') ? 'm4a' : 'webm';
+      const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+      const localAudioUrl = URL.createObjectURL(audioBlob);
+      const fileName = `Voice_Note_${Date.now()}.${ext}`;
+
+      const tempId = `temp-${Date.now()}`;
+      const optimisticMsg = {
+        id: tempId,
+        projectId,
+        senderId: currentUser.userId,
+        content: '🎙️ Voice Note',
+        fileUrl: localAudioUrl,
+        fileName,
+        visibility,
+        status: 'sending',
+        parentMessageId: replyingTo?.id || null,
+        parentMessage: replyingTo ? {
+          id: replyingTo.id,
+          content: replyingTo.content,
+          sender: { name: replyingTo.sender?.name || 'User' }
+        } : null,
+        sender: {
+          id: currentUser.userId,
+          name: currentUser.name || 'You',
+        },
+        createdAt: new Date().toISOString(),
+        readReceipts: []
+      };
+
+      // 1. Instantly display voice note bubble in chat stream (0ms delay) with loader spinner!
+      setMessages(prev => {
+        const updated = [...prev, optimisticMsg];
+        projectMessagesCache[projectId] = updated;
+        return updated;
+      });
+      setTimeout(() => {
+        const el = document.getElementById('project-chat-scroll-bottom');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
+
+      // 2. Upload file & save to DB in background
+      try {
+        const file = new File([audioBlob], fileName, { type: mimeType });
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const uploadRes = await fetch('/api/conversations/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          const serverUrl = uploadData.url;
+
+          const msgRes = await fetch(`/api/projects/${projectId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: '🎙️ Voice Note',
+              fileUrl: serverUrl,
+              fileName,
+              visibility,
+              parentMessageId: replyingTo?.id || null
+            })
+          });
+
+          if (msgRes.ok) {
+            const data = await msgRes.json();
+            const savedMsg = data.message;
+            // Voice note successfully sent: replace loader with checkmark tick!
+            setMessages(prev => {
+              const updated = prev.map(m => m.id === tempId ? { ...savedMsg, fileUrl: serverUrl } : m);
+              projectMessagesCache[projectId] = updated;
+              return updated;
+            });
+          } else {
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
+            toast.error('Failed to send voice note');
+          }
+        } else {
+          setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
+          toast.error('Failed to upload voice note');
+        }
+      } catch (err) {
+        console.error('Voice note upload error:', err);
+        setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
+        toast.error('Error uploading voice note');
+      }
+    };
+
+    recorder.stop();
+  };
+
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setUploading(true);
+    const newAttachedFiles: Array<{ url: string; name: string; size: number }> = [];
+
+    for (const file of files) {
       const formData = new FormData();
       formData.append('file', file);
+      try {
+        const res = await fetch('/api/conversations/upload', {
+          method: 'POST',
+          body: formData
+        });
+        if (res.ok) {
+          const data = await res.json();
+          newAttachedFiles.push({ url: data.url, name: data.name, size: data.size });
+        }
+      } catch (err) {
+        console.error('File upload error:', err);
+      }
+    }
+
+    if (newAttachedFiles.length > 0) {
+      setAttachedFiles(prev => [...prev, ...newAttachedFiles]);
+    }
+
+    setUploading(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const imageItems = items.filter(item => item.type.startsWith('image/'));
+
+    if (imageItems.length === 0) return;
+
+    setUploading(true);
+    const pastedFiles: Array<{ url: string; name: string; size: number }> = [];
+
+    for (const item of imageItems) {
+      const file = item.getAsFile();
+      if (!file) continue;
+
+      const fileName = `Screenshot_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`;
+      const screenshotFile = new File([file], fileName, { type: file.type || 'image/png' });
+
+      const formData = new FormData();
+      formData.append('file', screenshotFile);
 
       try {
         const res = await fetch('/api/conversations/upload', {
           method: 'POST',
           body: formData
         });
-
         if (res.ok) {
           const data = await res.json();
-          // Send message with voice note URL directly
-          await sendVoiceNoteMessage(data.url, data.name);
+          pastedFiles.push({ url: data.url, name: data.name, size: data.size });
         }
       } catch (err) {
-        console.error(err);
+        console.error('Pasted image upload error:', err);
       }
+    }
 
-      mediaRecorderRef.current?.stream.getTracks().forEach(track => track.stop());
-      setIsRecording(false);
-      setRecordingSeconds(0);
-    };
+    if (pastedFiles.length > 0) {
+      setAttachedFiles(prev => [...prev, ...pastedFiles]);
+    }
 
-    mediaRecorderRef.current.stop();
+    setUploading(false);
   };
 
   const sendVoiceNoteMessage = async (audioUrl: string, fileName: string) => {
@@ -533,16 +750,20 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   };
 
   const sendMessage = async () => {
-    if (!content.trim() || isSending) return;
+    if ((!content.trim() && attachedFiles.length === 0) || isSending) return;
 
     const currentContent = content.trim();
     const currentMentions = [...mentions];
     const currentTaskMentions = [...taskMentions];
+    const currentFiles = [...attachedFiles];
     
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage = {
       id: tempId,
       content: currentContent,
+      fileUrl: currentFiles[0]?.url || null,
+      fileName: currentFiles[0]?.name || null,
+      fileSize: currentFiles[0]?.size || null,
       senderId: currentUser.userId,
       sender: { name: currentUser.name || 'You', role: currentUser.role },
       createdAt: new Date().toISOString(),
@@ -567,36 +788,47 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
     setContent('');
     setMentions([]);
     setTaskMentions([]);
+    setAttachedFiles([]);
     setIsSending(false);
 
     try {
-      const payload = {
-        content: currentContent,
-        visibility: isClient ? 'PUBLIC' : visibility,
-        mentions: currentMentions,
-        taskMentions: currentTaskMentions,
-        parentMessageId: replyingTo?.id || undefined
-      };
-      
-      setReplyingTo(null);
+      if (currentFiles.length > 0) {
+        for (let i = 0; i < currentFiles.length; i++) {
+          const file = currentFiles[i];
+          const payload = {
+            content: i === 0 ? currentContent : '',
+            visibility: isClient ? 'PUBLIC' : visibility,
+            mentions: i === 0 ? currentMentions : [],
+            taskMentions: i === 0 ? currentTaskMentions : [],
+            parentMessageId: i === 0 ? (replyingTo?.id || undefined) : undefined,
+            fileUrl: file.url,
+            fileName: file.name,
+            fileSize: file.size
+          };
 
-      const res = await fetch(`/api/projects/${projectId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const savedMsg = data.message || data;
-        setMessages(prev => {
-          const updated = prev.map(m => m.id === tempId ? { ...savedMsg, status: undefined } : m);
-          projectMessagesCache[projectId] = updated;
-          return updated;
-        });
+          await fetch(`/api/projects/${projectId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        }
       } else {
-        setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
+        const payload = {
+          content: currentContent,
+          visibility: isClient ? 'PUBLIC' : visibility,
+          mentions: currentMentions,
+          taskMentions: currentTaskMentions,
+          parentMessageId: replyingTo?.id || undefined
+        };
+        await fetch(`/api/projects/${projectId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
       }
+
+      setReplyingTo(null);
+      fetchMessages();
     } catch (e) {
       console.error(e);
       setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
@@ -622,12 +854,20 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   };
 
   const handleDeleteMessage = async (messageId: string) => {
+    // 1. Instantly mark message as deleted in view & cache (0ms delay)
+    setMessages(prev => {
+      const updated = prev.map(m => m.id === messageId ? { ...m, deletedAt: new Date().toISOString() } : m);
+      projectMessagesCache[projectId] = updated;
+      return updated;
+    });
+
+    // 2. API executes in background
     try {
       const res = await fetch(`/api/projects/${projectId}/messages/${messageId}`, {
         method: 'DELETE'
       });
       if (res.ok) {
-        fetchMessages();
+        toast.success('Message deleted');
       }
     } catch (e) {
       console.error(e);
@@ -777,88 +1017,117 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                         {isMe && getMessageStatus(msg)}
                       </div>
 
-                      <div className={`px-4 py-3 relative ${
-                        isMe 
-                          ? 'bg-[#16181a] text-white rounded-2xl rounded-tr-xs shadow-xs' 
-                          : 'bg-[#e5e5ea] dark:bg-[#26262a] text-slate-900 dark:text-white rounded-2xl rounded-tl-xs border border-slate-300/30 dark:border-white/5 shadow-2xs'
-                      }`}>
-                        {msg.visibility === 'INTERNAL' && !isMe && (
-                          <Badge variant="secondary" className="mb-2 text-[9px] h-4 py-0 flex items-center w-fit border-orange-200 bg-orange-50 text-orange-700">
-                            <EyeOff size={10} className="mr-1" /> Internal
-                          </Badge>
-                        )}
+                      {!msg.deletedAt && (
+                        msg.content?.includes('Voice Note') ||
+                        msg.content?.includes('🎙️') ||
+                        (msg.fileUrl && (
+                          msg.fileName?.toLowerCase().includes('voice') ||
+                          msg.fileName?.toLowerCase().includes('audio') ||
+                          msg.fileUrl.match(/\.(webm|mp3|wav|ogg|m4a|aac|opus)($|\?)/i)
+                        ))
+                      ) ? (
+                        <VoiceNotePlayer
+                          src={msg.fileUrl || ''}
+                          sender={msg.sender}
+                          createdAt={msg.createdAt}
+                          isCurrentUser={isMe}
+                        />
+                      ) : (
+                        <div className={`px-4 py-3 relative ${
+                          isMe 
+                            ? 'bg-[#16181a] text-white rounded-2xl rounded-tr-xs shadow-xs' 
+                            : 'bg-[#e5e5ea] dark:bg-[#26262a] text-slate-900 dark:text-white rounded-2xl rounded-tl-xs border border-slate-300/30 dark:border-white/5 shadow-2xs'
+                        }`}>
+                          {msg.visibility === 'INTERNAL' && !isMe && (
+                            <Badge variant="secondary" className="mb-2 text-[9px] h-4 py-0 flex items-center w-fit border-orange-200 bg-orange-50 text-orange-700">
+                              <EyeOff size={10} className="mr-1" /> Internal
+                            </Badge>
+                          )}
 
-                        {msg.parentMessageId && (
-                          <div 
-                            className={`mb-2 p-2 rounded-lg border-l-4 text-left cursor-pointer transition-colors max-w-sm ${
-                              isMe 
-                                ? 'bg-white/10 border-white/40 hover:bg-white/20' 
-                                : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 hover:bg-slate-200'
-                            }`}
-                            onClick={() => {
-                              const el = document.querySelector(`[data-msg-id="${msg.parentMessageId}"]`);
-                              if (el) {
-                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                              }
-                            }}
-                          >
-                            <p className="text-[11px] font-bold opacity-80 mb-0.5">{msg.parentMessage?.sender?.name}</p>
-                            <p className="text-[11px] line-clamp-1 opacity-90">{msg.parentMessage?.content}</p>
-                          </div>
-                        )}
-                        
-                        {msg.deletedAt ? (
-                          <p className="text-sm italic opacity-70">This message was deleted.</p>
-                        ) : editingMessageId === msg.id ? (
-                          <div className="flex flex-col gap-2 min-w-[200px]">
-                            <textarea 
-                              value={editContent}
-                              onChange={(e) => setEditContent(e.target.value)}
-                              className="w-full text-sm bg-transparent border-b border-white/30 focus:border-white focus:outline-none resize-none p-1 placeholder:text-white/50 text-white custom-scrollbar"
-                              rows={2}
-                              autoFocus
-                            />
-                            <div className="flex justify-end gap-1">
-                              <Button size="icon" variant="ghost" className="h-6 w-6 hover:bg-white/20 text-white" onClick={() => setEditingMessageId(null)}>
-                                <X size={12} />
-                              </Button>
-                              <Button size="icon" variant="ghost" className="h-6 w-6 hover:bg-white/20 text-white" onClick={() => handleEditMessage(msg.id)}>
-                                <CheckCheck size={12} />
-                              </Button>
+                          {msg.parentMessageId && (
+                            <div 
+                              className={`mb-2 p-2 rounded-lg border-l-4 text-left cursor-pointer transition-colors max-w-sm ${
+                                isMe 
+                                  ? 'bg-white/10 border-white/40 hover:bg-white/20' 
+                                  : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 hover:bg-slate-200'
+                              }`}
+                              onClick={() => {
+                                const el = document.querySelector(`[data-msg-id="${msg.parentMessageId}"]`);
+                                if (el) {
+                                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
+                              }}
+                            >
+                              <p className="text-[11px] font-bold opacity-80 mb-0.5">{msg.parentMessage?.sender?.name}</p>
+                              <p className="text-[11px] line-clamp-1 opacity-90">{msg.parentMessage?.content}</p>
                             </div>
-                          </div>
-                        ) : (
-                          <>
-                            <p className="text-sm whitespace-pre-wrap break-words leading-relaxed font-normal">
-                              {renderContent(msg.content)}
-                            </p>
-                            {msg.isEdited && (
-                              <span className="text-[9px] opacity-60 absolute bottom-1 right-3">(edited)</span>
-                            )}
-                            {msg.fileUrl && (
-                              (msg.fileName?.includes('Voice_Note') || msg.fileUrl.match(/\.(webm|mp3|wav|ogg|m4a)$/i)) ? (
-                                  <VoiceNotePlayer
-                                    src={msg.fileUrl}
-                                    sender={msg.sender}
-                                    createdAt={msg.createdAt}
-                                    isCurrentUser={isMe}
-                                  />
-                              ) : (
-                                <div className={`flex items-center gap-3 p-3 mt-2 rounded-xl border max-w-sm ${
-                                  isMe
-                                    ? 'bg-white/10 border-white/20 text-white'
-                                    : 'bg-slate-50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 text-slate-800 dark:text-slate-200'
-                                }`}>
-                                  <Paperclip size={16} />
-                                  <div className="min-w-0 flex-1">
-                                    <div className="font-bold text-xs truncate">{msg.fileName || 'Attached File'}</div>
+                          )}
+                          
+                          {msg.deletedAt ? (
+                            <p className="text-sm italic opacity-70">This message was deleted.</p>
+                          ) : editingMessageId === msg.id ? (
+                            <div className="flex flex-col gap-2 min-w-[200px]">
+                              <textarea 
+                                value={editContent}
+                                onChange={(e) => setEditContent(e.target.value)}
+                                className="w-full text-sm bg-transparent border-b border-white/30 focus:border-white focus:outline-none resize-none p-1 placeholder:text-white/50 text-white custom-scrollbar"
+                                rows={2}
+                                autoFocus
+                              />
+                              <div className="flex justify-end gap-1">
+                                <Button size="icon" variant="ghost" className="h-6 w-6 hover:bg-white/20 text-white" onClick={() => setEditingMessageId(null)}>
+                                  <X size={12} />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-6 w-6 hover:bg-white/20 text-white" onClick={() => handleEditMessage(msg.id)}>
+                                  <CheckCheck size={12} />
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-sm whitespace-pre-wrap break-words leading-relaxed font-normal">
+                                {renderContent(msg.content)}
+                              </p>
+                              {msg.isEdited && (
+                                <span className="text-[9px] opacity-60 absolute bottom-1 right-3">(edited)</span>
+                              )}
+                              {msg.fileUrl && (
+                                (msg.fileUrl.match(/\.(png|jpg|jpeg|gif|webp|svg)($|\?)/i) || msg.fileName?.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) || msg.fileName?.startsWith('Screenshot')) ? (
+                                  <div className="mt-2.5 rounded-2xl overflow-hidden border border-slate-200/60 dark:border-white/10 shadow-2xs max-w-md bg-black/5 dark:bg-black/40">
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewImageUrl(msg.fileUrl)}
+                                      className="block w-full text-left group relative cursor-pointer"
+                                    >
+                                      <img
+                                        src={msg.fileUrl}
+                                        alt={msg.fileName || 'Screenshot'}
+                                        className="w-full max-h-96 object-cover rounded-2xl transition-transform duration-200 group-hover:scale-[1.01]"
+                                      />
+                                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-2xl flex items-center justify-center">
+                                        <span className="opacity-0 group-hover:opacity-100 bg-black/80 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full backdrop-blur-xs transition-opacity shadow-md">
+                                          Click to expand image
+                                        </span>
+                                      </div>
+                                    </button>
                                   </div>
-                                </div>
-                              )
-                            )}
-                          </>
-                        )}
-                      </div>
+                                ) : (
+                                  <div className={`flex items-center gap-3 p-3 mt-2 rounded-xl border max-w-sm ${
+                                    isMe
+                                      ? 'bg-white/10 border-white/20 text-white'
+                                      : 'bg-slate-50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 text-slate-800 dark:text-slate-200'
+                                  }`}>
+                                    <Paperclip size={16} />
+                                    <div className="min-w-0 flex-1">
+                                      <div className="font-bold text-xs truncate">{msg.fileName || 'Attached File'}</div>
+                                    </div>
+                                  </div>
+                                )
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
 
                       {/* Hover Actions Menu */}
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 mt-1 z-10">
@@ -904,6 +1173,31 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
       </div>
 
       <div className="p-4 bg-white dark:bg-[#18181b] border-t border-slate-100 dark:border-slate-800 relative z-30">
+        {/* Attachment preview */}
+        {attachedFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/40 rounded-2xl p-2.5 text-xs text-indigo-800 dark:text-indigo-400">
+            {attachedFiles.map((file, idx) => (
+              <div key={idx} className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-indigo-200/60 dark:border-indigo-800/40 rounded-xl px-3 py-1.5 shadow-2xs">
+                {file.name.match(/\.(png|jpg|jpeg|gif|webp)$/i) ? (
+                  <img src={file.url} alt={file.name} className="w-6 h-6 object-cover rounded-md" />
+                ) : (
+                  <Paperclip size={14} className="text-indigo-500" />
+                )}
+                <div className="min-w-0 max-w-[160px]">
+                  <span className="font-bold truncate text-[11px] block">{file.name}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAttachedFiles(prev => prev.filter((_, i) => i !== idx))}
+                  className="text-slate-400 hover:text-red-500 p-0.5 rounded-full"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {showSuggestions && (
           <div className="absolute bottom-full mb-2 left-4 w-72 bg-white dark:bg-[#1f1f23] border border-slate-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-[100]">
             <div className="max-h-64 overflow-y-auto py-2 custom-scrollbar">
@@ -965,8 +1259,20 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
         )}
 
         <div className="flex items-center gap-2.5">
-          <button type="button" className="w-9 h-9 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0">
-            <Plus size={18} />
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            multiple
+            className="hidden"
+          />
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={triggerFileUpload}
+            className="w-9 h-9 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
+          >
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <Plus size={18} />}
           </button>
 
           {!isClient && (
@@ -1009,7 +1315,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-800 bg-[#fbfaf7] dark:bg-slate-900/50 px-4 py-1.5 focus-within:ring-2 focus-within:ring-primary/40 transition-all">
+            <div className="flex-1 flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-800 bg-[#fbfaf7] dark:bg-slate-900/50 px-4 py-1.5 focus-within:ring-2 focus-within:ring-primary/40 transition-all" onPaste={handlePaste}>
               <textarea
                 ref={textareaRef}
                 value={content}
@@ -1023,16 +1329,44 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                 <button type="button" onClick={startVoiceRecording} className="hover:text-primary transition-colors p-1" title="Record Voice Note">
                   <Mic size={17} />
                 </button>
-                <button type="button" className="hover:text-slate-700 dark:hover:text-white transition-colors p-1"><Paperclip size={16} /></button>
+                <button type="button" onClick={triggerFileUpload} className="hover:text-slate-700 dark:hover:text-white transition-colors p-1" title="Attach Files">
+                  <Paperclip size={16} />
+                </button>
               </div>
             </div>
           )}
 
-          <Button type="button" onClick={sendMessage} disabled={!content.trim() || isRecording} className="h-10 w-10 rounded-full shrink-0 shadow-sm flex items-center justify-center p-0 bg-primary hover:bg-primary/90 text-white">
+          <Button type="button" onClick={sendMessage} disabled={(!content.trim() && attachedFiles.length === 0) || isRecording} className="h-10 w-10 rounded-full shrink-0 shadow-sm flex items-center justify-center p-0 bg-primary hover:bg-primary/90 text-white">
             <Send size={16} />
           </Button>
         </div>
       </div>
+
+      {/* MICROSOFT TEAMS LIGHTBOX MODAL */}
+      {previewImageUrl && (
+        <div
+          className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setPreviewImageUrl(null)}
+        >
+          <div
+            className="relative max-w-5xl max-h-[90vh] bg-white dark:bg-[#1f1f23] rounded-2xl overflow-hidden shadow-2xl border border-white/10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewImageUrl(null)}
+              className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors"
+            >
+              <X size={18} />
+            </button>
+            <img
+              src={previewImageUrl}
+              alt="Image preview"
+              className="w-full h-full max-h-[85vh] object-contain rounded-2xl"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 });

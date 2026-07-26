@@ -31,7 +31,8 @@ import {
   Mic,
   Play,
   Pause,
-  Square
+  Square,
+  CheckCircle
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -54,19 +55,44 @@ const VoiceNotePlayer = ({
   const [duration, setDuration] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     if (!audioRef.current) return;
-    if (isPlaying) {
-      audioRef.current.pause();
+    try {
+      if (isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        setIsPlaying(true);
+        await audioRef.current.play();
+      }
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        console.error('Audio playback error:', err);
+      }
       setIsPlaying(false);
-    } else {
-      audioRef.current.play();
-      setIsPlaying(true);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (!audioRef.current) return;
+    const dur = audioRef.current.duration;
+    if (dur && isFinite(dur)) {
+      setDuration(dur);
+    } else if (audioRef.current) {
+      audioRef.current.currentTime = 1e101;
+      audioRef.current.ontimeupdate = () => {
+        if (!audioRef.current) return;
+        audioRef.current.ontimeupdate = null;
+        if (isFinite(audioRef.current.duration)) {
+          setDuration(audioRef.current.duration);
+        }
+        audioRef.current.currentTime = 0;
+      };
     }
   };
 
   const formatAudioTime = (time: number) => {
-    if (isNaN(time) || time === 0) return '0:00';
+    if (!time || isNaN(time) || !isFinite(time) || time <= 0) return '0:00';
     const mins = Math.floor(time / 60);
     const secs = Math.floor(time % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -81,7 +107,8 @@ const VoiceNotePlayer = ({
     40, 60, 90, 50, 80, 65, 35, 75, 100, 45, 85, 60, 40, 90, 50
   ];
 
-  const progressPercent = duration > 0 ? (currentTime / duration) : 0;
+  const validDuration = (duration && isFinite(duration)) ? duration : 0;
+  const progressPercent = validDuration > 0 ? (currentTime / validDuration) : 0;
   const activeBarIndex = Math.floor(progressPercent * waveformHeights.length);
 
   return (
@@ -92,9 +119,21 @@ const VoiceNotePlayer = ({
     }`}>
       <audio
         ref={audioRef}
-        src={src}
-        onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime || 0)}
-        onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
+        src={src || undefined}
+        preload="metadata"
+        onTimeUpdate={() => {
+          if (!audioRef.current) return;
+          setCurrentTime(audioRef.current.currentTime || 0);
+          if ((!duration || !isFinite(duration)) && isFinite(audioRef.current.duration)) {
+            setDuration(audioRef.current.duration);
+          }
+        }}
+        onLoadedMetadata={handleLoadedMetadata}
+        onDurationChange={() => {
+          if (audioRef.current && isFinite(audioRef.current.duration)) {
+            setDuration(audioRef.current.duration);
+          }
+        }}
         onEnded={() => { setIsPlaying(false); setCurrentTime(0); }}
         className="hidden"
       />
@@ -134,15 +173,16 @@ const VoiceNotePlayer = ({
 
           {waveformHeights.map((h, idx) => {
             const isPassed = idx <= activeBarIndex;
+            const barHeightPx = Math.max(4, Math.round((h / 100) * 24));
             return (
               <span
                 key={idx}
-                className={`flex-1 rounded-full transition-colors duration-150 ${
+                className={`inline-block w-[3px] rounded-full shrink-0 transition-colors duration-150 ${
                   isPassed
                     ? (isCurrentUser ? 'bg-white' : 'bg-slate-900 dark:bg-white')
-                    : (isCurrentUser ? 'bg-white/30' : 'bg-slate-400/50 dark:bg-white/30')
+                    : (isCurrentUser ? 'bg-white/40' : 'bg-slate-400 dark:bg-white/40')
                 }`}
-                style={{ height: `${h}%` }}
+                style={{ height: `${barHeightPx}px` }}
               />
             );
           })}
@@ -443,9 +483,10 @@ export default function ConversationsClient({
     setShowMentionSuggestions(false);
   };
 
-  // File Upload State
+  // File Upload & Lightbox State
   const [uploading, setUploading] = useState(false);
-  const [attachedFile, setAttachedFile] = useState<{ url: string; name: string; size: number } | null>(null);
+  const [attachedFiles, setAttachedFiles] = useState<Array<{ url: string; name: string; size: number }>>([]);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Voice Recording State
@@ -458,17 +499,25 @@ export default function ConversationsClient({
   const startVoiceRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/mp4')
+        ? 'audio/mp4'
+        : '';
+
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
 
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
+        if (e.data && e.data.size > 0) {
           audioChunksRef.current.push(e.data);
         }
       };
 
-      recorder.start();
+      recorder.start(100);
       setIsRecording(true);
       setRecordingSeconds(0);
 
@@ -481,47 +530,103 @@ export default function ConversationsClient({
   };
 
   const stopAndSendVoiceNote = () => {
-    if (!mediaRecorderRef.current) return;
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || !selectedGroupId) return;
 
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
     }
 
-    mediaRecorderRef.current.onstop = async () => {
-      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-      const file = new File([audioBlob], `Voice_Note_${Date.now()}.webm`, { type: 'audio/webm' });
+    try {
+      if (recorder.state === 'recording') {
+        recorder.requestData();
+      }
+    } catch (e) {
+      console.warn('requestData error:', e);
+    }
 
-      setUploading(true);
-      const formData = new FormData();
-      formData.append('file', file);
+    recorder.onstop = async () => {
+      recorder.stream.getTracks().forEach(track => track.stop());
+      setIsRecording(false);
+      setRecordingSeconds(0);
 
+      if (audioChunksRef.current.length === 0) {
+        toast.error('No audio recorded');
+        return;
+      }
+
+      const mimeType = recorder.mimeType || 'audio/webm';
+      const ext = mimeType.includes('mp4') ? 'm4a' : 'webm';
+      const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+      const localAudioUrl = URL.createObjectURL(audioBlob);
+      const fileName = `Voice_Note_${Date.now()}.${ext}`;
+
+      const tempId = `temp-${Date.now()}`;
+      const optimisticMsg = {
+        id: tempId,
+        groupId: selectedGroupId,
+        content: '🎙️ Voice Note',
+        fileUrl: localAudioUrl,
+        fileName,
+        senderId: currentUser.id,
+        sender: { name: currentUser.name || 'You', role: currentUser.role },
+        createdAt: new Date().toISOString(),
+        parentMessageId: replyingTo?.id || null,
+        status: 'sending'
+      };
+
+      // 1. Instantly display voice note bubble in chat (0ms delay) with loader spinner!
+      setMessages(prev => {
+        const updated = [...prev, optimisticMsg];
+        if (selectedGroupId) groupMessagesCache[selectedGroupId] = updated;
+        return updated;
+      });
+      scrollToBottom();
+
+      // 2. Upload file & send message in background
       try {
-        const res = await fetch('/api/conversations/upload', {
+        const file = new File([audioBlob], fileName, { type: mimeType });
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const uploadRes = await fetch('/api/conversations/upload', {
           method: 'POST',
           body: formData
         });
 
-        if (res.ok) {
-          const data = await res.json();
-          setAttachedFile({
-            url: data.url,
-            name: data.name,
-            size: data.size
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          const serverUrl = uploadData.url;
+
+          const msgRes = await fetch(`/api/conversations/groups/${selectedGroupId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: '🎙️ Voice Note',
+              parentMessageId: replyingTo?.id || null,
+              fileUrl: serverUrl,
+              fileName,
+              fileSize: uploadData.size
+            })
           });
-          toast.success('Voice note recorded');
+
+          if (msgRes.ok) {
+            fetchGroupMessages(selectedGroupId);
+          } else {
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
+          }
+        } else {
+          setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
+          toast.error('Failed to upload voice note');
         }
       } catch (err) {
-        toast.error('Failed to upload voice note');
-      } finally {
-        setUploading(false);
+        console.error('Voice note error:', err);
+        setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
+        toast.error('Error sending voice note');
       }
-
-      mediaRecorderRef.current?.stream.getTracks().forEach(track => track.stop());
-      setIsRecording(false);
-      setRecordingSeconds(0);
     };
 
-    mediaRecorderRef.current.stop();
+    recorder.stop();
   };
 
   const cancelVoiceRecording = () => {
@@ -551,6 +656,7 @@ export default function ConversationsClient({
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
 
   // Settings Modal State
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -751,77 +857,164 @@ const groupMessagesCache: Record<string, any[]> = {};
     );
   };
 
-  // Upload File Handler
+  // Multiple File Upload Handler
   const triggerFileUpload = () => {
     fileInputRef.current?.click();
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
+    const newAttachedFiles: Array<{ url: string; name: string; size: number }> = [];
 
-    try {
-      const res = await fetch('/api/conversations/upload', {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        setAttachedFile({
-          url: data.url,
-          name: data.name,
-          size: data.size
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const res = await fetch('/api/conversations/upload', {
+          method: 'POST',
+          body: formData
         });
-        toast.success(`File "${file.name}" uploaded successfully`);
-      } else {
-        toast.error('Failed to upload file');
-      }
-    } catch (err) {
-      toast.error('File upload error');
-      console.error(err);
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+        if (res.ok) {
+          const data = await res.json();
+          newAttachedFiles.push({ url: data.url, name: data.name, size: data.size });
+        }
+      } catch (err) {
+        console.error('File upload error:', err);
       }
     }
+
+    if (newAttachedFiles.length > 0) {
+      setAttachedFiles(prev => [...prev, ...newAttachedFiles]);
+      toast.success(`${newAttachedFiles.length} file(s) attached`);
+    } else {
+      toast.error('Failed to upload files');
+    }
+
+    setUploading(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Clipboard Paste Handler (Ctrl+V / Cmd+V Screenshot & Image Paste)
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const imageItems = items.filter(item => item.type.startsWith('image/'));
+
+    if (imageItems.length === 0) return;
+
+    setUploading(true);
+    const pastedFiles: Array<{ url: string; name: string; size: number }> = [];
+
+    for (const item of imageItems) {
+      const file = item.getAsFile();
+      if (!file) continue;
+
+      const fileName = `Screenshot_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`;
+      const screenshotFile = new File([file], fileName, { type: file.type || 'image/png' });
+
+      const formData = new FormData();
+      formData.append('file', screenshotFile);
+
+      try {
+        const res = await fetch('/api/conversations/upload', {
+          method: 'POST',
+          body: formData
+        });
+        if (res.ok) {
+          const data = await res.json();
+          pastedFiles.push({ url: data.url, name: data.name, size: data.size });
+        }
+      } catch (err) {
+        console.error('Pasted image upload error:', err);
+      }
+    }
+
+    if (pastedFiles.length > 0) {
+      setAttachedFiles(prev => [...prev, ...pastedFiles]);
+      toast.success(`Pasted screenshot attached (${pastedFiles.length})`);
+    }
+
+    setUploading(false);
   };
 
   // Send Message Handler
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!messageContent.trim() && !attachedFile) return;
+    if (!messageContent.trim() && attachedFiles.length === 0) return;
     if (!selectedGroupId) return;
 
-    setIsSending(true);
-    try {
-      const res = await fetch(`/api/conversations/groups/${selectedGroupId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: messageContent,
-          parentMessageId: replyingTo?.id || null,
-          fileUrl: attachedFile?.url || null,
-          fileName: attachedFile?.name || null,
-          fileSize: attachedFile?.size || null
-        })
-      });
+    const currentContent = messageContent;
+    const currentFiles = [...attachedFiles];
+    const currentReply = replyingTo;
 
-      if (res.ok) {
-        setMessageContent('');
-        setReplyingTo(null);
-        setAttachedFile(null);
-        scrollToBottom();
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMsg = {
+      id: tempId,
+      groupId: selectedGroupId,
+      content: currentContent,
+      fileUrl: currentFiles[0]?.url || null,
+      fileName: currentFiles[0]?.name || null,
+      fileSize: currentFiles[0]?.size || null,
+      senderId: currentUser.id,
+      sender: { name: currentUser.name || 'You', role: currentUser.role },
+      createdAt: new Date().toISOString(),
+      parentMessageId: currentReply?.id || null,
+      parentMessage: currentReply ? {
+        id: currentReply.id,
+        content: currentReply.content,
+        sender: { name: currentReply.sender?.name || 'User' }
+      } : null,
+      status: 'sending'
+    };
+
+    setIsSending(true);
+    setMessages(prev => {
+      const updated = [...prev, optimisticMsg];
+      if (selectedGroupId) groupMessagesCache[selectedGroupId] = updated;
+      return updated;
+    });
+    setMessageContent('');
+    setReplyingTo(null);
+    setAttachedFiles([]);
+    scrollToBottom();
+
+    try {
+      if (currentFiles.length > 0) {
+        for (let i = 0; i < currentFiles.length; i++) {
+          const file = currentFiles[i];
+          await fetch(`/api/conversations/groups/${selectedGroupId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: i === 0 ? currentContent : '',
+              parentMessageId: i === 0 ? (currentReply?.id || null) : null,
+              fileUrl: file.url,
+              fileName: file.name,
+              fileSize: file.size
+            })
+          });
+        }
       } else {
-        toast.error('Failed to send message');
+        await fetch(`/api/conversations/groups/${selectedGroupId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: currentContent,
+            parentMessageId: currentReply?.id || null,
+            fileUrl: null,
+            fileName: null,
+            fileSize: null
+          })
+        });
       }
+      fetchGroupMessages(selectedGroupId);
     } catch (err) {
       toast.error('An error occurred while sending');
+      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
       console.error(err);
     } finally {
       setIsSending(false);
@@ -859,12 +1052,24 @@ const groupMessagesCache: Record<string, any[]> = {};
   // Confirmed Delete Message execution
   const confirmDeleteMessage = async () => {
     if (!selectedGroupId || !msgIdToDelete) return;
+    const targetId = msgIdToDelete;
+
+    // 1. Instantly close modal and mark message as deleted in view & cache (0ms delay)
+    setIsDeleteMsgOpen(false);
+    setMsgIdToDelete(null);
+
+    setMessages(prev => {
+      const updated = prev.map(m => m.id === targetId ? { ...m, deletedAt: new Date().toISOString() } : m);
+      if (selectedGroupId) groupMessagesCache[selectedGroupId] = updated;
+      return updated;
+    });
+
+    // 2. API executes in background
     try {
-      const res = await fetch(`/api/conversations/groups/${selectedGroupId}/messages/${msgIdToDelete}`, {
+      const res = await fetch(`/api/conversations/groups/${selectedGroupId}/messages/${targetId}`, {
         method: 'DELETE'
       });
       if (res.ok) {
-        fetchGroupMessages(selectedGroupId);
         toast.success('Message deleted');
       } else {
         toast.error('Failed to delete message');
@@ -872,9 +1077,6 @@ const groupMessagesCache: Record<string, any[]> = {};
     } catch (err) {
       toast.error('An error occurred');
       console.error(err);
-    } finally {
-      setIsDeleteMsgOpen(false);
-      setMsgIdToDelete(null);
     }
   };
 
@@ -1238,9 +1440,12 @@ const groupMessagesCache: Record<string, any[]> = {};
 
                           {/* Message bubble */}
                           <div className={`flex flex-col gap-1 min-w-0 max-w-xl ${isCurrentUser ? 'items-end' : ''}`}>
-                            <div className="flex items-baseline gap-2">
+                            <div className="flex items-center gap-2">
                               <span className="text-xs font-bold text-slate-900 dark:text-slate-100">{msg.sender?.name || 'User'}</span>
-                              <span className="text-[10px] text-slate-400 font-medium">{formatMsgDate(msg.createdAt)}</span>
+                              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                                {formatMsgDate(msg.createdAt)}
+                                {msg.status === 'sending' && <Loader2 className="h-3 w-3 animate-spin text-primary ml-1" />}
+                              </span>
                             </div>
 
                             {/* Reply Quote context */}
@@ -1251,77 +1456,108 @@ const groupMessagesCache: Record<string, any[]> = {};
                               </div>
                             )}
 
-                            {/* Content Bubble */}
-                            <div className={`rounded-2xl px-4.5 py-3 text-sm shadow-sm relative ${
-                              isCurrentUser
-                                ? 'bg-[#16181a] text-white rounded-tr-none'
-                                : 'bg-[#e5e5ea] dark:bg-[#26262a] text-slate-900 dark:text-white rounded-tl-none border border-slate-300/30 dark:border-white/5'
-                            }`}>
-                              {/* Content text / Edit box */}
-                              {editingMessageId === msg.id ? (
-                                <div className="flex flex-col gap-2 min-w-[200px]">
-                                  <textarea 
-                                    value={editContent}
-                                    onChange={(e) => setEditContent(e.target.value)}
-                                    className="w-full text-sm bg-transparent border-b border-primary-foreground/30 focus:border-primary-foreground focus:outline-none resize-none p-1 placeholder:text-primary-foreground/50 text-white custom-scrollbar"
-                                    rows={2}
-                                    autoFocus
-                                  />
-                                  <div className="flex justify-end gap-1">
-                                    <Button size="icon" variant="ghost" className="h-6 w-6 hover:bg-primary-foreground/20 text-white" onClick={() => setEditingMessageId(null)}>
-                                      <X size={12} />
-                                    </Button>
-                                    <Button size="icon" variant="ghost" className="h-6 w-6 hover:bg-primary-foreground/20 text-white" onClick={() => handleEditMessage(msg.id)}>
-                                      <Check size={12} />
-                                    </Button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  {msg.content && <p className="whitespace-pre-wrap break-words leading-relaxed">{renderFormattedMessageContent(msg.content)}</p>}
-                                  {msg.isEdited && (
-                                    <span className="text-[9px] opacity-60 absolute bottom-1 right-3">(edited)</span>
-                                  )}
-                                </>
-                              )}
-
-                              {/* Attachment File / Voice Note Card */}
-                              {msg.fileUrl && (
-                                (msg.fileName?.includes('Voice_Note') || msg.fileUrl.match(/\.(webm|mp3|wav|ogg|m4a)$/i)) ? (
-                                  <VoiceNotePlayer
-                                    src={msg.fileUrl}
-                                    sender={msg.sender}
-                                    createdAt={msg.createdAt}
-                                    isCurrentUser={isCurrentUser}
-                                  />
-                                ) : (
-                                  <div className={`flex items-center gap-3 p-3 mt-2 rounded-xl border max-w-sm ${
-                                    isCurrentUser
-                                      ? 'bg-primary-foreground/10 border-primary-foreground/20 text-white'
-                                      : 'bg-slate-50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 text-slate-800 dark:text-slate-200'
-                                  }`}>
-                                    {getFileIcon(msg.fileName || 'file')}
-                                    <div className="min-w-0 flex-1">
-                                      <div className="font-bold text-xs truncate">{msg.fileName || 'Attached File'}</div>
-                                      <div className={`text-[10px] mt-0.5 ${isCurrentUser ? 'text-primary-foreground/70' : 'text-slate-400'}`}>
-                                        {formatFileSize(msg.fileSize || 0)}
-                                      </div>
+                            {/* Content Bubble or Voice Note Player */}
+                            {!msg.deletedAt && (
+                              msg.content?.includes('Voice Note') ||
+                              msg.content?.includes('🎙️') ||
+                              (msg.fileUrl && (
+                                msg.fileName?.toLowerCase().includes('voice') ||
+                                msg.fileName?.toLowerCase().includes('audio') ||
+                                msg.fileUrl.match(/\.(webm|mp3|wav|ogg|m4a|aac|opus)($|\?)/i)
+                              ))
+                            ) ? (
+                              <VoiceNotePlayer
+                                src={msg.fileUrl || ''}
+                                sender={msg.sender}
+                                createdAt={msg.createdAt}
+                                isCurrentUser={isCurrentUser}
+                              />
+                            ) : (
+                              <div className={`rounded-2xl px-4.5 py-3 text-sm shadow-sm relative ${
+                                isCurrentUser
+                                  ? 'bg-[#16181a] text-white rounded-tr-none'
+                                  : 'bg-[#e5e5ea] dark:bg-[#26262a] text-slate-900 dark:text-white rounded-tl-none border border-slate-300/30 dark:border-white/5'
+                              }`}>
+                                {/* Content text / Edit box */}
+                                {msg.deletedAt ? (
+                                  <p className="text-sm italic opacity-70 py-0.5">This message was deleted.</p>
+                                ) : editingMessageId === msg.id ? (
+                                  <div className="flex flex-col gap-2 min-w-[200px]">
+                                    <textarea 
+                                      value={editContent}
+                                      onChange={(e) => setEditContent(e.target.value)}
+                                      className="w-full text-sm bg-transparent border-b border-primary-foreground/30 focus:border-primary-foreground focus:outline-none resize-none p-1 placeholder:text-primary-foreground/50 text-white custom-scrollbar"
+                                      rows={2}
+                                      autoFocus
+                                    />
+                                    <div className="flex justify-end gap-1">
+                                      <Button size="icon" variant="ghost" className="h-6 w-6 hover:bg-primary-foreground/20 text-white" onClick={() => setEditingMessageId(null)}>
+                                        <X size={12} />
+                                      </Button>
+                                      <Button size="icon" variant="ghost" className="h-6 w-6 hover:bg-primary-foreground/20 text-white" onClick={() => handleEditMessage(msg.id)}>
+                                        <Check size={12} />
+                                      </Button>
                                     </div>
-                                    <a
-                                      href={msg.fileUrl}
-                                      download={msg.fileName || 'file'}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className={`p-1.5 rounded-lg transition-colors hover:bg-black/10 dark:hover:bg-white/10 ${
-                                        isCurrentUser ? 'text-white' : 'text-slate-500'
-                                      }`}
-                                    >
-                                      <Download size={15} />
-                                    </a>
                                   </div>
-                                )
-                              )}
+                                ) : (
+                                  <>
+                                    {msg.content && <p className="whitespace-pre-wrap break-words leading-relaxed">{renderFormattedMessageContent(msg.content)}</p>}
+                                    {msg.isEdited && (
+                                      <span className="text-[9px] opacity-60 absolute bottom-1 right-3">(edited)</span>
+                                    )}
+                                  </>
+                                )}
+
+                                {/* Standard File Card or Screenshot Image Card */}
+                                {msg.fileUrl && (
+                                  (msg.fileUrl.match(/\.(png|jpg|jpeg|gif|webp|svg)($|\?)/i) || msg.fileName?.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) || msg.fileName?.startsWith('Screenshot')) ? (
+                                    <div className="mt-2.5 rounded-2xl overflow-hidden border border-slate-200/60 dark:border-white/10 shadow-2xs max-w-md bg-black/5 dark:bg-black/40">
+                                      <button
+                                        type="button"
+                                        onClick={() => setPreviewImageUrl(msg.fileUrl)}
+                                        className="block w-full text-left group relative cursor-pointer"
+                                      >
+                                        <img
+                                          src={msg.fileUrl}
+                                          alt={msg.fileName || 'Screenshot'}
+                                          className="w-full max-h-96 object-cover rounded-2xl transition-transform duration-200 group-hover:scale-[1.01]"
+                                        />
+                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-2xl flex items-center justify-center">
+                                          <span className="opacity-0 group-hover:opacity-100 bg-black/80 text-white text-[11px] font-semibold px-3 py-1.5 rounded-full backdrop-blur-xs transition-opacity shadow-md">
+                                            Click to expand image
+                                          </span>
+                                        </div>
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className={`flex items-center gap-3 p-3 mt-2 rounded-xl border max-w-sm ${
+                                      isCurrentUser
+                                        ? 'bg-primary-foreground/10 border-primary-foreground/20 text-white'
+                                        : 'bg-slate-50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 text-slate-800 dark:text-slate-200'
+                                    }`}>
+                                      {getFileIcon(msg.fileName || 'file')}
+                                      <div className="min-w-0 flex-1">
+                                        <div className="font-bold text-xs truncate">{msg.fileName || 'Attached File'}</div>
+                                        <div className={`text-[10px] mt-0.5 ${isCurrentUser ? 'text-primary-foreground/70' : 'text-slate-400'}`}>
+                                          {formatFileSize(msg.fileSize || 0)}
+                                        </div>
+                                      </div>
+                                      <a
+                                        href={msg.fileUrl}
+                                        download={msg.fileName || 'file'}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={`p-1.5 rounded-lg transition-colors hover:bg-black/10 dark:hover:bg-white/10 ${
+                                          isCurrentUser ? 'text-white' : 'text-slate-500'
+                                        }`}
+                                      >
+                                        <Download size={15} />
+                                      </a>
+                                    </div>
+                                  )
+                                )}
                               </div>
+                            )}
 
                               {/* Hover actions menu below the bubble card */}
                               <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 mt-1.5 z-10">
@@ -1415,22 +1651,28 @@ const groupMessagesCache: Record<string, any[]> = {};
                     )}
 
                     {/* Attachment preview */}
-                    {attachedFile && (
-                      <div className="flex items-center justify-between bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/40 rounded-2xl px-4 py-2.5 text-xs text-indigo-800 dark:text-indigo-400">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {getFileIcon(attachedFile.name)}
-                          <div className="min-w-0">
-                            <span className="font-bold truncate max-w-sm block">{attachedFile.name}</span>
-                            <span className="text-[10px] text-indigo-600/80 dark:text-indigo-400/80 mt-0.5 block">{formatFileSize(attachedFile.size)}</span>
+                    {attachedFiles.length > 0 && (
+                      <div className="flex flex-wrap gap-2 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/40 rounded-2xl p-2.5 text-xs text-indigo-800 dark:text-indigo-400">
+                        {attachedFiles.map((file, idx) => (
+                          <div key={idx} className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-indigo-200/60 dark:border-indigo-800/40 rounded-xl px-3 py-1.5 shadow-2xs">
+                            {file.name.match(/\.(png|jpg|jpeg|gif|webp)$/i) ? (
+                              <img src={file.url} alt={file.name} className="w-6 h-6 object-cover rounded-md" />
+                            ) : (
+                              getFileIcon(file.name)
+                            )}
+                            <div className="min-w-0 max-w-[160px]">
+                              <span className="font-bold truncate text-[11px] block">{file.name}</span>
+                              <span className="text-[9px] text-slate-400 block">{formatFileSize(file.size)}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setAttachedFiles(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-slate-400 hover:text-red-500 p-0.5 rounded-full"
+                            >
+                              <X size={13} />
+                            </button>
                           </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setAttachedFile(null)}
-                          className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 p-1 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-900/30"
-                        >
-                          <X size={15} />
-                        </button>
+                        ))}
                       </div>
                     )}
 
@@ -1520,11 +1762,12 @@ const groupMessagesCache: Record<string, any[]> = {};
                     )}
 
                     {/* Chat field, attachments, send (Exact Mockup Layout) */}
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2.5" onPaste={handlePaste}>
                       <input
                         type="file"
                         ref={fileInputRef}
                         onChange={handleFileUpload}
+                        multiple
                         className="hidden"
                       />
                       <button
@@ -1604,7 +1847,7 @@ const groupMessagesCache: Record<string, any[]> = {};
 
                       <Button
                         type="submit"
-                        disabled={isSending || isPendingInvitation || (!messageContent.trim() && !attachedFile)}
+                        disabled={isSending || isPendingInvitation || (!messageContent.trim() && attachedFiles.length === 0)}
                         className="h-9 w-9 rounded-full shrink-0 shadow-sm flex items-center justify-center p-0 bg-primary hover:bg-primary/90 text-white"
                       >
                         {isSending ? (
@@ -1675,104 +1918,129 @@ const groupMessagesCache: Record<string, any[]> = {};
       {/* CREATE GROUP MODAL */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white dark:bg-[#1f1f1f] rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-between">
+          <div className="bg-white dark:bg-[#1f1f23] rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] relative z-50">
+            {/* Fixed Header */}
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-between z-20 bg-white dark:bg-[#1f1f23]">
               <div>
-                <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">Create New Chat Group</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Collaborate in real-time with team members and clients.</p>
+                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Create Team Group</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-normal">Start a group chat and add members.</p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsCreateModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg p-1"
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg p-1 transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
             
-            <form onSubmit={handleCreateGroup} className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 custom-scrollbar">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Group Name</label>
-                <Input
-                  placeholder="e.g. Design & Copy sync"
-                  value={newGroupName}
-                  onChange={e => setNewGroupName(e.target.value)}
-                  required
-                  autoFocus
-                  className="bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 rounded-2xl h-10 text-sm focus-visible:ring-primary"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 font-sans">Description (Optional)</label>
-                <Input
-                  placeholder="e.g. Syncing assets and designs for the project"
-                  value={newGroupDesc}
-                  onChange={e => setNewGroupDesc(e.target.value)}
-                  className="bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 rounded-2xl h-10 text-sm focus-visible:ring-primary"
-                />
-              </div>
-
-              <div className="space-y-2 flex flex-col flex-1 min-h-[220px]">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Select Members</label>
-                <div className="relative shrink-0 mb-2">
-                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+            {/* Scrollable Form Body */}
+            <form onSubmit={handleCreateGroup} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 custom-scrollbar relative z-10">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">GROUP NAME</label>
                   <Input
-                    placeholder="Search users to add..."
-                    value={userSearchQuery}
-                    onChange={e => setUserSearchQuery(e.target.value)}
-                    className="pl-9 bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 h-9 text-xs rounded-xl focus-visible:ring-primary"
+                    placeholder="e.g. Design & Copy sync"
+                    value={newGroupName}
+                    onChange={e => setNewGroupName(e.target.value)}
+                    required
+                    autoFocus
+                    className="bg-slate-50/60 dark:bg-[#1a1a1a] border-slate-200/80 dark:border-slate-800 rounded-2xl h-10 text-sm focus-visible:ring-primary font-medium"
                   />
                 </div>
 
-                <div className="flex-1 overflow-y-auto border border-slate-100 dark:border-slate-800 rounded-2xl p-2 bg-slate-50/30 dark:bg-[#151515] space-y-1.5 max-h-[200px] custom-scrollbar">
-                  {filteredUsers.length > 0 ? (
-                    filteredUsers.map(user => {
-                      const isSelected = selectedMembers.includes(user.id);
-                      return (
-                        <button
-                          type="button"
-                          key={user.id}
-                          onClick={() => toggleMemberSelection(user.id)}
-                          className={`w-full flex items-center justify-between p-2 rounded-xl transition-all ${
-                            isSelected
-                              ? 'bg-primary/10 border-primary/20 text-primary'
-                              : 'hover:bg-slate-100/50 dark:hover:bg-slate-800/30 text-slate-700 dark:text-slate-300'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 text-left min-w-0">
-                            <Avatar className="h-7 w-7">
-                              <AvatarImage src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user.name}`} />
-                              <AvatarFallback className="bg-slate-200 text-slate-700 text-[10px] font-bold">
-                                {user.name.substring(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <div className="font-bold text-xs truncate">{user.name}</div>
-                              <div className="text-[9px] text-slate-400 truncate">{user.email}</div>
-                            </div>
-                          </div>
-                          <div className={`h-4.5 w-4.5 rounded-md border flex items-center justify-center shrink-0 ${
-                            isSelected
-                              ? 'bg-primary border-primary text-white'
-                              : 'border-slate-300 dark:border-slate-700'
-                          }`}>
-                            {isSelected && <Check size={12} strokeWidth={3} />}
-                          </div>
-                        </button>
-                      );
-                    })
-                  ) : (
-                    <div className="text-center py-8 text-xs text-slate-400">No users found.</div>
-                  )}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">DESCRIPTION (OPTIONAL)</label>
+                  <Input
+                    placeholder="e.g. Syncing design files and updates"
+                    value={newGroupDesc}
+                    onChange={e => setNewGroupDesc(e.target.value)}
+                    className="bg-slate-50/60 dark:bg-[#1a1a1a] border-slate-200/80 dark:border-slate-800 rounded-2xl h-10 text-sm focus-visible:ring-primary font-medium"
+                  />
+                </div>
+
+                <div className="space-y-2 flex flex-col relative z-30">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">ADD MEMBERS</label>
+                    <span className="text-xs text-slate-400 font-semibold">{selectedMembers.length} selected</span>
+                  </div>
+                  
+                  <div className="relative">
+                    <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400 z-10" />
+                    <Input
+                      placeholder="Search members..."
+                      value={userSearchQuery}
+                      onFocus={() => setIsMemberDropdownOpen(true)}
+                      onChange={e => {
+                        setUserSearchQuery(e.target.value);
+                        setIsMemberDropdownOpen(true);
+                      }}
+                      className="pl-10 bg-slate-50/60 dark:bg-[#1a1a1a] border-slate-200/80 dark:border-slate-800 h-10 text-xs rounded-xl focus-visible:ring-primary font-medium"
+                    />
+
+                    {/* Floating Overlay Dropdown */}
+                    {isMemberDropdownOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setIsMemberDropdownOpen(false)}
+                        />
+                        
+                        <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white dark:bg-[#1f1f25] border border-slate-200 dark:border-slate-700 rounded-2xl p-2.5 shadow-2xl max-h-52 overflow-y-auto custom-scrollbar space-y-1.5 backdrop-blur-md">
+                          {filteredUsers.length > 0 ? (
+                            filteredUsers.map(user => {
+                              const isSelected = selectedMembers.includes(user.id);
+                              return (
+                                <div
+                                  key={user.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleMemberSelection(user.id);
+                                  }}
+                                  className={`w-full flex items-center justify-between p-2.5 rounded-[8px] transition-all cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-slate-200/70 dark:bg-slate-800/80 text-slate-900 dark:text-white font-semibold'
+                                      : 'bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3 text-left min-w-0">
+                                    <Avatar className="h-7 w-7 shrink-0">
+                                      <AvatarImage src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user.name}`} />
+                                      <AvatarFallback className="bg-slate-300 text-slate-800 text-xs font-bold">
+                                        {user.name.substring(0, 2).toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className="min-w-0">
+                                      <div className="font-bold text-xs text-slate-900 dark:text-white truncate">{user.name}</div>
+                                      <div className="text-[10px] text-slate-400 truncate">{user.email}</div>
+                                    </div>
+                                  </div>
+                                  <div className="shrink-0 ml-2">
+                                    {isSelected ? (
+                                      <CheckCircle size={18} className="text-slate-900 dark:text-white fill-slate-900 dark:fill-white stroke-white dark:stroke-slate-900" />
+                                    ) : (
+                                      <div className="w-4.5 h-4.5 rounded-full border-2 border-slate-300 dark:border-slate-600" />
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="text-center py-6 text-xs text-slate-400 italic">No members found.</div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className="mt-4 flex justify-end gap-2.5 shrink-0">
+              {/* Fixed Footer */}
+              <div className="p-6 border-t border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-end gap-3 bg-white dark:bg-[#1f1f23] z-30 relative shadow-sm">
                 <Button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="px-5 py-2 h-10 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 bg-transparent"
+                  className="px-6 py-2.5 h-10 rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 bg-transparent font-semibold text-xs transition-all"
                   disabled={isCreatingGroup}
                 >
                   Cancel
@@ -1780,9 +2048,9 @@ const groupMessagesCache: Record<string, any[]> = {};
                 <Button
                   type="submit"
                   disabled={isCreatingGroup || !newGroupName.trim()}
-                  className="px-6 py-2 h-10 rounded-2xl bg-primary hover:bg-primary/95 text-white font-bold transition-all shadow-sm disabled:opacity-50"
+                  className="px-6 py-2.5 h-10 rounded-full bg-[#16181a] dark:bg-white text-white dark:text-slate-900 font-bold text-xs hover:opacity-90 transition-all shadow-sm disabled:opacity-50"
                 >
-                  {isCreatingGroup ? 'Creating...' : 'Create Group'}
+                  {isCreatingGroup ? 'Creating...' : '+ Create Group'}
                 </Button>
               </div>
             </form>
@@ -1790,91 +2058,99 @@ const groupMessagesCache: Record<string, any[]> = {};
         </div>
       )}
 
-      {/* MANAGE GROUP / SETTINGS MODAL */}
+      {/* MANAGE GROUP MEMBERS MODAL */}
       {isSettingsModalOpen && activeGroup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white dark:bg-[#1f1f1f] rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-white dark:bg-[#1f1f23] rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Fixed Header */}
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">Manage Group members</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Add or remove users from "{activeGroup.name}".</p>
+                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Manage Group members</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-normal">
+                  Add or remove users from "{activeGroup.name}".
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsSettingsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg p-1"
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg p-1 transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
             
+            {/* Body */}
             <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 custom-scrollbar">
-              <div className="space-y-2 flex flex-col flex-1 min-h-[250px]">
+              <div className="space-y-2 flex flex-col flex-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Group Members</label>
-                <div className="relative shrink-0 mb-2">
-                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                
+                {/* Search Bar */}
+                <div className="relative shrink-0 mb-1">
+                  <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
                   <Input
                     placeholder="Filter users..."
                     value={userSearchQuery}
                     onChange={e => setUserSearchQuery(e.target.value)}
-                    className="pl-9 bg-slate-50/50 dark:bg-[#1a1a1a] border-slate-100 dark:border-slate-800 h-9 text-xs rounded-xl focus-visible:ring-primary"
+                    className="pl-10 bg-slate-50/60 dark:bg-[#1a1a1a] border-slate-200/80 dark:border-slate-800 h-10 text-xs rounded-xl focus-visible:ring-primary font-medium"
                   />
                 </div>
 
-                <div className="flex-1 overflow-y-auto border border-slate-100 dark:border-slate-800 rounded-2xl p-2 bg-slate-50/30 dark:bg-[#151515] space-y-1.5 max-h-[220px] custom-scrollbar">
+                {/* Scrollable Member List Container */}
+                <div className="border border-slate-200/60 dark:border-slate-800 rounded-2xl p-2.5 bg-slate-50/30 dark:bg-[#151515] space-y-2 max-h-[250px] overflow-y-auto custom-scrollbar">
                   {filteredUsers.length > 0 ? (
                     filteredUsers.map(user => {
                       const isSelected = settingsMembers.includes(user.id);
                       return (
-                        <button
-                          type="button"
+                        <div
                           key={user.id}
                           onClick={() => {
                             setSettingsMembers(prev =>
                               prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id]
                             );
                           }}
-                          className={`w-full flex items-center justify-between p-2 rounded-xl transition-all ${
+                          className={`w-full flex items-center justify-between p-3 rounded-[8px] transition-all cursor-pointer ${
                             isSelected
-                              ? 'bg-primary/10 border-primary/20 text-primary'
-                              : 'hover:bg-slate-100/50 dark:hover:bg-slate-800/30 text-slate-700 dark:text-slate-300'
+                              ? 'bg-slate-200/70 dark:bg-slate-800/80 text-slate-900 dark:text-white'
+                              : 'bg-slate-100/50 dark:bg-slate-800/30 hover:bg-slate-200/50 text-slate-700 dark:text-slate-300'
                           }`}
                         >
-                          <div className="flex items-center gap-2.5 text-left min-w-0">
-                            <Avatar className="h-7 w-7">
+                          <div className="flex items-center gap-3 text-left min-w-0">
+                            <Avatar className="h-8 w-8 shrink-0">
                               <AvatarImage src={`https://api.dicebear.com/7.x/notionists/svg?seed=${user.name}`} />
-                              <AvatarFallback className="bg-slate-200 text-slate-700 text-[10px] font-bold">
+                              <AvatarFallback className="bg-slate-300 text-slate-800 text-xs font-bold">
                                 {user.name.substring(0, 2).toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
                             <div className="min-w-0">
-                              <div className="font-bold text-xs truncate">{user.name}</div>
-                              <div className="text-[9px] text-slate-400 truncate">{user.email}</div>
+                              <div className="font-bold text-sm text-slate-900 dark:text-white truncate">{user.name}</div>
+                              <div className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</div>
                             </div>
                           </div>
-                          <div className={`h-4.5 w-4.5 rounded-md border flex items-center justify-center shrink-0 ${
-                            isSelected
-                              ? 'bg-primary border-primary text-white'
-                              : 'border-slate-300 dark:border-slate-700'
-                          }`}>
-                            {isSelected && <Check size={12} strokeWidth={3} />}
+                          <div className="shrink-0 ml-2">
+                            {isSelected ? (
+                              <CheckCircle size={20} className="text-slate-900 dark:text-white fill-slate-900 dark:fill-white stroke-white dark:stroke-slate-900" />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-600" />
+                            )}
                           </div>
-                        </button>
+                        </div>
                       );
                     })
                   ) : (
-                    <div className="text-center py-8 text-xs text-slate-400">No users found.</div>
+                    <div className="text-center py-8 text-xs text-slate-400 italic">No users found.</div>
                   )}
                 </div>
               </div>
 
-              {/* Owner Action: Delete */}
-              <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-red-50/50 dark:bg-red-950/5 p-4 rounded-2xl border border-red-100/50 dark:border-red-900/10">
+              {/* Danger Zone Box */}
+              <div className="mt-2 p-4 bg-red-50/70 dark:bg-red-950/20 rounded-2xl border border-red-200/60 dark:border-red-900/30 flex items-center justify-between gap-3">
                 <div className="flex items-start gap-3 min-w-0 flex-1">
-                  <AlertCircle className="text-red-500 h-5 w-5 shrink-0 mt-0.5" />
+                  <AlertCircle className="text-red-600 dark:text-red-400 h-5 w-5 shrink-0 mt-0.5" />
                   <div className="min-w-0 flex-1">
                     <h4 className="font-bold text-xs text-red-700 dark:text-red-400">Danger Zone</h4>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Delete this chat group, deleting all message history and files for everyone.</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-normal">
+                      Delete this chat group, deleting all message history and files for everyone.
+                    </p>
                   </div>
                 </div>
                 <Button
@@ -1882,30 +2158,31 @@ const groupMessagesCache: Record<string, any[]> = {};
                   variant="destructive"
                   onClick={handleDeleteGroup}
                   disabled={isDeletingGroup || isUpdatingMembers}
-                  className="bg-red-600 hover:bg-red-700 text-white rounded-xl h-9 text-xs font-bold transition-all px-4"
+                  className="bg-red-600 hover:bg-red-700 text-white rounded-xl h-9 text-xs font-bold transition-all px-4 shrink-0 shadow-xs"
                 >
                   {isDeletingGroup ? 'Deleting...' : 'Delete Group'}
                 </Button>
               </div>
+            </div>
 
-              <div className="mt-4 flex justify-end gap-2.5 shrink-0">
-                <Button
-                  type="button"
-                  onClick={() => setIsSettingsModalOpen(false)}
-                  className="px-5 py-2 h-10 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 bg-transparent"
-                  disabled={isUpdatingMembers || isDeletingGroup}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleUpdateMembers}
-                  disabled={isUpdatingMembers || isDeletingGroup}
-                  className="px-6 py-2 h-10 rounded-2xl bg-primary hover:bg-primary/95 text-white font-bold transition-all shadow-sm"
-                >
-                  {isUpdatingMembers ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </div>
+            {/* Fixed Footer */}
+            <div className="p-6 border-t border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-end gap-3 bg-white dark:bg-[#1f1f23]">
+              <Button
+                type="button"
+                onClick={() => setIsSettingsModalOpen(false)}
+                className="px-6 py-2.5 h-10 rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 bg-transparent font-semibold text-xs transition-all"
+                disabled={isUpdatingMembers || isDeletingGroup}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleUpdateMembers}
+                disabled={isUpdatingMembers || isDeletingGroup}
+                className="px-6 py-2.5 h-10 rounded-full bg-[#16181a] dark:bg-white text-white dark:text-slate-900 font-bold text-xs hover:opacity-90 transition-all shadow-sm"
+              >
+                {isUpdatingMembers ? 'Saving...' : 'Save Changes'}
+              </Button>
             </div>
           </div>
         </div>
@@ -2153,6 +2430,32 @@ const groupMessagesCache: Record<string, any[]> = {};
                 Decline
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MICROSOFT TEAMS LIGHTBOX MODAL */}
+      {previewImageUrl && (
+        <div
+          className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setPreviewImageUrl(null)}
+        >
+          <div
+            className="relative max-w-5xl max-h-[90vh] bg-white dark:bg-[#1f1f23] rounded-2xl overflow-hidden shadow-2xl border border-white/10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewImageUrl(null)}
+              className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors"
+            >
+              <X size={18} />
+            </button>
+            <img
+              src={previewImageUrl}
+              alt="Image preview"
+              className="w-full h-full max-h-[85vh] object-contain rounded-2xl"
+            />
           </div>
         </div>
       )}
