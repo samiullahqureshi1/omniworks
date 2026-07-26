@@ -586,12 +586,11 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   };
 
   useEffect(() => {
-    if (projectMessagesCache[projectId]) {
+    if (projectMessagesCache[projectId] && projectMessagesCache[projectId].length > 0) {
       setMessages(projectMessagesCache[projectId]);
       setLoading(false);
     } else {
       setLoading(true);
-      setMessages([]);
     }
 
     if (projectDetailsCache[projectId]) {

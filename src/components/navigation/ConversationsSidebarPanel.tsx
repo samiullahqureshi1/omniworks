@@ -253,36 +253,70 @@ export function ConversationsSidebarPanel({
   const stripHtml = (html: string) =>
     html ? html.replace(/<[^>]*>/g, '') : '';
 
-  const filteredProjects = projects.filter((p) =>
-    p.name.toLowerCase().includes(projectSearch.toLowerCase())
-  );
-
-  // Unread messages groups sorted FIRST (Microsoft Teams style)
-  const filteredGroups = groups
-    .filter((g) => {
-      const matchesSearch = g.name.toLowerCase().includes(groupSearch.toLowerCase());
-      const unreadCount = g.messages?.filter(
+  const filteredProjects = projects
+    .filter((p: any) => {
+      const matchesSearch = p.name.toLowerCase().includes(projectSearch.toLowerCase());
+      const unreadCount = p.messages?.filter(
         (m: any) => !m.readReceipts?.some((r: any) => r.userId === currentUserId)
-      ).length || 0;
+      ).length || (p.unreadCount || 0);
 
       if (readFilter === 'unread') return matchesSearch && unreadCount > 0;
       if (readFilter === 'read') return matchesSearch && unreadCount === 0;
       return matchesSearch;
     })
-    .sort((a, b) => {
-      const unreadA = a.messages?.filter((m: any) => !m.readReceipts?.some((r: any) => r.userId === currentUserId)).length || 0;
-      const unreadB = b.messages?.filter((m: any) => !m.readReceipts?.some((r: any) => r.userId === currentUserId)).length || 0;
-      if (unreadA > 0 && unreadB === 0) return -1;
-      if (unreadA === 0 && unreadB > 0) return 1;
-      return 0;
+    .sort((a: any, b: any) => {
+      const timeA = new Date(a.messages?.[0]?.createdAt || a.updatedAt || a.createdAt).getTime();
+      const timeB = new Date(b.messages?.[0]?.createdAt || b.updatedAt || b.createdAt).getTime();
+      return timeB - timeA;
     });
 
-  const totalUnread = groups.reduce((acc, g) => {
+  const filteredGroups = groups
+    .filter((g: any) => {
+      const matchesSearch = g.name.toLowerCase().includes(groupSearch.toLowerCase());
+      const unreadCount = g.messages?.filter(
+        (m: any) => !m.readReceipts?.some((r: any) => r.userId === currentUserId)
+      ).length || (g.unreadCount || 0);
+
+      if (readFilter === 'unread') return matchesSearch && unreadCount > 0;
+      if (readFilter === 'read') return matchesSearch && unreadCount === 0;
+      return matchesSearch;
+    })
+    .sort((a: any, b: any) => {
+      const timeA = new Date(a.messages?.[0]?.createdAt || a.updatedAt || a.createdAt).getTime();
+      const timeB = new Date(b.messages?.[0]?.createdAt || b.updatedAt || b.createdAt).getTime();
+      return timeB - timeA;
+    });
+
+  const totalGroupUnread = groups.reduce((acc, g) => {
     const count = g.messages?.filter(
       (m: any) => !m.readReceipts?.some((r: any) => r.userId === currentUserId)
-    ).length || 0;
+    ).length || (g.unreadCount || 0);
     return acc + (count > 0 ? 1 : 0);
   }, 0);
+
+  const totalProjectUnread = projects.reduce((acc, p: any) => {
+    const count = p.messages?.filter(
+      (m: any) => !m.readReceipts?.some((r: any) => r.userId === currentUserId)
+    ).length || (p.unreadCount || 0);
+    return acc + (count > 0 ? 1 : 0);
+  }, 0);
+
+  const totalUnread = totalGroupUnread + totalProjectUnread;
+
+  const handleReadFilterChange = (filter: 'all' | 'unread' | 'read') => {
+    setReadFilter(filter);
+    if (filter === 'unread') {
+      if (activeTab === 'projects') {
+        if (filteredProjects.length > 0) {
+          selectProject(filteredProjects[0].id);
+        }
+      } else {
+        if (filteredGroups.length > 0) {
+          selectGroup(filteredGroups[0].id);
+        }
+      }
+    }
+  };
 
   return (
     <div className="flex flex-col h-full w-full bg-[#fafafa] dark:bg-[#131316] border-r border-slate-200/60 dark:border-white/5 overflow-hidden select-none">
@@ -362,7 +396,7 @@ export function ConversationsSidebarPanel({
           {/* Filter Badges: All | Unread */}
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setReadFilter('all')}
+              onClick={() => handleReadFilterChange('all')}
               className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-all border ${
                 readFilter === 'all'
                   ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900'
@@ -372,7 +406,7 @@ export function ConversationsSidebarPanel({
               All
             </button>
             <button
-              onClick={() => setReadFilter('unread')}
+              onClick={() => handleReadFilterChange('unread')}
               className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-all border flex items-center gap-1 ${
                 readFilter === 'unread'
                   ? 'bg-primary text-white border-primary'

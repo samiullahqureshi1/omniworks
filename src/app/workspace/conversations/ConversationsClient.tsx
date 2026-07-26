@@ -245,6 +245,7 @@ const stripHtml = (htmlString: string | null | undefined) => {
   return htmlString.replace(/<[^>]*>/g, '');
 };
 
+const groupMessagesCache: Record<string, any[]> = {};
 
 export default function ConversationsClient({
   currentUser,
@@ -700,8 +701,6 @@ export default function ConversationsClient({
     fetchGroups();
   }, []);
 
-const groupMessagesCache: Record<string, any[]> = {};
-
   // Fetch messages when a group is selected
   const fetchGroupMessages = async (groupId: string) => {
     try {
@@ -724,12 +723,11 @@ const groupMessagesCache: Record<string, any[]> = {};
 
   useEffect(() => {
     if (selectedGroupId) {
-      if (groupMessagesCache[selectedGroupId]) {
+      if (groupMessagesCache[selectedGroupId] && groupMessagesCache[selectedGroupId].length > 0) {
         setMessages(groupMessagesCache[selectedGroupId]);
         setMessagesLoading(false);
       } else {
         setMessagesLoading(true);
-        setMessages([]);
       }
       fetchGroupMessages(selectedGroupId);
     } else {
@@ -2061,28 +2059,28 @@ const groupMessagesCache: Record<string, any[]> = {};
       {/* MANAGE GROUP MEMBERS MODAL */}
       {isSettingsModalOpen && activeGroup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white dark:bg-[#1f1f23] rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-white dark:bg-[#1f1f23] rounded-[8px] shadow-xl border border-slate-100 dark:border-slate-800 w-full max-w-md overflow-hidden flex flex-col max-h-[85vh] relative z-50">
             {/* Fixed Header */}
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-between">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-between z-20 bg-white dark:bg-[#1f1f23]">
               <div>
-                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Manage Group members</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-normal">
+                <h2 className="text-lg font-extrabold text-slate-900 dark:text-white tracking-tight">Manage Group members</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-normal">
                   Add or remove users from "{activeGroup.name}".
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsSettingsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg p-1 transition-colors"
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-[8px] p-1 transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
             
-            {/* Body */}
-            <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 custom-scrollbar">
+            {/* Scrollable Body */}
+            <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4 custom-scrollbar">
               <div className="space-y-2 flex flex-col flex-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Group Members</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">GROUP MEMBERS</label>
                 
                 {/* Search Bar */}
                 <div className="relative shrink-0 mb-1">
@@ -2096,7 +2094,7 @@ const groupMessagesCache: Record<string, any[]> = {};
                 </div>
 
                 {/* Scrollable Member List Container */}
-                <div className="border border-slate-200/60 dark:border-slate-800 rounded-2xl p-2.5 bg-slate-50/30 dark:bg-[#151515] space-y-2 max-h-[250px] overflow-y-auto custom-scrollbar">
+                <div className="border border-slate-200/60 dark:border-slate-800 rounded-2xl p-2 bg-slate-50/30 dark:bg-[#151515] space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar">
                   {filteredUsers.length > 0 ? (
                     filteredUsers.map(user => {
                       const isSelected = settingsMembers.includes(user.id);
@@ -2143,7 +2141,7 @@ const groupMessagesCache: Record<string, any[]> = {};
               </div>
 
               {/* Danger Zone Box */}
-              <div className="mt-2 p-4 bg-red-50/70 dark:bg-red-950/20 rounded-2xl border border-red-200/60 dark:border-red-900/30 flex items-center justify-between gap-3">
+              <div className="mt-1 p-4 bg-red-50/70 dark:bg-red-950/20 rounded-2xl border border-red-200/60 dark:border-red-900/30 flex items-center justify-between gap-3">
                 <div className="flex items-start gap-3 min-w-0 flex-1">
                   <AlertCircle className="text-red-600 dark:text-red-400 h-5 w-5 shrink-0 mt-0.5" />
                   <div className="min-w-0 flex-1">
@@ -2158,7 +2156,7 @@ const groupMessagesCache: Record<string, any[]> = {};
                   variant="destructive"
                   onClick={handleDeleteGroup}
                   disabled={isDeletingGroup || isUpdatingMembers}
-                  className="bg-red-600 hover:bg-red-700 text-white rounded-xl h-9 text-xs font-bold transition-all px-4 shrink-0 shadow-xs"
+                  className="bg-red-600 hover:bg-red-700 text-white rounded-[8px] h-8 text-xs font-bold transition-all px-4 shrink-0 shadow-xs"
                 >
                   {isDeletingGroup ? 'Deleting...' : 'Delete Group'}
                 </Button>
@@ -2166,11 +2164,11 @@ const groupMessagesCache: Record<string, any[]> = {};
             </div>
 
             {/* Fixed Footer */}
-            <div className="p-6 border-t border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-end gap-3 bg-white dark:bg-[#1f1f23]">
+            <div className="p-5 border-t border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-end gap-3 bg-white dark:bg-[#1f1f23] z-30 relative shadow-sm">
               <Button
                 type="button"
                 onClick={() => setIsSettingsModalOpen(false)}
-                className="px-6 py-2.5 h-10 rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 bg-transparent font-semibold text-xs transition-all"
+                className="px-5 py-2 h-9 rounded-[8px] border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 bg-transparent font-semibold text-xs transition-all"
                 disabled={isUpdatingMembers || isDeletingGroup}
               >
                 Cancel
@@ -2179,7 +2177,7 @@ const groupMessagesCache: Record<string, any[]> = {};
                 type="button"
                 onClick={handleUpdateMembers}
                 disabled={isUpdatingMembers || isDeletingGroup}
-                className="px-6 py-2.5 h-10 rounded-full bg-[#16181a] dark:bg-white text-white dark:text-slate-900 font-bold text-xs hover:opacity-90 transition-all shadow-sm"
+                className="px-5 py-2 h-9 rounded-[8px] bg-[#16181a] dark:bg-white text-white dark:text-slate-900 font-bold text-xs hover:opacity-90 transition-all shadow-sm"
               >
                 {isUpdatingMembers ? 'Saving...' : 'Save Changes'}
               </Button>
