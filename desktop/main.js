@@ -26,8 +26,10 @@ const API_BASE = 'https://omniwork.vercel.app/api/desktop';
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 400,
-    height: 420,
+    width: 1280,
+    height: 800,
+    minWidth: 900,
+    minHeight: 600,
     icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -36,7 +38,10 @@ function createWindow() {
     }
   });
 
-  mainWindow.loadFile('index.html');
+  const appUrl = process.env.DESKTOP_APP_URL || 'http://localhost:3000/desktop';
+  mainWindow.loadURL(appUrl).catch(() => {
+    mainWindow.loadFile('index.html');
+  });
 
   mainWindow.on('close', (event) => {
     if (activeTimer && !forceQuit) {
@@ -197,11 +202,11 @@ ipcMain.on('start-timer', (event, data) => {
     if (!isIdle) {
       await captureScreenshot();
     }
-  }, 3 * 60 * 1000); // Every 3 minutes
+  }, 5 * 60 * 1000); // Every 5 minutes
 
   syncInterval = setInterval(async () => {
     await syncData();
-  }, 60 * 1000); // Sync every minute
+  }, 3 * 60 * 1000); // Sync time every 3 minutes
 
   event.reply('status-update', { status: 'active' });
 });

@@ -446,384 +446,256 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
       case 'MEDIUM': return 'text-blue-500 bg-blue-100 dark:bg-blue-900/30';
       case 'HIGH': return 'text-orange-500 bg-orange-100 dark:bg-orange-900/30';
       case 'CRITICAL': return 'text-red-500 bg-red-100 dark:bg-red-900/30 font-bold';
-      default: return 'text-slate-500';
+  default: return 'text-slate-500';
     }
   };
 
   return (
-    <div className="flex flex-col gap-4 animate-in fade-in duration-500 max-w-7xl mx-auto w-full">
-      {/* Header Container that stretches to touch the sidebar */}
-      <div className="-mx-4 md:-mx-8 -mt-6 border-b border-slate-200 dark:border-white/10 bg-white dark:bg-[#151518] z-20">
-        {/* Top Header Bar */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-6 pb-2 px-4 md:px-8">
-          {/* Breadcrumb Left */}
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
-            <span className="flex items-center justify-center w-5 h-5 rounded bg-blue-600 text-white font-bold text-[10px]">P</span>
-            <Link href="/workspace/projects" className="hover:text-slate-800 dark:hover:text-white transition-colors">
-              Project Space
-            </Link>
-            <span className="text-slate-300 dark:text-white/20">/</span>
-            <div className="flex items-center gap-1.5 text-slate-900 dark:text-white font-bold text-base">
-              <FolderKanban size={16} className="text-primary" />
-              <span>{project.name}</span>
-              <ChevronDown size={14} className="text-slate-400 cursor-pointer" />
-            </div>
-            <Star size={14} className="text-slate-400 hover:text-yellow-500 cursor-pointer ml-1" />
+    <div className="flex flex-col h-full w-full overflow-hidden bg-white dark:bg-[#151518]">
+      {/* Sticky Fixed Top Header */}
+      <header className="sticky top-0 z-30 bg-white dark:bg-[#151518] border-b border-slate-200 dark:border-slate-800 px-6 py-3 flex items-center justify-between shadow-2xs shrink-0">
+        {/* Left: Breadcrumbs */}
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+          <span className="flex items-center justify-center w-5 h-5 rounded bg-blue-600 text-white font-bold text-[10px]">P</span>
+          <Link href="/workspace/projects" className="hover:text-slate-800 dark:hover:text-white transition-colors">
+            Project Space
+          </Link>
+          <span className="text-slate-300 dark:text-white/20">/</span>
+          <div className="flex items-center gap-1.5 text-slate-900 dark:text-white font-bold text-base">
+            <FolderKanban size={16} className="text-primary" />
+            <span>{project.name}</span>
+            <ChevronDown size={14} className="text-slate-400 cursor-pointer" />
           </div>
+          <Star size={14} className="text-slate-400 hover:text-yellow-500 cursor-pointer ml-1" />
         </div>
-      </div>
-      
-      {/* Header Card */}
-      <div className="relative flex flex-col gap-4 overflow-hidden bg-background p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 shadow-sm transition-all hover:shadow-md">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-blue-500/5 pointer-events-none" />
-        <div className="relative z-10">
-        <Link href="/workspace/projects" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 w-fit transition-colors mb-2">
-          <ArrowLeft size={14} /> Back to Projects
-        </Link>
-        <div className="flex justify-between items-start">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-extrabold tracking-tight text-foreground">{project.name}</h1>
-              <Badge 
-                variant="outline" 
-                className={typeof project.status === 'string' ? getStatusColor(project.status) : ''}
-                style={typeof project.status !== 'string' && project.status ? { 
-                  backgroundColor: `${project.status.color}20`, 
-                  color: project.status.color, 
-                  borderColor: `${project.status.color}40` 
-                } : {}}
+
+        {/* Right: View Tabs Header Controls */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('overview')}
+            className={`px-3.5 py-1.5 rounded-[8px] text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'overview'
+                ? 'bg-slate-100 dark:bg-white/10 text-slate-900 dark:text-white border border-slate-200/80 dark:border-white/10 shadow-2xs'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+            }`}
+          >
+            <LayoutDashboard size={14} />
+            <span>Overview</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('tasks')}
+            className={`px-3.5 py-1.5 rounded-[8px] text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'tasks'
+                ? 'bg-slate-100 dark:bg-white/10 text-slate-900 dark:text-white border border-slate-200/80 dark:border-white/10 shadow-2xs'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+            }`}
+          >
+            <CheckSquare size={14} />
+            <span>Tasks</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-white/20 text-[10px] font-black">
+              {project.tasks?.length || 0}
+            </span>
+          </button>
+
+          {(isOwner || isPM) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditProjectOpen(true)}
+              className="h-8 rounded-[8px] border text-xs font-semibold flex items-center gap-1 ml-2"
+            >
+              <Settings size={13} />
+              <span>Edit</span>
+            </Button>
+          )}
+        </div>
+      </header>
+
+      {/* Main Body Content */}
+      <div className="flex-1 w-full overflow-hidden flex">
+        {activeTab === 'overview' ? (
+          <div className="flex w-full h-full overflow-hidden">
+            {/* Left Column: Project Details Panel */}
+            <div className="w-full lg:w-[480px] xl:w-[520px] shrink-0 border-r border-slate-200 dark:border-slate-800 p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6 bg-white dark:bg-[#151518]">
+              {/* Back to Projects */}
+              <Link
+                href="/workspace/projects"
+                className="text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center gap-1 w-fit transition-colors"
               >
-                {typeof project.status === 'string' 
-                  ? project.status.replace('_', ' ') 
-                  : project.status?.name || 'No Status'}
-              </Badge>
-              <Badge variant="secondary" className={getPriorityColor(project.priority)}>
-                {project.priority}
-              </Badge>
-              {project.isRepeated && (
-                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0.5 px-2 font-semibold flex items-center gap-1">
-                  <Repeat size={10} /> Recurring
-                </Badge>
-              )}
-            </div>
-            {project.description && (
-              <div 
-                className="text-muted-foreground mt-2 max-w-3xl prose prose-sm dark:prose-invert" 
-                dangerouslySetInnerHTML={{ __html: project.description }}
-              />
-            )}
-          </div>
-        </div>
-        {(isOwner || isPM) && (
-          <div className="relative z-10 mt-2">
-            <Dialog open={isEditProjectOpen} onOpenChange={setIsEditProjectOpen}>
-              <DialogContent className="sm:max-w-[700px] h-[90vh] p-0 flex flex-col overflow-hidden">
-                <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shrink-0 shadow-sm">
-                  <DialogTitle>Edit Project</DialogTitle>
-                </DialogHeader>
+                <ArrowLeft size={13} /> Back to Projects
+              </Link>
+
+              {/* Title & Badges */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+                    {project.name}
+                  </h1>
+                  <Badge
+                    variant="outline"
+                    className={`text-xs font-bold ${typeof project.status === 'string' ? getStatusColor(project.status) : ''}`}
+                    style={typeof project.status !== 'string' && project.status ? {
+                      backgroundColor: `${project.status.color}20`,
+                      color: project.status.color,
+                      borderColor: `${project.status.color}40`
+                    } : {}}
+                  >
+                    {typeof project.status === 'string'
+                      ? project.status.replace('_', ' ')
+                      : project.status?.name || 'No Status'}
+                  </Badge>
+                  <Badge variant="secondary" className={`text-xs font-bold ${getPriorityColor(project.priority)}`}>
+                    {project.priority}
+                  </Badge>
+                </div>
+
+                {/* Description Card */}
+                {project.description && (
+                  <div className="mt-3 p-4 rounded-2xl bg-red-600 dark:bg-red-700 text-white font-medium text-xs leading-relaxed shadow-sm">
+                    <div dangerouslySetInnerHTML={{ __html: project.description }} />
+                  </div>
+                )}
+              </div>
+
+              {/* Details Section */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                  <Briefcase size={14} className="text-indigo-500" />
+                  <span>Details</span>
+                </h3>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {!isStrictMember && (
+                    <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/5 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-white/10 flex items-center justify-center text-indigo-500 shrink-0">
+                        <Users size={16} />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Client</span>
+                        <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                          {project.client?.name || 'Internal'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/5 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-white/10 flex items-center justify-center text-indigo-500 shrink-0">
+                      <UserCheck size={16} />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Manager</span>
+                      <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                        {project.projectManager?.name || 'Unassigned'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/5 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-white/10 flex items-center justify-center text-indigo-500 shrink-0">
+                      <Calendar size={16} />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Start Date</span>
+                      <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                        {new Date(project.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/5 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-white/10 flex items-center justify-center text-indigo-500 shrink-0">
+                      <CalendarDays size={16} />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">End Date</span>
+                      <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                        {project.isOngoing
+                          ? 'Ongoing'
+                          : project.endDate
+                          ? new Date(project.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                          : 'Not set'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress & Hours Section */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                  <Timer size={14} className="text-indigo-500" />
+                  <span>Progress & Hours</span>
+                </h3>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block mb-1">
+                        Logged Hours
+                      </span>
+                      <div className="text-2xl font-black text-slate-900 dark:text-white">
+                        {displayTotalTrackedHours} <span className="text-xs font-semibold text-slate-400">h</span>
+                      </div>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                      <Clock size={16} />
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 block mb-1">
+                        Allocated Limit
+                      </span>
+                      <div className="text-2xl font-black text-slate-900 dark:text-white">
+                        {displayTotalAllocatedHours || project.totalAllocatedHours || 0} <span className="text-xs font-semibold text-slate-400">h</span>
+                      </div>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                      <Timer size={16} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Progress Percentage Bar */}
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex justify-between items-center text-xs font-black text-indigo-600 dark:text-indigo-400">
+                    <span>{displayProgressPercent}% Complete</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-600 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, displayProgressPercent)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Edit Project Dialog */}
+              <Dialog open={isEditProjectOpen} onOpenChange={setIsEditProjectOpen}>
+                <DialogContent className="sm:max-w-[700px] h-[90vh] p-0 flex flex-col overflow-hidden">
+                  <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shrink-0 shadow-sm">
+                    <DialogTitle>Edit Project</DialogTitle>
+                  </DialogHeader>
                   <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
                     <form onSubmit={handleUpdateProject} className="space-y-6 pb-6">
-                      {/* Rules Selector */}
-                      <div className="space-y-3 bg-indigo-50/50 dark:bg-indigo-950/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/30">
-                        <div className="flex justify-between items-center">
-                          <label className="text-sm font-bold text-foreground">
-                            Automation Rules
-                          </label>
-                          <span className="text-xs text-muted-foreground">Select rules to run automatically on this project.</span>
-                        </div>
-                        <div className="flex gap-2 items-center flex-wrap">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button type="button" variant="outline" size="sm" className="h-9 rounded-xl border bg-background px-3 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
-                                Select Rules... <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-56 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1.5 z-50">
-                              {rules.filter(r => r.isActive).length === 0 ? (
-                                <div className="p-2.5 text-center text-xs text-muted-foreground">
-                                  No active rules
-                                </div>
-                              ) : (
-                                rules
-                                  .filter((r) => r.isActive)
-                                  .map((r) => {
-                                    const isAttached = attachedRuleIds.includes(r.id);
-                                    return (
-                                      <DropdownMenuItem
-                                        key={r.id}
-                                        onClick={() => {
-                                          if (isAttached) {
-                                            setAttachedRuleIds(prev => prev.filter(id => id !== r.id));
-                                          } else {
-                                            setAttachedRuleIds(prev => [...prev, r.id]);
-                                          }
-                                        }}
-                                        className="cursor-pointer rounded-lg px-2.5 py-2 text-xs flex items-center justify-between hover:bg-muted focus:bg-muted"
-                                      >
-                                        <span>{r.name}</span>
-                                        {isAttached && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />}
-                                      </DropdownMenuItem>
-                                    );
-                                  })
-                              )}
-                              <DropdownMenuSeparator className="my-1 border-t" />
-                              <DropdownMenuItem
-                                onClick={() => setIsCreateRuleOpen(true)}
-                                className="cursor-pointer rounded-lg px-2.5 py-2 text-xs text-primary hover:bg-primary/5 focus:bg-primary/5 font-semibold flex items-center gap-1"
-                              >
-                                <Plus className="h-3.5 w-3.5" /> Create New Rule
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-
-                          <div className="flex flex-wrap gap-1.5 items-center">
-                            {attachedRuleIds.map((id) => {
-                              const r = rules.find((rule) => rule.id === id);
-                              if (!r) return null;
-                              return (
-                                <Badge
-                                  key={id}
-                                  variant="secondary"
-                                  className="py-1 px-2.5 rounded-lg flex items-center gap-1.5 bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-900/50 text-xs font-semibold"
-                                >
-                                  {r.name}
-                                  <button
-                                    type="button"
-                                    onClick={() => setAttachedRuleIds((prev) => prev.filter((rid) => rid !== id))}
-                                    className="hover:text-destructive text-indigo-500 hover:bg-indigo-200/50 rounded-full p-0.5"
-                                  >
-                                    <X size={10} />
-                                  </button>
-                                </Badge>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2 sm:col-span-2">
-                          <label className="text-sm font-medium">Project Name <span className="text-destructive">*</span></label>
-                          <Input name="name" required defaultValue={project.name} />
-                        </div>
-                        <div className="space-y-2 sm:col-span-2">
-                          <label className="text-sm font-medium">Description</label>
-                          <RichTextEditor
-                            content={editDescription}
-                            onChange={setEditDescription}
-                            placeholder="Brief overview of the project..."
-                          />
-                        </div>
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">Client</label>
-                        <select name="clientId" defaultValue={project.clientId || ''} className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring">
-                          <option value="">No Client (Internal)</option>
-                          {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
+                        <label className="text-sm font-medium">Project Name</label>
+                        <Input name="name" defaultValue={project.name} required />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">Project Manager</label>
-                        <select name="projectManagerId" defaultValue={project.projectManagerId || ''} className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring">
-                          <option value="">Unassigned</option>
-                          {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                        </select>
+                        <label className="text-sm font-medium">Description</label>
+                        <RichTextEditor
+                          content={editDescription}
+                          onChange={setEditDescription}
+                          placeholder="Describe the project..."
+                        />
                       </div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <label className="text-sm font-medium">Status</label>
-                          <button 
-                            type="button" 
-                            onClick={() => setIsCreatingStatus(!isCreatingStatus)} 
-                            className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-                          >
-                            {isCreatingStatus ? "Cancel" : "+ New Status"}
-                          </button>
-                        </div>
-                        {isCreatingStatus ? (
-                          <div className="flex items-center gap-2">
-                            <Input
-                              placeholder="Status Name (e.g. Planning)"
-                              value={newStatusName}
-                              onChange={(e) => setNewStatusName(e.target.value)}
-                              disabled={isSavingStatus}
-                              className="h-9"
-                            />
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={handleCreateStatus}
-                              disabled={isSavingStatus || !newStatusName.trim()}
-                              className="h-9"
-                            >
-                              {isSavingStatus ? "..." : "Save"}
-                            </Button>
-                          </div>
-                        ) : (
-                          <>
-                            {localProjectStatuses.length === 0 ? (
-                              <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-200">
-                                No statuses available.{' '}
-                                <button type="button" onClick={() => setIsCreatingStatus(true)} className="font-semibold underline">
-                                  Create one here.
-                                </button>
-                              </div>
-                            ) : (
-                              <select name="statusId" defaultValue={project.statusId} className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring">
-                                {localProjectStatuses.map((s) => (
-                                  <option key={s.id} value={s.id}>{s.name}</option>
-                                ))}
-                              </select>
-                            )}
-                          </>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Priority</label>
-                        <select name="priority" defaultValue={project.priority} className="flex h-9 w-full rounded-xl border bg-background px-3 text-sm focus:ring-1 focus:ring-ring">
-                          <option value="LOW">Low</option>
-                          <option value="MEDIUM">Medium</option>
-                          <option value="HIGH">High</option>
-                          <option value="CRITICAL">Critical</option>
-                        </select>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Start Date <span className="text-destructive">*</span></label>
-                        <Input name="startDate" type="date" required defaultValue={new Date(project.startDate).toISOString().split('T')[0]} />
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <label className="text-sm font-medium">End Date</label>
-                          <div className="flex items-center gap-1.5">
-                            <input type="checkbox" id="edit-ongoing" checked={editIsOngoing} onChange={(e) => setEditIsOngoing(e.target.checked)} className="rounded border-gray-300 text-primary focus:ring-primary"/>
-                            <label htmlFor="edit-ongoing" className="text-xs text-muted-foreground cursor-pointer">Ongoing</label>
-                          </div>
-                        </div>
-                        {!editIsOngoing ? (
-                          <Input name="endDate" type="date" required={!editIsOngoing} defaultValue={project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : ''} />
-                        ) : (
-                          <div className="flex h-9 w-full items-center justify-center rounded-xl border bg-muted/50 text-xs text-muted-foreground italic">Project has no end date</div>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Project Budget ($)</label>
-                        <NumberStepper name="projectBudget" step={1} min={0} defaultValue={project.projectBudget || ''} />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Total Allocated Hours <span className="text-destructive">*</span></label>
-                        <NumberStepper name="totalAllocatedHours" step={0.1} min={0} required defaultValue={project.totalAllocatedHours || ''} />
-                      </div>
-
-                      {/* Custom Fields */}
-                      <div className="space-y-3 pt-2 col-span-1 sm:col-span-2">
-                        <div className="flex justify-between items-center">
-                          <label className="text-sm font-medium flex items-center gap-1.5">
-                            Custom Fields
-                          </label>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              setEditCustomFields([
-                                ...editCustomFields,
-                                {
-                                  name: "",
-                                  type: "text",
-                                  value: "",
-                                },
-                              ])
-                            }
-                            className="h-8 text-xs"
-                          >
-                            <Plus className="mr-1 h-3 w-3" /> Add Field
-                          </Button>
-                        </div>
-
-                        {editCustomFields.length > 0 && (
-                          <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
-                            {editCustomFields.map((field, index) => (
-                              <div
-                                key={index}
-                                className="p-3 border rounded-xl bg-muted/20 space-y-3 relative group"
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setEditCustomFields(
-                                      editCustomFields.filter((_, i) => i !== index)
-                                    )
-                                  }
-                                  className="absolute right-2 top-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                  <div className="space-y-1.5">
-                                    <label className="text-xs font-medium text-muted-foreground">Field Name</label>
-                                    <Input
-                                      placeholder="Field Name"
-                                      value={field.name}
-                                      onChange={(e) => {
-                                        const newFields = [...editCustomFields];
-                                        newFields[index].name = e.target.value;
-                                        setEditCustomFields(newFields);
-                                      }}
-                                      className="h-8 text-xs bg-background"
-                                      required
-                                    />
-                                  </div>
-
-                                  <div className="space-y-1.5">
-                                    <label className="text-xs font-medium text-muted-foreground">Field Type</label>
-                                    <select
-                                      value={field.type}
-                                      onChange={(e) => {
-                                        const newFields = [...editCustomFields];
-                                        newFields[index].type = e.target.value;
-                                        newFields[index].value = "";
-                                        setEditCustomFields(newFields);
-                                      }}
-                                      className="flex h-8 w-full rounded-xl border bg-background px-2 text-xs focus:ring-1 focus:ring-ring"
-                                    >
-                                      <option value="text">Text</option>
-                                      <option value="number">Number</option>
-                                      <option value="url">URL</option>
-                                    </select>
-                                  </div>
-                                </div>
-
-                                <div className="space-y-1.5">
-                                  <label className="text-xs font-medium text-muted-foreground">Value</label>
-                                  <Input
-                                    type={field.type === "number" ? "number" : "text"}
-                                    placeholder={
-                                      field.type === "url"
-                                        ? "https://example.com"
-                                        : field.type === "number"
-                                        ? "0"
-                                        : "Enter value..."
-                                    }
-                                    value={field.value}
-                                    onChange={(e) => {
-                                      const newFields = [...editCustomFields];
-                                      newFields[index].value = e.target.value;
-                                      setEditCustomFields(newFields);
-                                    }}
-                                    className="h-8 text-xs bg-background"
-                                    required
-                                  />
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-
-                    </div>
-                    
                       <Button type="submit" className="w-full" disabled={isPending}>
                         {isPending ? 'Saving...' : 'Update Project'}
                       </Button>
@@ -831,325 +703,30 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                   </div>
                 </DialogContent>
               </Dialog>
-
-
-            </div>
-          )}
-        
-          {/* Top Header Expanded Info */}
-          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6 pt-6 border-t border-slate-200/60 dark:border-slate-800/60">
-            {/* Project Details */}
-            <div className="lg:col-span-7 space-y-5">
-              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                <Briefcase size={15} className="text-indigo-500"/> Details
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {!isStrictMember && (
-                  <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50/40 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
-                    <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/5 shadow-sm rounded-lg text-indigo-500">
-                      <Users size={16} />
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Client</span>
-                      <span className="font-semibold text-xs text-foreground truncate">{project.client?.name || 'Internal'}</span>
-                    </div>
-                  </div>
-                )}
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50/40 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
-                  <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/5 shadow-sm rounded-lg text-indigo-500">
-                    <UserCheck size={16} />
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Manager</span>
-                    <span className="font-semibold text-xs text-foreground truncate">{project.projectManager?.name || 'Unassigned'}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50/40 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
-                  <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/5 shadow-sm rounded-lg text-indigo-500">
-                    <Calendar size={16} />
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Start Date</span>
-                    <span className="font-semibold text-xs text-foreground truncate">
-                      {new Date(project.startDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50/40 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
-                  <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/5 shadow-sm rounded-lg text-indigo-500">
-                    <CalendarDays size={16} />
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">End Date</span>
-                    <span className="font-semibold text-xs text-foreground truncate">
-                      {project.isOngoing ? 'Ongoing' : project.endDate ? new Date(project.endDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'Not set'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {project.notes && (
-                <div className="p-3 bg-amber-50/20 dark:bg-amber-950/5 border border-amber-100/30 dark:border-amber-950/20 rounded-xl">
-                  <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider block mb-1">Notes</span>
-                  <p className="text-xs text-slate-700 dark:text-slate-300 italic leading-relaxed">
-                    "{project.notes}"
-                  </p>
-                </div>
-              )}
-
-              {project.customFields && (project.customFields as any[]).length > 0 && (
-                <div className="mt-5 pt-4 border-t border-slate-200/60 dark:border-slate-800/60 space-y-3">
-                  <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">Custom Fields</span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {(project.customFields as any[]).map((field: any, idx: number) => {
-                      const getIconForType = (type: string) => {
-                        switch (type?.toLowerCase()) {
-                          case 'number': return <Hash size={16} />;
-                          case 'website':
-                          case 'url': return <Globe size={16} />;
-                          case 'email': return <Mail size={16} />;
-                          case 'phone': return <Phone size={16} />;
-                          default: return <Type size={16} />;
-                        }
-                      };
-
-                      return (
-                        <div key={idx} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50/40 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
-                          <div className="p-2.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-white/5 shadow-sm rounded-lg text-indigo-500">
-                            {getIconForType(field.type)}
-                          </div>
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider truncate">{field.name}</span>
-                            {field.type === 'url' || field.type === 'website' ? (
-                              <a 
-                                href={field.value.startsWith('http') ? field.value : `https://${field.value}`} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="font-semibold text-xs text-blue-600 dark:text-blue-400 hover:underline truncate"
-                              >
-                                {field.value}
-                              </a>
-                            ) : (
-                              <span className="font-semibold text-xs text-foreground truncate">{field.value}</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* Time & Progress */}
-            <div className="lg:col-span-5 space-y-5">
-              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                <Timer size={15} className="text-indigo-500"/> 
-                {isStrictMember ? 'Your Progress & Hours' : 'Progress & Hours'}
-              </h3>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="relative overflow-hidden bg-gradient-to-br from-emerald-50/30 via-white to-white dark:from-emerald-950/5 dark:via-[#1a1a1a] dark:to-[#1a1a1a] border border-slate-100 dark:border-white/[0.03] rounded-xl p-4 shadow-sm">
-                  <div className="flex justify-between items-start">
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Logged Hours</span>
-                      <p className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">
-                        {renderTrackedTime(displayTotalTrackedHours)}
-                      </p>
-                    </div>
-                    <div className="p-2 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-lg">
-                      <Timer size={16} />
-                    </div>
-                  </div>
-                </div>
-
-                {displayTotalAllocatedHours > 0 && (
-                  <div className="relative overflow-hidden bg-gradient-to-br from-indigo-50/30 via-white to-white dark:from-indigo-950/5 dark:via-[#1a1a1a] dark:to-[#1a1a1a] border border-slate-100 dark:border-white/[0.03] rounded-xl p-4 shadow-sm">
-                    <div className="flex justify-between items-start">
-                      <div className="space-y-1">
-                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Allocated Limit</span>
-                        <p className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">
-                          {displayTotalAllocatedHours} <span className="text-xs font-semibold text-muted-foreground">h</span>
-                        </p>
-                      </div>
-                      <div className="p-2 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-lg">
-                        <Clock size={16} />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {displayTotalAllocatedHours > 0 && (
-                <div className="p-5 bg-slate-50/40 dark:bg-white/[0.01] border border-slate-100 dark:border-white/[0.04] rounded-2xl space-y-3.5">
-                  <div className="flex justify-between items-center text-xs font-bold">
-                    <span className={displayProgressPercent > 100 ? 'text-rose-500' : 'text-indigo-600 dark:text-indigo-400'}>
-                      {displayProgressPercent}% Complete
-                    </span>
-                    {displayTotalTrackedHours > displayTotalAllocatedHours && (
-                      <span className="text-rose-500 flex items-center bg-rose-50 dark:bg-rose-950/20 px-2 py-0.5 rounded-lg text-[10px] font-bold border border-rose-100 dark:border-rose-900/30">
-                        <ShieldAlert size={11} className="mr-1"/> Over Budget
-                      </span>
-                    )}
-                  </div>
-                  <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
-                    <div 
-                      className={`h-full rounded-full transition-all duration-1000 ${displayProgressPercent > 100 ? 'bg-gradient-to-r from-rose-500 to-red-600' : 'bg-gradient-to-r from-indigo-500 to-blue-600'}`} 
-                      style={{ width: `${Math.min(100, displayProgressPercent)}%` }}
-                    ></div>
-                  </div>
-                </div>
-              )}
+            {/* Right Column: Integrated Project Conversation */}
+            <div className="flex-1 h-full min-w-0 bg-[#fafbfc] dark:bg-[#0f0f11]">
+              <ProjectConversation
+                ref={conversationRef}
+                projectId={project.id}
+                currentUser={currentUser}
+                organizationId={project.organizationId}
+                isClient={isClient}
+              />
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Tabs Layout */}
-      <Tabs defaultValue="overview" className="flex flex-col gap-6">
-        <TabsList className="bg-muted/30 border border-slate-200/60 dark:border-slate-800/60 shadow-sm p-1.5 rounded-xl">
-          <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-sm flex items-center gap-2 transition-all px-4"><LayoutDashboard size={14}/> Overview</TabsTrigger>
-          <TabsTrigger value="tasks" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-sm flex items-center gap-2 transition-all px-4"><CheckSquare size={14}/> Tasks <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 font-bold bg-muted-foreground/10">{project.tasks.length}</Badge></TabsTrigger>
-        </TabsList>
-
-        {/* OVERVIEW TAB */}
-        <TabsContent value="overview" className="mt-0">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            
-            {/* Left Column: Tasks + Members */}
-            <div className="col-span-1 flex flex-col gap-6">
-              {/* Project Tasks */}
-              <Card className="shadow-sm border-slate-200/60 dark:border-slate-800/60 hover:shadow-md transition-all duration-300">
-                <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/50 bg-muted/10">
-                  <CardTitle className="text-sm flex items-center gap-2"><CheckSquare size={16} className="text-primary"/> Project Tasks</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0 max-h-[300px] overflow-y-auto custom-scrollbar">
-                  {project.tasks.length === 0 ? (
-                    <div className="p-4 text-sm text-muted-foreground text-center">No tasks available.</div>
-                  ) : (
-                    <ul className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                      {project.tasks.map((task: any) => {
-                        const tracked = getTaskTrackedHours(task.id);
-                        const allocated = task.allocatedHours || 0;
-                        return (
-                          <li key={task.id} className="flex flex-col p-3 hover:bg-muted/40 transition-colors group gap-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium truncate pr-2">{task.title}</span>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="h-7 px-2 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-all shadow-sm bg-background border"
-                                onClick={() => handleMentionTask(task.id, task.title)}
-                                title="Mention Task"
-                              >
-                                @
-                              </Button>
-                            </div>
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <div className="flex -space-x-1">
-                                {task.assignees?.map((a: any) => (
-                                  <Avatar key={a.userId} className="h-5 w-5 border border-background">
-                                    <AvatarFallback className="text-[8px] bg-primary/10 text-primary">{a.user?.name?.substring(0,2)}</AvatarFallback>
-                                  </Avatar>
-                                ))}
-                                {(!task.assignees || task.assignees.length === 0) && (
-                                  <span className="text-[10px] italic">Unassigned</span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1 font-mono bg-muted/30 px-1.5 py-0.5 rounded">
-                                <Clock size={10} className="text-primary/70" />
-                                <span>{formatTrackedTime(tracked)} / {allocated.toFixed(1)} hrs</span>
-                              </div>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Project Members */}
-              <Card className="shadow-sm border-slate-200/60 dark:border-slate-800/60 hover:shadow-md transition-all duration-300">
-                <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/50 bg-muted/10">
-                  <CardTitle className="text-sm flex items-center gap-2"><Users size={16} className="text-primary"/> Project Members</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0 max-h-[300px] overflow-y-auto custom-scrollbar">
-                  {projectMembers.length === 0 ? (
-                    <div className="p-4 text-sm text-muted-foreground text-center">No members available.</div>
-                  ) : (
-                    <ul className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                      {projectMembers.map((member: any) => {
-                        const tracked = getMemberTrackedHours(member.id);
-                        const allocated = getMemberAllocatedHours(member.id);
-                        return (
-                          <li key={member.id} className="flex flex-col p-3 hover:bg-muted/40 transition-colors group gap-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 truncate">
-                                <div className="relative">
-                                  <Avatar className="h-6 w-6">
-                                    <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{member.name.substring(0,2)}</AvatarFallback>
-                                  </Avatar>
-                                  <span className={`absolute bottom-0 right-0 w-2 h-2 rounded-full border border-white dark:border-slate-900 ${presenceMap[member.id] === 'ONLINE' ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'}`}></span>
-                                </div>
-                                <span className="text-sm font-medium truncate">{member.name}</span>
-                                <Badge variant="secondary" className="text-[8px] h-4 py-0 px-1.5 uppercase font-semibold">
-                                  {member.id === project.projectManagerId ? 'MANAGER' : member.role}
-                                </Badge>
-                              </div>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="h-7 px-2 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-all shadow-sm bg-background border"
-                                onClick={() => handleMentionUser(member.id, member.name)}
-                                title="Mention Member"
-                              >
-                                @
-                              </Button>
-                            </div>
-                            {((member.role !== 'OWNER' && member.role !== 'CLIENT') || tracked > 0 || allocated > 0) && (
-                              <div className="flex items-center justify-end text-xs text-muted-foreground mt-1">
-                                <div className="flex items-center gap-1 font-mono bg-muted/30 px-1.5 py-0.5 rounded">
-                                  <Clock size={10} className="text-primary/70" />
-                                  <span>{formatTrackedTime(tracked)} / {allocated.toFixed(1)} hrs</span>
-                                </div>
-                              </div>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Right Column: Conversation */}
-            <div className="col-span-1 md:col-span-1 lg:col-span-2">
-              <div className="shadow-sm border border-slate-200/60 dark:border-slate-800/60 rounded-2xl h-full flex flex-col overflow-hidden hover:shadow-md transition-all duration-300 bg-white dark:bg-slate-950">
-                <ProjectConversation 
-                  ref={conversationRef}
-                  projectId={project.id} 
-                  currentUser={currentUser} 
-                  organizationId={project.organizationId} 
-                  isClient={isClient}
-                />
-              </div>
-            </div>
-
-          </div>
-        </TabsContent>
-
-        {/* TASKS TAB */}
-        <TabsContent value="tasks" className="space-y-4">
-          {canManageTasks && (
-            <div className="flex justify-end mb-4">
-              <Dialog open={isNewTaskModalOpen} onOpenChange={setIsNewTaskModalOpen}>
-                <DialogTrigger asChild>
-                  <Button className="shadow-sm bg-primary text-primary-foreground hover:bg-primary/90">
-                    <Plus className="mr-2 h-4 w-4" /> Create New Task
-                  </Button>
-                </DialogTrigger>
+        ) : (
+          /* TASKS TAB CONTENT */
+          <div className="flex-1 overflow-y-auto p-6 w-full custom-scrollbar space-y-6">
+            {canManageTasks && (
+              <div className="flex justify-end mb-4">
+                <Dialog open={isNewTaskModalOpen} onOpenChange={setIsNewTaskModalOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="shadow-sm bg-primary text-primary-foreground hover:bg-primary/90">
+                      <Plus className="mr-2 h-4 w-4" /> Create New Task
+                    </Button>
+                  </DialogTrigger>
                 <DialogContent className="sm:max-w-[500px]">
                   <DialogHeader>
                     <DialogTitle>Create New Task</DialogTitle>
@@ -1301,12 +878,11 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                     )}
                   </div>
                 </div>
-              )
+              );
             })}
           </div>
-        </TabsContent>
-
-      </Tabs>
+        </div>
+      )}
 
       {/* Assignee Selection Modal */}
       <Dialog open={isAssigneeModalOpen} onOpenChange={setIsAssigneeModalOpen}>
@@ -1483,6 +1059,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
           </form>
         </DialogContent>
       </Dialog>
+    </div>
     </div>
   );
 }

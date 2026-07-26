@@ -778,23 +778,7 @@ export default function TaskFormModal({
                             </div>
                           </div>
 
-                          {/* Allocated Hours */}
-                          <div className="space-y-2 opacity-60">
-                            <label className="text-sm font-medium">Allocated Hours</label>
-                            <div className="flex h-[36px] w-full rounded-[8px] bg-slate-50 dark:bg-white/5 px-3 items-center text-[13px] text-slate-700 dark:text-slate-350">
-                              {tasksInput[0].allocatedHours || "—"}
-                            </div>
-                          </div>
-
-                          {/* Tracked Hours */}
-                          <div className="space-y-2 opacity-60">
-                            <label className="text-sm font-medium">Tracked Hours</label>
-                            <div className="flex h-[36px] w-full rounded-[8px] bg-slate-50 dark:bg-white/5 px-3 items-center text-[13px] text-slate-700 dark:text-slate-350">
-                              {trackedHours || "0"}
-                            </div>
-                          </div>
-
-                          {/* Assignee */}
+                          {/* Assignee (Opposite Due Date) */}
                           <div className="space-y-2 col-span-1 opacity-60">
                             <label className="text-sm font-medium">Assignee</label>
                             <div className="flex flex-wrap gap-1.5 items-center w-full min-h-[36px] bg-slate-50 dark:bg-white/5 rounded-[8px] px-3 py-2 text-[13px]">
@@ -810,6 +794,22 @@ export default function TaskFormModal({
                                   ) : null;
                                 })
                               )}
+                            </div>
+                          </div>
+
+                          {/* Allocated Hours */}
+                          <div className="space-y-2 opacity-60">
+                            <label className="text-sm font-medium">Allocated Hours</label>
+                            <div className="flex h-[36px] w-full rounded-[8px] bg-slate-50 dark:bg-white/5 px-3 items-center text-[13px] text-slate-700 dark:text-slate-350">
+                              {tasksInput[0].allocatedHours || "—"}
+                            </div>
+                          </div>
+
+                          {/* Tracked Hours (Opposite Allocated Hours) */}
+                          <div className="space-y-2 opacity-60">
+                            <label className="text-sm font-medium">Tracked Hours</label>
+                            <div className="flex h-[36px] w-full rounded-[8px] bg-slate-50 dark:bg-white/5 px-3 items-center text-[13px] text-slate-700 dark:text-slate-350">
+                              {trackedHours || "0"}
                             </div>
                           </div>
                         </div>
@@ -1022,7 +1022,7 @@ export default function TaskFormModal({
                                 </DropdownMenu>
                               </div>
 
-                              {/* Due Date */}
+                              {/* Due Date (Left) */}
                               <div className="space-y-2">
                                 <label className="text-sm font-medium">
                                   Due Date
@@ -1035,98 +1035,8 @@ export default function TaskFormModal({
                                 />
                               </div>
 
-                              {/* Make This Task Repeat */}
-                              {!isEditing && tasksInput.length === 1 ? (
-                                <div className="space-y-2">
-                                  <label className="text-sm font-medium">Make  task repeat</label>
-                                  <div className="flex items-center gap-2 h-[36px]">
-                                    <input
-                                      type="checkbox"
-                                      id={`repeat-${index}`}
-                                      checked={isRepeatEnabled}
-                                      onChange={(e) => setIsRepeatEnabled(e.target.checked)}
-                                      className="h-4 w-4 rounded border-gray-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
-                                    />
-                                    <label htmlFor={`repeat-${index}`} className="text-[13px] text-slate-600 dark:text-slate-400 cursor-pointer">
-                                      Enable repeat
-                                    </label>
-                                  </div>
-                                  {isRepeatEnabled && (
-                                    <div className="grid grid-cols-3 gap-2 mt-1">
-                                      <div className="space-y-1">
-                                        <span className="text-[11px] text-slate-400">Frequency</span>
-                                        <select
-                                          value={repeatFrequency}
-                                          onChange={(e) => setRepeatFrequency(e.target.value as any)}
-                                          className="w-full h-8 bg-slate-100 dark:bg-white/5 border-0 px-2 text-xs text-slate-700 dark:text-slate-300 rounded-[6px] outline-none"
-                                        >
-                                          <option value="DAILY">Daily</option>
-                                          <option value="WEEKLY">Weekly</option>
-                                          <option value="MONTHLY">Monthly</option>
-                                        </select>
-                                      </div>
-                                      <div className="space-y-1">
-                                        <span className="text-[11px] text-slate-400">Start</span>
-                                        <input
-                                          type="date"
-                                          required={isRepeatEnabled}
-                                          value={repeatStartDate}
-                                          onChange={(e) => setRepeatStartDate(e.target.value)}
-                                          className="w-full h-8 bg-slate-100 dark:bg-white/5 border-0 px-2 text-xs text-slate-700 dark:text-slate-300 rounded-[6px] outline-none"
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <span className="text-[11px] text-slate-400">End</span>
-                                        <input
-                                          type="date"
-                                          required={isRepeatEnabled}
-                                          value={repeatEndDate}
-                                          onChange={(e) => setRepeatEndDate(e.target.value)}
-                                          className="w-full h-8 bg-slate-100 dark:bg-white/5 border-0 px-2 text-xs text-slate-700 dark:text-slate-300 rounded-[6px] outline-none"
-                                        />
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                <div />
-                              )}
-
-                              {/* Allocated Hours */}
-                              {!isClient && (
-                                <div className="space-y-2">
-                                  <label className="text-sm font-medium">
-                                    Allocated Hours <span className="text-destructive">*</span>
-                                  </label>
-                                  <input
-                                    type="number"
-                                    step="0.1"
-                                    min="0.1"
-                                    required
-                                    value={tInput.allocatedHours}
-                                    onChange={(e) => updateTaskInput(index, "allocatedHours", e.target.value)}
-                                    placeholder="e.g. 10.5"
-                                    className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none placeholder:text-slate-400/80"
-                                  />
-                                  {isEditing && (
-                                    <>
-                                      <label className="text-sm font-medium mt-2 block">Tracked Hours</label>
-                                      <input
-                                        type="number"
-                                        step="0.1"
-                                        min="0"
-                                        value={trackedHours}
-                                        onChange={(e) => setTrackedHours(e.target.value)}
-                                        placeholder="e.g. 5.5"
-                                        className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none placeholder:text-slate-400/80"
-                                      />
-                                    </>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* Assignee */}
-                              {!isClient && (
+                              {/* Assignee (Right - opposite Due Date) */}
+                              {!isClient ? (
                                 <div className="space-y-2">
                                   <label className="text-sm font-medium">Assignee</label>
                                   <DropdownMenu
@@ -1183,10 +1093,10 @@ export default function TaskFormModal({
                                                 {u.name?.substring(0, 2).toUpperCase()}
                                               </div>
                                               <div className="flex flex-col min-w-0">
-                                                <span className="text-[13.5px] font-semibold text-slate-800 dark:text-slate-200 truncate">{u.name}</span>
-                                                <span className="text-[11px] text-slate-400 truncate">{u.email}</span>
+                                                <span className="font-semibold text-slate-900 dark:text-white truncate">{u.name}</span>
+                                                <span className="text-xs text-slate-400 truncate">{u.email}</span>
                                               </div>
-                                              {isSelected && <Check size={14} className="ml-auto text-slate-500 shrink-0" />}
+                                              {isSelected && <Check size={14} className="ml-auto text-slate-500" />}
                                             </DropdownMenuItem>
                                           );
                                         })
@@ -1194,13 +1104,101 @@ export default function TaskFormModal({
                                     </DropdownMenuContent>
                                   </DropdownMenu>
                                 </div>
+                              ) : (
+                                <div />
                               )}
 
+                              {/* Allocated Hours (Left) */}
+                              {!isClient ? (
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium">
+                                    Allocated Hours <span className="text-destructive">*</span>
+                                  </label>
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0.1"
+                                    required
+                                    value={tInput.allocatedHours}
+                                    onChange={(e) => updateTaskInput(index, "allocatedHours", e.target.value)}
+                                    placeholder="e.g. 10.5"
+                                    className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-350 rounded-[8px] outline-none placeholder:text-slate-400/80"
+                                  />
+                                </div>
+                              ) : (
+                                <div />
+                              )}
+
+                              {/* Tracked Hours (Right - opposite Allocated Hours) */}
+                              <div className="space-y-2">
+                                <label className="text-sm font-medium">Tracked Hours</label>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="0"
+                                  value={trackedHours}
+                                  onChange={(e) => setTrackedHours(e.target.value)}
+                                  placeholder="e.g. 5.5"
+                                  className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none placeholder:text-slate-400/80"
+                                />
+                              </div>
+
+                              {/* Make This Task Repeat */}
+                              {!isEditing && tasksInput.length === 1 ? (
+                                <div className="space-y-2 col-span-2">
+                                  <label className="text-sm font-medium">Make task repeat</label>
+                                  <div className="flex items-center gap-2 h-[36px]">
+                                    <input
+                                      type="checkbox"
+                                      id={`repeat-${index}`}
+                                      checked={isRepeatEnabled}
+                                      onChange={(e) => setIsRepeatEnabled(e.target.checked)}
+                                      className="h-4 w-4 rounded border-gray-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                                    />
+                                    <label htmlFor={`repeat-${index}`} className="text-[13px] text-slate-600 dark:text-slate-400 cursor-pointer">
+                                      Enable repeat
+                                    </label>
+                                  </div>
+                                  {isRepeatEnabled && (
+                                    <div className="grid grid-cols-3 gap-2 mt-1">
+                                      <div className="space-y-1">
+                                        <span className="text-[11px] text-slate-400">Frequency</span>
+                                        <select
+                                          value={repeatFrequency}
+                                          onChange={(e) => setRepeatFrequency(e.target.value as any)}
+                                          className="w-full h-8 bg-slate-100 dark:bg-white/5 border-0 px-2 text-xs text-slate-700 dark:text-slate-300 rounded-[6px] outline-none"
+                                        >
+                                          <option value="DAILY">Daily</option>
+                                          <option value="WEEKLY">Weekly</option>
+                                          <option value="MONTHLY">Monthly</option>
+                                        </select>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <span className="text-[11px] text-slate-400">Start</span>
+                                        <input
+                                          type="date"
+                                          required={isRepeatEnabled}
+                                          value={repeatStartDate}
+                                          onChange={(e) => setRepeatStartDate(e.target.value)}
+                                          className="w-full h-8 bg-slate-100 dark:bg-white/5 border-0 px-2 text-xs text-slate-700 dark:text-slate-300 rounded-[6px] outline-none"
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <span className="text-[11px] text-slate-400">End</span>
+                                        <input
+                                          type="date"
+                                          required={isRepeatEnabled}
+                                          value={repeatEndDate}
+                                          onChange={(e) => setRepeatEndDate(e.target.value)}
+                                          className="w-full h-8 bg-slate-100 dark:bg-white/5 border-0 px-2 text-xs text-slate-700 dark:text-slate-300 rounded-[6px] outline-none"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
                             </div>
                           </div>
-
-
-
 
                           {/* Description field - full width */}
                           <div className="space-y-3 mt-4">

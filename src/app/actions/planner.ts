@@ -754,7 +754,7 @@ export async function getPlannerCalendarAction(fromIso: string, toIso: string, m
       })
     ];
 
-    return { success: true, items, canReschedule: showAll ? canReschedule : false };
+    return { success: true, items, canReschedule: showAll ? canReschedule : false, userRole: role };
   } catch (error: any) {
     return { error: error.message || 'Failed to load calendar.' };
   }
