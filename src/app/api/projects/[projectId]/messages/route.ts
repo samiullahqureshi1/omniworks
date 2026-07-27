@@ -75,10 +75,10 @@ export async function POST(request: Request, context: { params: Promise<{ projec
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { projectId } = await context.params;
-    const { content, visibility, mentions = [], taskMentions = [], parentMessageId } = await request.json();
+    const { content, visibility, mentions = [], taskMentions = [], parentMessageId, fileUrl, fileName } = await request.json();
 
-    if (!content?.trim()) {
-      return NextResponse.json({ error: 'Message content is required' }, { status: 400 });
+    if (!content?.trim() && !fileUrl) {
+      return NextResponse.json({ error: 'Message content or attachment is required' }, { status: 400 });
     }
 
     // Verify access
@@ -145,7 +145,9 @@ export async function POST(request: Request, context: { params: Promise<{ projec
         organizationId: session.organizationId,
         projectId,
         senderId: session.userId,
-        content,
+        content: content?.trim() || '',
+        fileUrl: fileUrl || null,
+        fileName: fileName || null,
         visibility: msgVisibility,
         parentMessageId: parentMessageId || null,
         mentions: {

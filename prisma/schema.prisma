@@ -463,6 +463,8 @@ model ProjectMessage {
   sender   User   @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
 
   content         String
+  fileUrl         String?
+  fileName        String?
   visibility      MessageVisibility @default(PUBLIC)
   parentMessageId String?
   parentMessage   ProjectMessage?   @relation("MessageReplies", fields: [parentMessageId], references: [id], onDelete: Cascade)

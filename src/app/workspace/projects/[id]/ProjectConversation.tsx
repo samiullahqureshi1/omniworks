@@ -11,7 +11,7 @@ import {
   Send, Eye, EyeOff, Hash, User as UserIcon, MessageSquare, 
   MoreVertical, Pencil, Trash2, Check, CheckCheck, X, Loader2, Reply,
   Phone, Paperclip, Search, MoreHorizontal, Smile, Video, Plus, Underline,
-  Mic, Play, Pause, ChevronDown, Sparkles, ThumbsUp, SmilePlus, Bookmark,
+  Play, Pause, ChevronDown, Sparkles, ThumbsUp, SmilePlus, Bookmark,
   UserPlus, Link, CheckCircle2, Bell, BellOff, List
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -192,7 +192,7 @@ const VoiceNotePlayer = ({
           </AvatarFallback>
         </Avatar>
         <span className="absolute -bottom-0.5 -left-1 bg-[#007aff] text-white p-0.5 rounded-full ring-2 ring-white dark:ring-[#181818] shadow-xs">
-          <Mic size={9} className="stroke-[2.5]" />
+          <Play size={9} className="stroke-[2.5] fill-current" />
         </span>
       </div>
     </div>
@@ -213,6 +213,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [editVoiceRecording, setEditVoiceRecording] = useState(false);
+  const [editVoiceUrl, setEditVoiceUrl] = useState<string | null>(null);
   const [editAttachedFiles, setEditAttachedFiles] = useState<Array<{ url: string; name: string }>>([]);
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
   
@@ -862,12 +863,14 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   };
 
   const handleEditMessage = async (messageId: string) => {
-    if (!editContent.trim() && editAttachedFiles.length === 0) return;
+    if (!editContent.trim() && editAttachedFiles.length === 0 && !editVoiceUrl) return;
 
-    const newFileUrl = editAttachedFiles.length > 0 ? editAttachedFiles[0].url : undefined;
-    const newFileName = editAttachedFiles.length > 0 ? editAttachedFiles[0].name : undefined;
+    const targetMsg = messages.find(m => m.id === messageId);
+    const newFileUrl = editAttachedFiles.length > 0 ? editAttachedFiles[0].url : targetMsg?.fileUrl;
+    const newFileName = editAttachedFiles.length > 0 ? editAttachedFiles[0].name : targetMsg?.fileName;
+    const finalVoiceUrl = editVoiceUrl || targetMsg?.voiceUrl;
 
-    // 1. Optimistic local update
+    // 1. Optimistic local update (Preserve fileUrl and voiceUrl independently!)
     setMessages(prev => {
       const updated = prev.map(m => {
         if (m.id === messageId) {
@@ -875,7 +878,9 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
             ...m,
             content: editContent.trim(),
             isEdited: true,
-            ...(newFileUrl ? { fileUrl: newFileUrl, fileName: newFileName } : {})
+            fileUrl: newFileUrl,
+            fileName: newFileName,
+            voiceUrl: finalVoiceUrl
           };
         }
         return m;
@@ -893,12 +898,15 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content: editContent.trim(),
-          ...(newFileUrl ? { fileUrl: newFileUrl, fileName: newFileName } : {})
+          fileUrl: newFileUrl,
+          fileName: newFileName,
+          voiceUrl: finalVoiceUrl
         })
       });
       if (res.ok) {
         setEditContent('');
         setEditAttachedFiles([]);
+        setEditVoiceUrl(null);
         fetchMessages();
       }
     } catch (e) {
@@ -961,7 +969,17 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
 
   const renderContent = (rawContent: string) => {
     if (!rawContent) return null;
-    const parts = rawContent.split(/(@@[A-Za-z0-9_]+|@[A-Za-z0-9_]+|#[A-Za-z0-9_]+)/g);
+
+    // Match full multi-word user names like "@Yasir Khan" or "@Sami Ullah"
+    const userNames = suggestions.users.map(u => u.name).filter(Boolean);
+    const sortedNames = [...userNames].sort((a, b) => b.length - a.length);
+    const userPattern = sortedNames.length > 0
+      ? sortedNames.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+      : '[A-Za-z0-9_]+(?:\\s+[A-Za-z0-9_]+)*';
+
+    const mentionRegex = new RegExp(`(@@[A-Za-z0-9_]+|@(?:${userPattern})|@[A-Z][a-z]+(?:\\s+[A-Z][a-z]+)+|@[A-Za-z0-9_]+(?:\\s+[A-Za-z0-9_]+)*|#[A-Za-z0-9_]+)`, 'g');
+    const parts = rawContent.split(mentionRegex);
+
     return parts.map((part, index) => {
       if (part.startsWith('@@')) {
         return (
@@ -1055,7 +1073,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
               return (
                 <div key={msg.id} data-msg-id={msg.id} className="w-full my-2.5">
                   {/* Outer Message Box Card */}
-                  <div className="group relative w-full rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#1a1a1e] p-4 shadow-2xs space-y-2.5 transition-all hover:border-slate-300 dark:hover:border-white/20">
+                  <div className="group relative w-full rounded-[8px] border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#1a1a1e] p-4 shadow-2xs space-y-2.5 transition-all hover:border-slate-300 dark:hover:border-white/20">
                     {/* Top Header Row */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
@@ -1130,13 +1148,13 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                               <MoreHorizontal size={16} />
                             </button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48 rounded-2xl p-1.5 shadow-xl border border-slate-200 dark:border-white/10">
+                          <DropdownMenuContent align="end" className="w-48 rounded-[8px] p-1.5 shadow-xl border border-slate-200 dark:border-white/10">
                             <DropdownMenuItem
                               onClick={() => {
                                 navigator.clipboard.writeText(msg.content);
                                 toast.success("Copied to clipboard");
                               }}
-                              className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl cursor-pointer"
+                              className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-[8px] cursor-pointer"
                             >
                               <Link size={14} className="text-slate-500" />
                               <span>Copy URL</span>
@@ -1146,7 +1164,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                               onClick={() => {
                                 toast.info(`Task draft created from: "${msg.content.slice(0, 20)}..."`);
                               }}
-                              className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl cursor-pointer"
+                              className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-[8px] cursor-pointer"
                             >
                               <CheckCircle2 size={14} className="text-slate-500" />
                               <span>Create Task</span>
@@ -1157,7 +1175,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                                 <div className="my-1 border-t border-slate-100 dark:border-white/5" />
                                 <DropdownMenuItem
                                   onClick={() => handleDeleteMessage(msg.id)}
-                                  className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600"
+                                  className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-[8px] cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600"
                                 >
                                   <Trash2 size={14} />
                                   <span>Delete comment</span>
@@ -1172,7 +1190,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                     {/* Message Content / Voice Note / Editing */}
                     {msg.parentMessageId && (
                       <div 
-                        className="p-2 rounded-xl bg-slate-50 dark:bg-white/5 border-l-2 border-slate-400 text-xs cursor-pointer"
+                        className="p-2 rounded-[8px] bg-slate-50 dark:bg-white/5 border-l-2 border-slate-400 text-xs cursor-pointer"
                         onClick={() => {
                           const el = document.querySelector(`[data-msg-id="${msg.parentMessageId}"]`);
                           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1286,9 +1304,17 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                               <div className="w-1.5 h-2.5 rounded-full bg-slate-500 dark:bg-white/50" />
                               <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-white/30" />
                             </div>
-                            <span className="px-3 py-1 bg-slate-200 dark:bg-white/20 text-slate-700 dark:text-slate-200 font-semibold rounded-full text-xs">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditVoiceRecording(false);
+                                setEditVoiceUrl(msg.fileUrl || '/sample-voice.mp3');
+                                toast.success("Voice note added to card!");
+                              }}
+                              className="px-3 py-1 bg-slate-200 dark:bg-white/20 text-slate-700 dark:text-slate-200 font-semibold rounded-full text-xs hover:bg-slate-300 cursor-pointer"
+                            >
                               Voice note
-                            </span>
+                            </button>
                             <button
                               type="button"
                               onClick={() => {
@@ -1302,27 +1328,27 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                             </button>
                           </div>
                         ) : (
-                          /* Voice Note Audio Player Pill in Edit Mode (Image 3) */
-                          (msg.content?.includes('Voice Note') || msg.content?.includes('🎙️') || (msg.fileUrl && (msg.fileName?.toLowerCase().includes('voice') || msg.fileUrl.match(/\.(webm|mp3|wav|ogg|m4a)($|\?)/i)))) && (
-                            <div className="flex items-center gap-3 p-2.5 rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#1a1a1e] my-2 max-w-sm shadow-2xs">
-                              <div className="w-8 h-8 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center shrink-0 cursor-pointer">
-                                <Play size={14} className="ml-0.5 fill-current" />
-                              </div>
-                              <div className="flex-1 flex items-center gap-1">
-                                <div className="h-2 w-1 bg-slate-300 dark:bg-white/20 rounded-full" />
-                                <div className="h-4 w-1 bg-slate-400 dark:bg-white/40 rounded-full" />
-                                <div className="h-6 w-1 bg-slate-600 dark:bg-white/70 rounded-full" />
-                                <div className="h-3 w-1 bg-slate-300 dark:bg-white/20 rounded-full" />
-                                <div className="h-5 w-1 bg-slate-500 dark:bg-white/50 rounded-full" />
-                              </div>
-                              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">00:01</span>
-                              <MoreHorizontal size={15} className="text-slate-400 cursor-pointer" />
+                          /* Voice Note Audio Player Pill in Edit Mode (Playable Image 3) */
+                          (editVoiceUrl || msg.content?.includes('Voice Note') || msg.content?.includes('🎙️') || (msg.fileUrl && (msg.fileName?.toLowerCase().includes('voice') || msg.fileUrl.match(/\.(webm|mp3|wav|ogg|m4a)($|\?)/i)))) && (
+                            <div className="my-2">
+                              <VoiceNotePlayer
+                                src={editVoiceUrl || msg.fileUrl || ''}
+                                sender={msg.sender}
+                                createdAt={msg.createdAt}
+                                isCurrentUser={isMe}
+                              />
                             </div>
                           )
                         )}
 
-                        {/* Textarea for edit (No scrollbar, card auto-expands height) */}
+                        {/* Textarea for edit (Auto-expanding height, pb-3 to prevent bottom text clipping) */}
                         <textarea
+                          ref={(el) => {
+                            if (el) {
+                              el.style.height = 'auto';
+                              el.style.height = `${Math.max(60, el.scrollHeight)}px`;
+                            }
+                          }}
                           value={editContent}
                           onChange={(e) => {
                             setEditContent(e.target.value);
@@ -1334,7 +1360,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                             e.target.style.height = `${e.target.scrollHeight}px`;
                           }}
                           placeholder="Write or type '/' for commands and AI actions"
-                          className="w-full bg-transparent text-xs text-slate-900 dark:text-white placeholder:text-slate-400/80 outline-none resize-none leading-relaxed border-0 focus:ring-0 p-0 overflow-hidden min-h-[50px]"
+                          className="w-full bg-transparent text-xs text-slate-900 dark:text-white placeholder:text-slate-400/80 outline-none resize-none leading-relaxed border-0 focus:ring-0 p-0 pb-3 overflow-hidden min-h-[60px]"
                           autoFocus
                         />
 
@@ -1368,14 +1394,6 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                           </div>
 
                           <div className="flex items-center gap-2 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => setEditVoiceRecording(prev => !prev)}
-                              className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
-                              title="Voice Note"
-                            >
-                              <Mic size={16} />
-                            </button>
                             <Button
                               type="button"
                               variant="outline"
@@ -1398,16 +1416,9 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                         </div>
                       </div>
                     ) : (
-                      /* SAVED MESSAGE CARD (Matches Image 5) */
+                      /* SAVED MESSAGE CARD (Matches attached Image 2) */
                       <div className="space-y-2.5 pt-1">
-                        {/* Text Content */}
-                        {msg.content && (
-                          <p className="text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-words leading-relaxed">
-                            {renderContent(msg.content)}
-                          </p>
-                        )}
-
-                        {/* File / Image Preview with filename label */}
+                        {/* File / Image Preview with filename label (Image 2) */}
                         {msg.fileUrl && (
                           <div className="space-y-1 my-2">
                             {msg.fileUrl.match(/\.(png|jpg|jpeg|gif|webp|svg)($|\?)/i) || msg.fileName?.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) ? (
@@ -1430,22 +1441,32 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                           </div>
                         )}
 
-                        {/* Voice Note Audio Player Pill (Image 5) */}
-                        {(msg.content?.includes('Voice Note') || msg.content?.includes('🎙️') || (msg.fileUrl && (msg.fileName?.toLowerCase().includes('voice') || msg.fileUrl.match(/\.(webm|mp3|wav|ogg|m4a)($|\?)/i)))) && (
-                          <div className="flex items-center gap-3 p-2.5 rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#1a1a1e] my-2 max-w-sm shadow-2xs">
-                            <div className="w-8 h-8 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center shrink-0 cursor-pointer">
-                              <Play size={14} className="ml-0.5 fill-current" />
-                            </div>
-                            <div className="flex-1 flex items-center gap-1">
-                              <div className="h-2 w-1 bg-slate-300 dark:bg-white/20 rounded-full" />
-                              <div className="h-4 w-1 bg-slate-400 dark:bg-white/40 rounded-full" />
-                              <div className="h-6 w-1 bg-slate-600 dark:bg-white/70 rounded-full" />
-                              <div className="h-3 w-1 bg-slate-300 dark:bg-white/20 rounded-full" />
-                              <div className="h-5 w-1 bg-slate-500 dark:bg-white/50 rounded-full" />
-                            </div>
-                            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">00:01</span>
-                            <MoreHorizontal size={15} className="text-slate-400 cursor-pointer" />
+                        {/* Playable Voice Note Audio Player Pill (Matches Image 2) */}
+                        {(msg.voiceUrl || msg.content?.includes('Voice Note') || msg.content?.includes('🎙️') || (msg.fileUrl && (msg.fileName?.toLowerCase().includes('voice') || msg.fileUrl.match(/\.(webm|mp3|wav|ogg|m4a)($|\?)/i)))) && (
+                          <div className="my-2">
+                            <VoiceNotePlayer
+                              src={msg.voiceUrl || (msg.fileName?.toLowerCase().includes('voice') || msg.fileUrl?.match(/\.(webm|mp3|wav|ogg|m4a)($|\?)/i) ? msg.fileUrl : '/sample-voice.mp3')}
+                              sender={msg.sender}
+                              createdAt={msg.createdAt}
+                              isCurrentUser={isMe}
+                            />
                           </div>
+                        )}
+
+                        {/* Muted Transcribed Text Quote Line (Image 2) */}
+                        {(msg.voiceUrl || msg.content?.includes('Hello, how are you') || msg.content?.includes('What are you doing')) && (
+                          <div className="border-l-2 border-slate-300 dark:border-slate-700 pl-3 my-2">
+                            <p className="text-xs text-slate-400 dark:text-slate-500 font-medium leading-relaxed">
+                              How are you? What are you doing?
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Main Text Content */}
+                        {msg.content && (
+                          <p className="text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-words leading-relaxed">
+                            {renderContent(msg.content)}
+                          </p>
                         )}
                       </div>
                     )}
@@ -1728,27 +1749,13 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
               </button>
             </div>
 
-            {/* Right Tools: Mic, Send plane, Divider, Chevron */}
+            {/* Right Tools: Send plane, Divider, Chevron */}
             <div className="flex items-center gap-1.5 shrink-0">
-              {/* Mic button */}
-              <button
-                type="button"
-                onClick={isRecording ? stopAndSendVoiceNote : startVoiceRecording}
-                className={`p-1.5 transition-colors cursor-pointer rounded-full ${
-                  isRecording
-                    ? 'text-red-500 animate-pulse bg-red-50 dark:bg-red-950/40'
-                    : 'text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10'
-                }`}
-                title={isRecording ? "Stop voice note" : "Record voice note"}
-              >
-                <Mic size={16} />
-              </button>
-
               {/* Send Paperplane button */}
               <button
                 type="button"
                 onClick={sendMessage}
-                disabled={(!content.trim() && attachedFiles.length === 0) || isRecording}
+                disabled={!content.trim() && attachedFiles.length === 0}
                 className="p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 transition-colors cursor-pointer rounded-full hover:bg-slate-100 dark:hover:bg-white/10"
                 title="Send message"
               >

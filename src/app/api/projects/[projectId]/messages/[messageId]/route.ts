@@ -9,10 +9,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ proje
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { projectId, messageId } = await context.params;
-    const { content } = await request.json();
+    const { content, fileUrl, fileName } = await request.json();
 
-    if (!content?.trim()) {
-      return NextResponse.json({ error: 'Message content is required' }, { status: 400 });
+    if (!content?.trim() && !fileUrl) {
+      return NextResponse.json({ error: 'Message content or attachment is required' }, { status: 400 });
     }
 
     const message = await prisma.projectMessage.findUnique({
@@ -30,7 +30,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ proje
     const updatedMessage = await prisma.projectMessage.update({
       where: { id: messageId },
       data: { 
-        content, 
+        content: content?.trim() || message.content, 
+        ...(fileUrl !== undefined ? { fileUrl, fileName: fileName || null } : {}),
         isEdited: true 
       },
       include: {
