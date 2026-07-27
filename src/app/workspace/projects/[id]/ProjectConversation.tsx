@@ -15,6 +15,7 @@ import {
   UserPlus, Link, CheckCircle2, Bell, BellOff, List
 } from 'lucide-react';
 import { toast } from 'sonner';
+import TaskFormModal from '@/app/workspace/tasks/TaskFormModal';
 
 interface ProjectConversationProps {
   projectId: string;
@@ -216,6 +217,30 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   const [editVoiceUrl, setEditVoiceUrl] = useState<string | null>(null);
   const [editAttachedFiles, setEditAttachedFiles] = useState<Array<{ url: string; name: string }>>([]);
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
+  
+  // Task Creation Modal state from chat message
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [taskModalInitialConfig, setTaskModalInitialConfig] = useState<any>(null);
+
+  const handleOpenCreateTaskFromMessage = (msg: any) => {
+    let initialDesc = msg.content || '';
+    if (msg.fileUrl) {
+      if (msg.fileUrl.match(/\.(png|jpg|jpeg|gif|webp|svg)($|\?)/i) || msg.fileName?.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i)) {
+        initialDesc += `\n\n<p><img src="${msg.fileUrl}" alt="${msg.fileName || 'Attached image'}" class="max-h-64 rounded-xl border" /></p>`;
+      } else {
+        initialDesc += `\n\n<p><strong>Attached File:</strong> <a href="${msg.fileUrl}" target="_blank" rel="noopener noreferrer">${msg.fileName || 'Attached File'}</a></p>`;
+      }
+    }
+
+    setTaskModalInitialConfig({
+      projectId: projectId,
+      title: msg.content ? (msg.content.length > 50 ? msg.content.slice(0, 50) + '...' : msg.content) : (msg.fileName ? `Task from ${msg.fileName}` : 'New Task from Chat'),
+      description: initialDesc,
+      statusId: '',
+      priority: 'MEDIUM',
+    });
+    setIsTaskModalOpen(true);
+  };
   
   // File attachments & Lightbox state
   const [uploading, setUploading] = useState(false);
@@ -970,14 +995,20 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   const renderContent = (rawContent: string) => {
     if (!rawContent) return null;
 
-    // Match full multi-word user names like "@Yasir Khan" or "@Sami Ullah"
+    // Match full multi-word user names and task titles
     const userNames = suggestions.users.map(u => u.name).filter(Boolean);
     const sortedNames = [...userNames].sort((a, b) => b.length - a.length);
     const userPattern = sortedNames.length > 0
       ? sortedNames.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
       : '[A-Za-z0-9_]+(?:\\s+[A-Za-z0-9_]+)*';
 
-    const mentionRegex = new RegExp(`(@@[A-Za-z0-9_]+|@(?:${userPattern})|@[A-Z][a-z]+(?:\\s+[A-Z][a-z]+)+|@[A-Za-z0-9_]+(?:\\s+[A-Za-z0-9_]+)*|#[A-Za-z0-9_]+)`, 'g');
+    const taskTitles = suggestions.tasks.map(t => t.title).filter(Boolean);
+    const sortedTasks = [...taskTitles].sort((a, b) => b.length - a.length);
+    const taskPattern = sortedTasks.length > 0
+      ? sortedTasks.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+      : '[A-Za-z0-9_]+(?:\\s+[A-Za-z0-9_]+)*';
+
+    const mentionRegex = new RegExp(`(@@[A-Za-z0-9_]+|@(?:${userPattern})|@[A-Z][a-z]+(?:\\s+[A-Z][a-z]+)+|@[A-Za-z0-9_]+(?:\\s+[A-Za-z0-9_]+)*|#(?:${taskPattern})|#[A-Z][a-zA-Z0-9_-]+(?:\\s+[a-zA-Z0-9_-]+)+|#[A-Za-z0-9_]+(?:\\s+[A-Za-z0-9_]+)*)`, 'g');
     const parts = rawContent.split(mentionRegex);
 
     return parts.map((part, index) => {
@@ -1161,9 +1192,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                             </DropdownMenuItem>
 
                             <DropdownMenuItem
-                              onClick={() => {
-                                toast.info(`Task draft created from: "${msg.content.slice(0, 20)}..."`);
-                              }}
+                              onClick={() => handleOpenCreateTaskFromMessage(msg)}
                               className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-[8px] cursor-pointer"
                             >
                               <CheckCircle2 size={14} className="text-slate-500" />
@@ -1800,6 +1829,24 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
             />
           </div>
         </div>
+      )}
+
+      {/* Task Creation Modal triggered from Chat message */}
+      {isTaskModalOpen && (
+        <TaskFormModal
+          isOpen={isTaskModalOpen}
+          onOpenChange={setIsTaskModalOpen}
+          projects={[{ id: projectId, name: projectName, title: projectName }]}
+          taskStatuses={[]}
+          users={suggestions.users || []}
+          currentUser={currentUser}
+          onSuccess={() => {
+            setIsTaskModalOpen(false);
+            fetchMessages();
+            toast.success("Task created from message!");
+          }}
+          initialTemplateConfig={taskModalInitialConfig}
+        />
       )}
     </div>
   );
