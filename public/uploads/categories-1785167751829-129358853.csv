@@ -1,0 +1,33 @@
+CatNo,Title,Level,parentCatNo
+cat_1,Activewear,1,
+cat_2,Men's Clothing,2,cat_1
+cat_3,T-Shirts,3,cat_2
+cat_4,Tanks & Singlets,3,cat_2
+cat_5,Long Sleeve Tops,3,cat_2
+cat_6,Polos,3,cat_2
+cat_7,Shorts,3,cat_2
+cat_8,Joggers,3,cat_2
+cat_9,Track Pants,3,cat_2
+cat_10,Hoodies,3,cat_2
+cat_11,Sweatshirts,3,cat_2
+cat_12,Jackets,3,cat_2
+cat_13,Compression Tops,3,cat_2
+cat_14,Compression Bottoms,3,cat_2
+cat_15,Base Layers,3,cat_2
+cat_16,Women's Clothing,2,cat_1
+cat_17,Sports Bras,3,cat_16
+cat_18,T-Shirts (Women),3,cat_16
+cat_19,Tanks & Singlets (Women),3,cat_16
+cat_20,Long Sleeve Tops (Women),3,cat_16
+cat_21,Shorts (Women),3,cat_16
+cat_22,Leggings,3,cat_16
+cat_23,Tights,3,cat_16
+cat_24,Joggers (Women),3,cat_16
+cat_25,Hoodies (Women),3,cat_16
+cat_26,Jackets (Women),3,cat_16
+cat_27,Compression Tops (Women),3,cat_16
+cat_28,Compression Bottoms (Women),3,cat_16
+cat_29,Unisex Clothing,2,cat_1
+cat_30,Socks,3,cat_29
+cat_31,Underwear,3,cat_29
+cat_32,Base Layers (Unisex),3,cat_29

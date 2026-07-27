@@ -964,18 +964,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
         </div>
 
         <div className="flex items-center gap-1 text-slate-400">
-          <button type="button" className="p-2 hover:text-slate-700 dark:hover:text-white rounded-lg transition-colors" title="Call">
-            <Phone size={17} />
-          </button>
-          <button type="button" className="p-2 hover:text-slate-700 dark:hover:text-white rounded-lg transition-colors" title="Attachments">
-            <Paperclip size={17} />
-          </button>
-          <button type="button" className="p-2 hover:text-slate-700 dark:hover:text-white rounded-lg transition-colors" title="Search chat">
-            <Search size={17} />
-          </button>
-          <button type="button" className="p-2 hover:text-slate-700 dark:hover:text-white rounded-lg transition-colors" title="More options">
-            <MoreHorizontal size={17} />
-          </button>
+          
         </div>
       </div>
 

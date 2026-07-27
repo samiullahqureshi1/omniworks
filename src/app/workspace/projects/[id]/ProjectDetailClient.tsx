@@ -10,7 +10,7 @@ import {
   ArrowLeft, Calendar, Clock, MoreHorizontal, Settings, 
   LayoutDashboard, CheckSquare, Users, Timer, Activity,
   Briefcase, MessageSquare, GripVertical, Plus, ShieldAlert,
-  Search, Check, X, Hash, Trash2, Repeat, ChevronDown, Award, UserCheck, CalendarDays, Globe, Mail, Phone, Type,
+  Search, Check, X, Hash, Trash2, Repeat, ChevronDown, ChevronUp, Award, UserCheck, CalendarDays, Globe, Mail, Phone, Type,
   FolderKanban, Star, PhoneCall, Sparkles, Zap, Brain, UserPlus, Target, Edit2, Eye, EyeOff, TrendingUp, Flag
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -101,6 +101,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
   
   // Project Edit
   const [isEditProjectOpen, setIsEditProjectOpen] = useState(false);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [editIsOngoing, setEditIsOngoing] = useState(project.isOngoing);
   const [editDescription, setEditDescription] = useState(project.description || '');
   const [editCustomFields, setEditCustomFields] = useState<
@@ -648,10 +649,11 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
 
       {/* Main Body Content */}
       <div className="flex-1 w-full overflow-hidden flex">
-        {activeTab === 'overview' ? (
-          <div className="flex w-full h-full overflow-hidden">
-            {/* Left Column: Project Details Panel */}
-            <div className="w-full lg:w-[480px] xl:w-[520px] shrink-0 border-r border-slate-200 dark:border-slate-800 p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6 bg-white dark:bg-[#151518]">
+        {/* Left Panel: Active Tab Content (Overview, Tasks Table, Milestones) */}
+        <div className="flex-1 h-full min-w-0 overflow-y-auto custom-scrollbar bg-white dark:bg-[#151518]">
+          {activeTab === 'overview' ? (
+            /* OVERVIEW TAB */
+            <div className="p-6 flex flex-col gap-6">
               {/* Back to Projects */}
               <Link
                 href="/workspace/projects"
@@ -683,17 +685,10 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                     {project.priority}
                   </Badge>
                 </div>
-
-                {/* Description Card */}
-                {project.description && (
-                  <div className="mt-3 p-4 rounded-2xl bg-red-600 dark:bg-red-700 text-white font-medium text-xs leading-relaxed shadow-sm">
-                    <div dangerouslySetInnerHTML={{ __html: project.description }} />
-                  </div>
-                )}
               </div>
 
               {/* Details Section */}
-              <div className="space-y-3">
+              <div className="space-y-3 mt-4">
                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
                   <Briefcase size={14} className="text-indigo-500" />
                   <span>Details</span>
@@ -807,10 +802,41 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                 </div>
               </div>
 
+              {/* Description Card (Rendered below Details and Progress) */}
+              {project.description && (
+                <div className="mt-4 p-4 rounded-2xl bg-slate-50 dark:bg-white/[0.03] border border-slate-100 dark:border-white/5 space-y-2">
+                  <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    Description
+                  </h4>
+                  <div className="relative">
+                    <div
+                      className={`text-sm text-slate-800 dark:text-slate-200 leading-relaxed prose prose-sm max-w-none dark:prose-invert [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_p]:my-2 transition-all duration-300 ${
+                        !isDescriptionExpanded ? 'max-h-[180px] overflow-hidden' : ''
+                      }`}
+                      dangerouslySetInnerHTML={{ __html: project.description }}
+                    />
+                    {!isDescriptionExpanded && (
+                      <div className="absolute bottom-0 left-0 right-0 h-14 bg-gradient-to-t from-slate-50 dark:from-[#151518] to-transparent pointer-events-none" />
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsDescriptionExpanded(prev => !prev)}
+                    className="text-xs font-bold text-slate-900 dark:text-white hover:underline flex items-center gap-1 mt-2 cursor-pointer"
+                  >
+                    {isDescriptionExpanded ? (
+                      <>Show Less <ChevronUp size={14} /></>
+                    ) : (
+                      <>View More <ChevronDown size={14} /></>
+                    )}
+                  </button>
+                </div>
+              )}
+
               {/* Edit Project Dialog */}
               <Dialog open={isEditProjectOpen} onOpenChange={setIsEditProjectOpen}>
                 <DialogContent className="sm:max-w-[700px] h-[90vh] p-0 flex flex-col overflow-hidden">
-                  <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shrink-0 shadow-sm">
+                  <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shadow-sm">
                     <DialogTitle>Edit Project</DialogTitle>
                   </DialogHeader>
                   <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
@@ -835,29 +861,109 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                 </DialogContent>
               </Dialog>
             </div>
+          ) : activeTab === 'tasks' ? (
+            /* ======= TASKS TAB - TABLE VIEW ======= */
+            <div className="p-6 space-y-4">
+              {/* Header Bar */}
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <CheckSquare size={20} className="text-slate-700 dark:text-slate-300" />
+                    Tasks ({project.tasks?.length || 0})
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    View and manage tasks for this project.
+                  </p>
+                </div>
+                {canManageTasks && (
+                  <Button
+                    onClick={() => setIsNewTaskModalOpen(true)}
+                    className="flex items-center gap-2 rounded-[8px] bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800"
+                  >
+                    <Plus size={16} /> Create New Task
+                  </Button>
+                )}
+              </div>
 
-            {/* Right Column: Integrated Project Conversation */}
-            <div className="flex-1 h-full min-w-0 bg-[#fafbfc] dark:bg-[#0f0f11]">
-              <ProjectConversation
-                ref={conversationRef}
-                projectId={project.id}
-                currentUser={currentUser}
-                organizationId={project.organizationId}
-                isClient={isClient}
-              />
-            </div>
-          </div>
-        ) : activeTab === 'tasks' ? (
-          /* TASKS TAB CONTENT */
-          <div className="flex-1 overflow-y-auto p-6 w-full custom-scrollbar space-y-6">
-            {canManageTasks && (
-              <div className="flex justify-end mb-4">
-                <Dialog open={isNewTaskModalOpen} onOpenChange={setIsNewTaskModalOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="shadow-sm bg-primary text-primary-foreground hover:bg-primary/90">
-                      <Plus className="mr-2 h-4 w-4" /> Create New Task
-                    </Button>
-                  </DialogTrigger>
+              {/* Tasks Table */}
+              <div className="border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden bg-white dark:bg-[#151518]">
+                <Table>
+                  <TableHeader className="bg-slate-50/80 dark:bg-white/[0.03]">
+                    <TableRow className="border-b border-slate-200 dark:border-white/10">
+                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Task Title</TableHead>
+                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Status</TableHead>
+                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Priority</TableHead>
+                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Milestone</TableHead>
+                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Assignees</TableHead>
+                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider text-right">Allocated</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(!project.tasks || project.tasks.length === 0) ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-12 text-xs text-slate-400">
+                          No tasks found for this project.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      project.tasks.map((t: any) => (
+                        <TableRow key={t.id} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] border-b border-slate-100 dark:border-white/5 transition-colors">
+                          <TableCell className="font-medium text-xs text-slate-900 dark:text-white">
+                            <div>
+                              <span className="font-bold text-slate-900 dark:text-slate-100">{t.title}</span>
+                              {t.description && (
+                                <p className="text-[11px] text-slate-400 line-clamp-1 font-normal mt-0.5">{t.description}</p>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <select
+                              value={t.statusId || taskStatuses[0]?.id || ''}
+                              onChange={(e) => handleTaskStatusChange(t.id, e.target.value)}
+                              disabled={!canManageTasks || isPending}
+                              className="text-[11px] font-bold bg-slate-100 dark:bg-white/10 border-0 rounded-[6px] px-2 py-1 cursor-pointer outline-none text-slate-700 dark:text-slate-300"
+                            >
+                              {taskStatuses.map((s: any) => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                              ))}
+                            </select>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={`text-[10px] font-bold px-2 py-0.5 rounded-[6px] border ${getPriorityColor(t.priority)}`}>
+                              {t.priority}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {t.milestone ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 text-[10px] font-semibold border border-slate-200/60 dark:border-white/10">
+                                <Target size={10} />
+                                {t.milestone.title}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 italic">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex -space-x-1.5 items-center">
+                              {t.assignees?.map((a: any) => (
+                                <Avatar key={a.user.id} title={a.user.name} className="h-6 w-6 border-2 border-background">
+                                  <AvatarFallback className="text-[9px] bg-slate-500 text-white font-bold">{a.user.name.substring(0,2).toUpperCase()}</AvatarFallback>
+                                </Avatar>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            {t.allocatedHours ? `${t.allocatedHours}h` : '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Create Task Modal */}
+              <Dialog open={isNewTaskModalOpen} onOpenChange={setIsNewTaskModalOpen}>
                 <DialogContent className="sm:max-w-[500px]">
                   <DialogHeader>
                     <DialogTitle>Create New Task</DialogTitle>
@@ -952,93 +1058,11 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                 </DialogContent>
               </Dialog>
             </div>
-          )}
-
-          {/* Simple Kanban Board Layout */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {taskStatuses.map((status, index) => {
-              const statusTasks = project.tasks.filter((t: any) => {
-                if (t.statusId === status.id) return true;
-                // If a task lacks a status, map it to the very first column by default
-                if (!t.statusId && index === 0) return true;
-                return false;
-              });
-
-              return (
-                <div key={status.id} className="flex flex-col bg-\[#fbfaf7\] dark:bg-slate-900/50 rounded-xl p-3 border shadow-sm">
-                  <div className="flex items-center justify-between mb-3 px-1">
-                    <h3 className="font-semibold text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full" style={{ backgroundColor: status.color || '#cccccc' }}></div>
-                      {status.name}
-                    </h3>
-                    <Badge variant="secondary">{statusTasks.length}</Badge>
-                  </div>
-                  
-                  <div className="flex-1 flex flex-col gap-3">
-                    {statusTasks.length === 0 ? (
-                      <div className="h-24 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-lg flex items-center justify-center text-xs text-muted-foreground">
-                        No tasks
-                      </div>
-                    ) : (
-                      statusTasks.map((t: any) => (
-                        <div key={t.id} className="bg-background border rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow group">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-start gap-2">
-                              <GripVertical className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 cursor-grab shrink-0 mt-0.5" />
-                              <div>
-                                <p className="text-sm font-medium leading-snug">{t.title}</p>
-                                {t.description && <p className="text-[10px] text-muted-foreground line-clamp-2 mt-1">{t.description}</p>}
-                                {t.allocatedHours && <p className="text-[10px] text-primary/80 font-medium mt-1">{t.allocatedHours} hrs allocated</p>}
-                                {t.milestone && (
-                                  <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-200 text-[9px] font-semibold border border-slate-200 dark:border-white/10">
-                                    <Target size={9} />
-                                    {t.milestone.title}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <Badge variant="outline" className={`text-[8px] px-1 py-0 h-4 border leading-none shrink-0 ${
-                              t.priority === 'CRITICAL' ? 'bg-red-50 text-red-700 border-red-200' : 
-                              t.priority === 'HIGH' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                              t.priority === 'MEDIUM' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                              'bg-[#fbfaf7] text-slate-600 border-slate-200'
-                            }`}>{t.priority}</Badge>
-                          </div>
-                          
-                          <div className="flex items-center justify-between mt-3 pl-6">
-                            <select 
-                              value={t.statusId || taskStatuses[0]?.id || ''}
-                              onChange={(e) => handleTaskStatusChange(t.id, e.target.value)}
-                              disabled={!canManageTasks || isPending}
-                              className="text-[10px] font-medium bg-muted/50 border-0 rounded px-1.5 py-0.5"
-                            >
-                              {taskStatuses.map((s: any) => (
-                                <option key={s.id} value={s.id}>{s.name}</option>
-                              ))}
-                            </select>
-
-                            <div className="flex -space-x-1.5">
-                              {t.assignees?.map((a: any) => (
-                                <Avatar key={a.user.id} title={a.user.name} className="h-5 w-5 border-2 border-background">
-                                  <AvatarFallback className="text-[8px] bg-primary/20 text-primary font-bold">{a.user.name.substring(0,2)}</AvatarFallback>
-                                </Avatar>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : activeTab === 'milestones' ? (
-        /* ======= MILESTONES TAB ======= */
-        <div className="flex-1 overflow-y-auto p-6 w-full custom-scrollbar">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          ) : activeTab === 'milestones' ? (
+            /* ======= MILESTONES TAB ======= */
+            <div className="p-6 space-y-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
                 <Target size={20} className="text-slate-700 dark:text-slate-300" />
@@ -1336,10 +1360,20 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
             </DialogContent>
           </Dialog>
         </div>
-      ) : (
-        /* ======= FALLBACK (empty) ======= */
-        <div />
-      )}
+      ) : null}
+    </div>
+
+        {/* Right Panel: Integrated Project Conversation (Always present in ALL tabs) */}
+        <div className="w-[360px] lg:w-[400px] xl:w-[440px] h-full shrink-0 border-l border-slate-200 dark:border-slate-800 bg-[#fafbfc] dark:bg-[#0f0f11]">
+          <ProjectConversation
+            ref={conversationRef}
+            projectId={project.id}
+            currentUser={currentUser}
+            organizationId={project.organizationId}
+            isClient={isClient}
+          />
+        </div>
+      </div>
 
       {/* Assignee Selection Modal */}
       <Dialog open={isAssigneeModalOpen} onOpenChange={setIsAssigneeModalOpen}>
@@ -1516,7 +1550,6 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
           </form>
         </DialogContent>
       </Dialog>
-    </div>
     </div>
   );
 }
