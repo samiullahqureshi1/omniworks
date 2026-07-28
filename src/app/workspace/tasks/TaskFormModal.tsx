@@ -1196,7 +1196,7 @@ export default function TaskFormModal({
                               <div className="space-y-2 col-span-2 sm:col-span-1">
                                 <div className="flex items-center justify-between">
                                   <label className="text-sm font-medium">Milestone</label>
-                                  {(isOwner || isPM) && projectId && (
+                                  {/* {(isOwner || isPM) && projectId && (
                                     <button
                                       type="button"
                                       onClick={() => setIsQuickMilestoneOpen(true)}
@@ -1204,7 +1204,7 @@ export default function TaskFormModal({
                                     >
                                       <Plus size={12} /> Create Milestone
                                     </button>
-                                  )}
+                                  )} */}
                                 </div>
                                 <select
                                   value={tInput.milestoneId || ""}
