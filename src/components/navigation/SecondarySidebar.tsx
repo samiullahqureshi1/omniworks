@@ -195,7 +195,7 @@ export function SecondarySidebar({
                       <button
                         key={item.name}
                         onClick={() => handleItemClick(item)}
-                        className="group w-full flex items-center px-2.5 py-2 hover:bg-slate-200/60 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg transition-all text-left outline-none border border-transparent"
+                        className="group w-full flex items-center px-2.5 py-2 hover:bg-slate-200/60 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-[8px] transition-all text-left outline-none border border-transparent"
                       >
                         {content}
                       </button>
@@ -208,7 +208,7 @@ export function SecondarySidebar({
                       href={item.href || '#'}
                       prefetch={true}
                       onClick={() => handleItemClick(item)}
-                      className={`group flex items-center px-2.5 py-2 rounded-lg transition-all border ${
+                      className={`group flex items-center px-2.5 py-2 rounded-[8px] transition-all border ${
                         isActive 
                           ? 'bg-slate-200/70 dark:bg-white/10 text-slate-900 dark:text-white border-slate-300/50 dark:border-white/10 font-bold shadow-sm' 
                           : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white border-transparent'
@@ -237,7 +237,7 @@ export function SecondarySidebar({
                 {pinnedTemplates.map((template) => (
                   <div
                     key={template.id}
-                    className="group relative w-full flex items-center rounded-lg transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
+                    className="group relative w-full flex items-center rounded-[8px] transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
                   >
                     <button
                       onClick={() => {
@@ -301,7 +301,7 @@ export function SecondarySidebar({
                 {pinnedTasks.map((task) => (
                   <div
                     key={task.id}
-                    className="group relative w-full flex items-center rounded-lg transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
+                    className="group relative w-full flex items-center rounded-[8px] transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
                   >
                     <Link
                       href={`/workspace/tasks?taskId=${task.id}`}
