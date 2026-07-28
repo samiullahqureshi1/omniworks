@@ -71,6 +71,10 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
     User,
     Box,
     Folder,
+    Maximize2,
+    ChevronUp,
+    Edit3,
+    Link as LinkIcon,
   } from "lucide-react";
   import {
     Table,
@@ -1012,6 +1016,31 @@ const [isPMOpen, setIsPMOpen] = useState(false);
     const [submitMode, setSubmitMode] = useState<"STANDARD" | "OPEN_NEW" | "DUPLICATE">("STANDARD");
     const formRef = React.useRef<HTMLFormElement>(null);
     const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+    const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+    const DESCRIPTION_COLLAPSE_HEIGHT = 80; // px
+
+    // Checklist state
+    type ChecklistItem = { id: string; text: string; checked: boolean };
+    type Checklist = { id: string; title: string; items: ChecklistItem[] };
+    const [checklists, setChecklists] = useState<Checklist[]>([]);
+    const [checklistsOpen, setChecklistsOpen] = useState(true);
+    const addChecklist = () => {
+      setChecklists(prev => [...prev, { id: 'cl_' + Date.now(), title: 'Checklist', items: [] }]);
+      setChecklistsOpen(true);
+    };
+    const addChecklistItem = (clId: string) => {
+      setChecklists(prev => prev.map(cl => cl.id === clId ? { ...cl, items: [...cl.items, { id: 'item_' + Date.now() + Math.random(), text: '', checked: false }] } : cl));
+    };
+    const updateChecklistItem = (clId: string, itemId: string, patch: Partial<ChecklistItem>) => {
+      setChecklists(prev => prev.map(cl => cl.id === clId ? { ...cl, items: cl.items.map(it => it.id === itemId ? { ...it, ...patch } : it) } : cl));
+    };
+    const deleteChecklistItem = (clId: string, itemId: string) => {
+      setChecklists(prev => prev.map(cl => cl.id === clId ? { ...cl, items: cl.items.filter(it => it.id !== itemId) } : cl));
+    };
+    const deleteChecklist = (clId: string) => {
+      setChecklists(prev => prev.filter(cl => cl.id !== clId));
+    };
+    const openItemCount = checklists.reduce((acc, cl) => acc + cl.items.filter(it => !it.checked).length, 0);
 
     // Template Management States
     const [isTemplateSelectOpen, setIsTemplateSelectOpen] = useState(false);
@@ -3819,19 +3848,231 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                 <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Description</h3>
                 <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Add context, type “/” for blocks, or “@” to mention a teammate.</p>
               </div>
-              <ProjectDescriptionEditor
-                content={description}
-                onChange={setDescription}
-                placeholder="Add description, or write with AI"
-                people={members}
-                plain
-              />
+              <div
+                className="relative overflow-hidden transition-all duration-300"
+                style={descriptionExpanded ? {} : { maxHeight: `${DESCRIPTION_COLLAPSE_HEIGHT}px` }}
+              >
+                <ProjectDescriptionEditor
+                  content={description}
+                  onChange={setDescription}
+                  placeholder="Add description, or write with AI"
+                  people={members}
+                  plain
+                />
+                {!descriptionExpanded && (
+                  <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white dark:from-[#0f0f11] to-transparent pointer-events-none" />
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setDescriptionExpanded(v => !v)}
+                className="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors flex items-center gap-1"
+              >
+                {descriptionExpanded ? (
+                  <><ChevronUp size={13} /> Hide</>
+                ) : (
+                  <><ChevronDown size={13} /> View more</>
+                )}
+              </button>
             </div>
 
+            {/* Checklist Section */}
+            <div className="space-y-2 pt-4 border-t border-slate-100 dark:border-white/5">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setChecklistsOpen(v => !v)}
+                  className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                >
+                  {checklistsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  Checklists
+                  {openItemCount > 0 && (
+                    <span className="text-xs font-normal text-slate-400 flex items-center gap-1">
+                      {openItemCount} open
+                      <span className="inline-block w-12 h-1 rounded-full bg-slate-200 dark:bg-white/10 ml-1">
+                        <span
+                          className="block h-1 rounded-full bg-blue-500"
+                          style={{ width: `${Math.max(4, 100 - (openItemCount / Math.max(1, checklists.reduce((a, c) => a + c.items.length, 0))) * 100)}%` }}
+                        />
+                      </span>
+                    </span>
+                  )}
+                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    title="Expand"
+                    className="p-1 rounded hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                  >
+                    <Maximize2 size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={addChecklist}
+                    title="Add checklist"
+                    className="p-1 rounded hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                  >
+                    <Plus size={15} />
+                  </button>
+                </div>
+              </div>
 
+              {checklistsOpen && (
+                <div className="space-y-3">
+                  {checklists.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={addChecklist}
+                      className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors py-1"
+                    >
+                      <CheckSquare size={14} />
+                      Create checklist
+                    </button>
+                  ) : (
+                    checklists.map(cl => (
+                      <div key={cl.id} className="border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden bg-white dark:bg-white/[0.02]">
+                        {/* Checklist Title Row */}
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-white/5">
+                          <input
+                            type="text"
+                            value={cl.title}
+                            onChange={e => setChecklists(prev => prev.map(c => c.id === cl.id ? { ...c, title: e.target.value } : c))}
+                            className="text-sm font-semibold text-slate-900 dark:text-white bg-transparent outline-none border-0 w-full"
+                          />
+                          {/* Checklist header ... menu */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                className="shrink-0 ml-2 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors border border-slate-200 dark:border-white/10"
+                                title="More options"
+                              >
+                                <MoreHorizontal size={14} />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-44 rounded-xl shadow-lg border border-slate-100 dark:border-white/10 bg-white dark:bg-[#1c1c1c] p-1 z-[9999]"
+                            >
+                              <DropdownMenuItem
+                                onClick={() => addChecklistItem(cl.id)}
+                                className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium cursor-pointer rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5"
+                              >
+                                <Plus size={13} className="text-slate-400" /> Add Item
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  const input = document.querySelector(`[data-cl-title="${cl.id}"]`) as HTMLInputElement;
+                                  input?.focus();
+                                  input?.select();
+                                }}
+                                className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium cursor-pointer rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5"
+                              >
+                                <Edit3 size={13} className="text-slate-400" /> Rename
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium cursor-pointer rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5"
+                              >
+                                <UserPlus size={13} className="text-slate-400" /> Assign to
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => deleteChecklist(cl.id)}
+                                className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium cursor-pointer rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 focus:text-red-500"
+                              >
+                                <Trash2 size={13} /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
 
+                        {/* Items */}
+                        <div className="divide-y divide-slate-100 dark:divide-white/5">
+                          {cl.items.map(item => (
+                            <div key={item.id} className="flex items-center gap-3 px-4 py-2.5 group/item hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                              <button
+                                type="button"
+                                onClick={() => updateChecklistItem(cl.id, item.id, { checked: !item.checked })}
+                                className="shrink-0 w-[18px] h-[18px] rounded-full border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center transition-colors hover:border-blue-400"
+                                style={item.checked ? { backgroundColor: '#3b82f6', borderColor: '#3b82f6' } : {}}
+                              >
+                                {item.checked && <Check size={10} className="text-white" />}
+                              </button>
+                              <input
+                                type="text"
+                                value={item.text}
+                                onChange={e => updateChecklistItem(cl.id, item.id, { text: e.target.value })}
+                                placeholder="Item"
+                                className={`flex-1 bg-transparent outline-none border-0 text-[13px] font-medium placeholder:text-slate-400 ${
+                                  item.checked ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-300'
+                                }`}
+                              />
+                              {/* Hover: ... dropdown with Delete */}
+                              <div className="hidden group-hover/item:flex items-center gap-1 shrink-0">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className="p-1 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-600 transition-colors"
+                                      title="More"
+                                    >
+                                      <MoreHorizontal size={13} />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent
+                                    align="end"
+                                    className="w-36 rounded-xl shadow-lg border border-slate-100 dark:border-white/10 bg-white dark:bg-[#1c1c1c] p-1 z-[9999]"
+                                  >
+                                    <DropdownMenuItem
+                                      onClick={() => deleteChecklistItem(cl.id, item.id)}
+                                      className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium cursor-pointer rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 focus:text-red-500"
+                                    >
+                                      <Trash2 size={13} /> Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                              <button
+                                type="button"
+                                title="Assign"
+                                className="shrink-0 text-slate-300 hover:text-slate-500 dark:hover:text-slate-300 transition-colors"
+                              >
+                                <UserPlus size={14} />
+                              </button>
+                            </div>
+                          ))}
 
+                          {/* Add Item row */}
+                          <div className="flex items-center justify-between px-4 py-2.5">
+                            <button
+                              type="button"
+                              onClick={() => addChecklistItem(cl.id)}
+                              className="flex items-center gap-2 text-[13px] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                            >
+                              <Plus size={13} /> Add item
+                            </button>
+                            <button type="button" title="Assign" className="text-slate-300 hover:text-slate-500 transition-colors">
+                              <UserPlus size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
 
+                  {/* Add Checklist link */}
+                  {checklists.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={addChecklist}
+                      className="flex items-center gap-1.5 text-[13px] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors pt-1"
+                    >
+                      <Plus size={13} /> Add checklist
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
 
               {/* Custom Fields */}
               <div className="space-y-3 pt-2">

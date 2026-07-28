@@ -1240,33 +1240,69 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
 
           {/* Create Milestone Dialog */}
           <Dialog open={isCreateMilestoneOpen} onOpenChange={setIsCreateMilestoneOpen}>
-            <DialogContent className="sm:max-w-[520px] p-0 overflow-hidden flex flex-col">
-              <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shadow-sm">
-                <DialogTitle className="flex items-center gap-2"><Target size={18} className="text-slate-700 dark:text-slate-300" />New Milestone</DialogTitle>
-              </DialogHeader>
+            <DialogContent className="w-[calc(100%-2rem)] max-w-md p-0 gap-0 flex flex-col rounded-[8px] sm:rounded-[8px] overflow-hidden border-slate-200 dark:border-white/10 bg-white dark:bg-[#1f1f1f] shadow-[0_24px_70px_rgba(0,0,0,0.28)] [&>button]:right-5 [&>button]:top-5 [&>button]:text-slate-400 [&>button]:opacity-100 [&>button_svg]:size-5">
+              {/* Header */}
+              <div className="px-6 py-[18px] border-b border-slate-200/80 dark:border-white/10">
+                <DialogTitle className="pr-10 text-[17px] font-bold text-slate-900 dark:text-white leading-tight tracking-[-0.01em] flex items-center gap-2">
+                  <Target size={16} className="text-slate-500 dark:text-slate-400" /> New Milestone
+                </DialogTitle>
+                <DialogDescription className="text-[12.5px] leading-5 text-slate-500 dark:text-slate-400 mt-1">
+                  Define a key milestone for this project.
+                </DialogDescription>
+              </div>
+
               <form onSubmit={handleCreateMilestone} className="overflow-y-auto custom-scrollbar">
                 <div className="px-6 py-5 space-y-4">
+                  {/* Title */}
                   <div className="space-y-1.5">
-                    <label className="text-sm font-semibold">Title <span className="text-red-500">*</span></label>
-                    <Input placeholder="e.g. Design Phase Complete" value={mTitle} onChange={e => setMTitle(e.target.value)} required className="rounded-xl" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-semibold">Description</label>
-                    <textarea
-                      placeholder="Describe what this milestone represents..."
-                      className="flex min-h-[80px] w-full rounded-xl border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={mDescription}
-                      onChange={e => setMDescription(e.target.value)}
+                    <label className="block text-[13px] leading-4 font-bold text-slate-600 dark:text-slate-300">
+                      Title <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      placeholder="e.g. Design Phase Complete"
+                      value={mTitle}
+                      onChange={e => setMTitle(e.target.value)}
+                      required
+                      className="h-[42px] rounded-[8px] border-slate-200 px-4 text-[15px] text-slate-900 placeholder:text-slate-400 focus-visible:border-slate-700 focus-visible:ring-1 focus-visible:ring-slate-700 dark:border-white/10 dark:bg-transparent dark:text-white"
                     />
                   </div>
+
+                  {/* Description */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[13px] leading-4 font-bold text-slate-600 dark:text-slate-300">
+                      Description
+                    </label>
+                    <textarea
+                      placeholder="Describe what this milestone represents..."
+                      value={mDescription}
+                      onChange={e => setMDescription(e.target.value)}
+                      rows={3}
+                      className="w-full rounded-[8px] border border-slate-200 dark:border-white/10 bg-transparent px-4 py-2.5 text-[14px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-700 dark:focus:ring-slate-300 resize-none"
+                    />
+                  </div>
+
+                  {/* Due Date + Status */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-sm font-semibold">Due Date</label>
-                      <Input type="date" value={mDueDate} onChange={e => setMDueDate(e.target.value)} className="rounded-xl" />
+                      <label className="block text-[13px] leading-4 font-bold text-slate-600 dark:text-slate-300">
+                        Due Date
+                      </label>
+                      <Input
+                        type="date"
+                        value={mDueDate}
+                        onChange={e => setMDueDate(e.target.value)}
+                        className="h-[42px] rounded-[8px] border-slate-200 px-4 text-[14px] text-slate-900 focus-visible:border-slate-700 focus-visible:ring-1 focus-visible:ring-slate-700 dark:border-white/10 dark:bg-transparent dark:text-white"
+                      />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-sm font-semibold">Status</label>
-                      <select className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" value={mStatus} onChange={e => setMStatus(e.target.value)}>
+                      <label className="block text-[13px] leading-4 font-bold text-slate-600 dark:text-slate-300">
+                        Status
+                      </label>
+                      <select
+                        value={mStatus}
+                        onChange={e => setMStatus(e.target.value)}
+                        className="h-[42px] w-full rounded-[8px] border border-slate-200 dark:border-white/10 bg-transparent px-3 text-[14px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-slate-700 dark:focus:ring-slate-300 cursor-pointer"
+                      >
                         <option value="NOT_STARTED">Not Started</option>
                         <option value="IN_PROGRESS">In Progress</option>
                         <option value="ON_HOLD">On Hold</option>
@@ -1274,19 +1310,9 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                       </select>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold">Progress: {mProgress}%</label>
-                    <input
-                      type="range" min={0} max={100} step={5}
-                      value={mProgress}
-                      onChange={e => setMProgress(Number(e.target.value))}
-                      className="w-full accent-slate-900 dark:accent-slate-100"
-                    />
-                    <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
-                      <div className="h-full rounded-full bg-slate-800 dark:bg-slate-200 transition-all" style={{ width: `${mProgress}%` }} />
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-6 pt-2">
+
+                  {/* Toggles */}
+                  <div className="flex items-center gap-6 pt-1">
                     <label className="flex items-center gap-2.5 cursor-pointer select-none">
                       <div
                         onClick={() => setMClientVisible(v => !v)}
@@ -1294,7 +1320,9 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                       >
                         <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${mClientVisible ? 'translate-x-5' : ''}`} />
                       </div>
-                      <span className="text-sm font-medium flex items-center gap-1"><Eye size={14} /> Client Visible</span>
+                      <span className="text-[13px] font-medium flex items-center gap-1 text-slate-700 dark:text-slate-300">
+                        <Eye size={14} /> Client Visible
+                      </span>
                     </label>
                     <label className="flex items-center gap-2.5 cursor-pointer select-none">
                       <div
@@ -1303,15 +1331,29 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                       >
                         <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${mAutoComplete ? 'translate-x-5' : ''}`} />
                       </div>
-                      <span className="text-sm font-medium flex items-center gap-1"><TrendingUp size={14} /> Auto-Complete at 100%</span>
+                      <span className="text-[13px] font-medium flex items-center gap-1 text-slate-700 dark:text-slate-300">
+                        <TrendingUp size={14} /> Auto-Complete at 100%
+                      </span>
                     </label>
                   </div>
                 </div>
-                <div className="px-6 py-4 border-t bg-slate-50/50 dark:bg-white/[0.02] flex justify-end gap-2">
-                  <Button type="button" variant="outline" className="rounded-[8px]" onClick={() => setIsCreateMilestoneOpen(false)}>Cancel</Button>
-                  <Button type="submit" disabled={isPending || !mTitle.trim()} className="rounded-[8px] bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900">
-                    <Flag size={14} className="mr-1.5" /> Create Milestone
-                  </Button>
+
+                {/* Footer */}
+                <div className="px-6 py-4 border-t border-slate-200/80 dark:border-white/10 bg-slate-50/60 dark:bg-[#19191c] flex justify-end items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateMilestoneOpen(false)}
+                    className="h-9 px-4 text-sm font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 rounded-[16px] transition-colors outline-none cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending || !mTitle.trim()}
+                    className="h-9 min-w-[130px] px-5 text-sm font-bold rounded-[16px] bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed outline-none cursor-pointer flex items-center gap-1.5 justify-center"
+                  >
+                    <Flag size={14} /> Create Milestone
+                  </button>
                 </div>
               </form>
             </DialogContent>
@@ -1319,32 +1361,69 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
 
           {/* Edit Milestone Dialog */}
           <Dialog open={isEditMilestoneOpen} onOpenChange={setIsEditMilestoneOpen}>
-            <DialogContent className="sm:max-w-[520px] p-0 overflow-hidden flex flex-col">
-              <DialogHeader className="sticky top-0 bg-background z-10 px-6 py-4 border-b shadow-sm">
-                <DialogTitle className="flex items-center gap-2"><Edit2 size={18} className="text-slate-700 dark:text-slate-300" />Edit Milestone</DialogTitle>
-              </DialogHeader>
+            <DialogContent className="w-[calc(100%-2rem)] max-w-md p-0 gap-0 flex flex-col rounded-[8px] sm:rounded-[8px] overflow-hidden border-slate-200 dark:border-white/10 bg-white dark:bg-[#1f1f1f] shadow-[0_24px_70px_rgba(0,0,0,0.28)] [&>button]:right-5 [&>button]:top-5 [&>button]:text-slate-400 [&>button]:opacity-100 [&>button_svg]:size-5">
+              {/* Header */}
+              <div className="px-6 py-[18px] border-b border-slate-200/80 dark:border-white/10">
+                <DialogTitle className="pr-10 text-[17px] font-bold text-slate-900 dark:text-white leading-tight tracking-[-0.01em] flex items-center gap-2">
+                  <Edit2 size={16} className="text-slate-500 dark:text-slate-400" /> Edit Milestone
+                </DialogTitle>
+                <DialogDescription className="text-[12.5px] leading-5 text-slate-500 dark:text-slate-400 mt-1">
+                  Update the milestone details below.
+                </DialogDescription>
+              </div>
+
               <form onSubmit={handleEditMilestone} className="overflow-y-auto custom-scrollbar">
                 <div className="px-6 py-5 space-y-4">
+                  {/* Title */}
                   <div className="space-y-1.5">
-                    <label className="text-sm font-semibold">Title <span className="text-red-500">*</span></label>
-                    <Input value={emTitle} onChange={e => setEmTitle(e.target.value)} required className="rounded-xl" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-semibold">Description</label>
-                    <textarea
-                      className="flex min-h-[80px] w-full rounded-xl border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={emDescription}
-                      onChange={e => setEmDescription(e.target.value)}
+                    <label className="block text-[13px] leading-4 font-bold text-slate-600 dark:text-slate-300">
+                      Title <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      value={emTitle}
+                      onChange={e => setEmTitle(e.target.value)}
+                      required
+                      placeholder="e.g. Design Phase"
+                      className="h-[42px] rounded-[8px] border-slate-200 px-4 text-[15px] text-slate-900 placeholder:text-slate-400 focus-visible:border-slate-700 focus-visible:ring-1 focus-visible:ring-slate-700 dark:border-white/10 dark:bg-transparent dark:text-white"
                     />
                   </div>
+
+                  {/* Description */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[13px] leading-4 font-bold text-slate-600 dark:text-slate-300">
+                      Description
+                    </label>
+                    <textarea
+                      value={emDescription}
+                      onChange={e => setEmDescription(e.target.value)}
+                      rows={3}
+                      placeholder="Add a description…"
+                      className="w-full rounded-[8px] border border-slate-200 dark:border-white/10 bg-transparent px-4 py-2.5 text-[14px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-700 dark:focus:ring-slate-300 resize-none"
+                    />
+                  </div>
+
+                  {/* Due Date + Status */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-sm font-semibold">Due Date</label>
-                      <Input type="date" value={emDueDate} onChange={e => setEmDueDate(e.target.value)} className="rounded-xl" />
+                      <label className="block text-[13px] leading-4 font-bold text-slate-600 dark:text-slate-300">
+                        Due Date
+                      </label>
+                      <Input
+                        type="date"
+                        value={emDueDate}
+                        onChange={e => setEmDueDate(e.target.value)}
+                        className="h-[42px] rounded-[8px] border-slate-200 px-4 text-[14px] text-slate-900 focus-visible:border-slate-700 focus-visible:ring-1 focus-visible:ring-slate-700 dark:border-white/10 dark:bg-transparent dark:text-white"
+                      />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-sm font-semibold">Status</label>
-                      <select className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" value={emStatus} onChange={e => setEmStatus(e.target.value)}>
+                      <label className="block text-[13px] leading-4 font-bold text-slate-600 dark:text-slate-300">
+                        Status
+                      </label>
+                      <select
+                        value={emStatus}
+                        onChange={e => setEmStatus(e.target.value)}
+                        className="h-[42px] w-full rounded-[8px] border border-slate-200 dark:border-white/10 bg-transparent px-3 text-[14px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-slate-700 dark:focus:ring-slate-300 cursor-pointer"
+                      >
                         <option value="NOT_STARTED">Not Started</option>
                         <option value="IN_PROGRESS">In Progress</option>
                         <option value="ON_HOLD">On Hold</option>
@@ -1352,19 +1431,9 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                       </select>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold">Progress: {emProgress}%</label>
-                    <input
-                      type="range" min={0} max={100} step={5}
-                      value={emProgress}
-                      onChange={e => setEmProgress(Number(e.target.value))}
-                      className="w-full accent-slate-900 dark:accent-slate-100"
-                    />
-                    <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
-                      <div className="h-full rounded-full bg-slate-800 dark:bg-slate-200 transition-all" style={{ width: `${emProgress}%` }} />
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-6 pt-2">
+
+                  {/* Toggles */}
+                  <div className="flex items-center gap-6 pt-1">
                     <label className="flex items-center gap-2.5 cursor-pointer select-none">
                       <div
                         onClick={() => setEmClientVisible(v => !v)}
@@ -1372,7 +1441,9 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                       >
                         <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${emClientVisible ? 'translate-x-5' : ''}`} />
                       </div>
-                      <span className="text-sm font-medium flex items-center gap-1"><Eye size={14} /> Client Visible</span>
+                      <span className="text-[13px] font-medium flex items-center gap-1 text-slate-700 dark:text-slate-300">
+                        <Eye size={14} /> Client Visible
+                      </span>
                     </label>
                     <label className="flex items-center gap-2.5 cursor-pointer select-none">
                       <div
@@ -1381,15 +1452,29 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                       >
                         <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${emAutoComplete ? 'translate-x-5' : ''}`} />
                       </div>
-                      <span className="text-sm font-medium flex items-center gap-1"><TrendingUp size={14} /> Auto-Complete at 100%</span>
+                      <span className="text-[13px] font-medium flex items-center gap-1 text-slate-700 dark:text-slate-300">
+                        <TrendingUp size={14} /> Auto-Complete at 100%
+                      </span>
                     </label>
                   </div>
                 </div>
-                <div className="px-6 py-4 border-t bg-slate-50/50 dark:bg-white/[0.02] flex justify-end gap-2">
-                  <Button type="button" variant="outline" className="rounded-[8px]" onClick={() => setIsEditMilestoneOpen(false)}>Cancel</Button>
-                  <Button type="submit" disabled={isPending || !emTitle.trim()} className="rounded-[8px] bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900">
+
+                {/* Footer */}
+                <div className="px-6 py-4 border-t border-slate-200/80 dark:border-white/10 bg-slate-50/60 dark:bg-[#19191c] flex justify-end items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditMilestoneOpen(false)}
+                    className="h-9 px-4 text-sm font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 rounded-[16px] transition-colors outline-none cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending || !emTitle.trim()}
+                    className="h-9 min-w-[110px] px-5 text-sm font-bold rounded-[16px] bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed outline-none cursor-pointer"
+                  >
                     Save Changes
-                  </Button>
+                  </button>
                 </div>
               </form>
             </DialogContent>
