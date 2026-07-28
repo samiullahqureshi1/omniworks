@@ -781,8 +781,27 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   };
 
   const insertMention = (id: string, name: string, type: 'user' | 'task') => {
+    if (editingMessageId) {
+      const words = editContent.trimEnd().split(/\s+/);
+      const lastWord = words[words.length - 1] || '';
+      if (lastWord.startsWith('@') || lastWord.startsWith('#')) {
+        words.pop();
+      }
+      if (type === 'user') {
+        words.push(`@${name} `);
+      } else {
+        words.push(`#${name} `);
+      }
+      setEditContent(words.join(' '));
+      setShowSuggestions(false);
+      return;
+    }
+
     const words = content.trimEnd().split(/\s+/);
-    words.pop(); // remove the partial query
+    const lastWord = words[words.length - 1] || '';
+    if (lastWord.startsWith('@') || lastWord.startsWith('#')) {
+      words.pop();
+    }
     
     if (type === 'user') {
       words.push(`@${name} `);
@@ -1036,7 +1055,33 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
           </span>
         );
       }
-      return part;
+
+      // Render links inside text segments
+      const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
+      const subParts = part.split(urlRegex);
+
+      return (
+        <React.Fragment key={index}>
+          {subParts.map((sub, i) => {
+            if (sub.match(/^(https?:\/\/[^\s]+|www\.[^\s]+)$/)) {
+              const href = sub.startsWith('www.') ? `https://${sub}` : sub;
+              return (
+                <a
+                  key={i}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-blue-600 dark:text-blue-400 font-semibold underline hover:text-blue-800 dark:hover:text-blue-300 break-all transition-colors cursor-pointer"
+                >
+                  {sub}
+                </a>
+              );
+            }
+            return sub;
+          })}
+        </React.Fragment>
+      );
     });
   };
 
@@ -1260,7 +1305,125 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                           className="hidden"
                         />
 
-                        {/* Preview of attached files in Edit Mode */}
+                        {/* Voice Recording Bar in Edit Mode */}
+                        {editVoiceRecording ? (
+                          <div className="flex items-center justify-between gap-3 p-2 rounded-full bg-slate-100 dark:bg-white/10 my-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditVoiceRecording(false)}
+                              className="w-6 h-6 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-900 cursor-pointer shadow-2xs"
+                            >
+                              <X size={13} />
+                            </button>
+                            <span className="text-xs font-mono font-semibold text-slate-500">0:04</span>
+                            <div className="flex-1 flex items-center justify-center gap-1">
+                              <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-white/30" />
+                              <div className="w-1.5 h-3.5 rounded-full bg-slate-600 dark:bg-white/60" />
+                              <div className="w-1.5 h-4.5 rounded-full bg-slate-900 dark:bg-white" />
+                              <div className="w-1.5 h-2.5 rounded-full bg-slate-500 dark:bg-white/50" />
+                              <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-white/30" />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditVoiceRecording(false);
+                                setEditVoiceUrl(msg.fileUrl || '/sample-voice.mp3');
+                                toast.success("Voice note added to card!");
+                              }}
+                              className="px-3 py-1 bg-slate-200 dark:bg-white/20 text-slate-700 dark:text-slate-200 font-semibold rounded-full text-xs hover:bg-slate-300 cursor-pointer"
+                            >
+                              Voice note
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditVoiceRecording(false);
+                                setEditContent(prev => (prev ? prev + '\n' : '') + 'Hello, how are you? What are you doing?');
+                                toast.success("Voice note transcribed!");
+                              }}
+                              className="px-3.5 py-1 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold rounded-full text-xs shadow-2xs hover:bg-slate-800 cursor-pointer"
+                            >
+                              Transcribe
+                            </button>
+                          </div>
+                        ) : (
+                          /* Voice Note Audio Player Pill in Edit Mode */
+                          (editVoiceUrl || msg.content?.includes('Voice Note') || msg.content?.includes('🎙️') || (msg.fileUrl && (msg.fileName?.toLowerCase().includes('voice') || msg.fileUrl.match(/\.(webm|mp3|wav|ogg|m4a)($|\?)/i)))) && (
+                            <div className="my-2">
+                              <VoiceNotePlayer
+                                src={editVoiceUrl || msg.fileUrl || ''}
+                                sender={msg.sender}
+                                createdAt={msg.createdAt}
+                                isCurrentUser={isMe}
+                              />
+                            </div>
+                          )
+                        )}
+
+                        {/* Textarea for edit with @ and # autocomplete support */}
+                        <textarea
+                          ref={(el) => {
+                            if (el) {
+                              el.style.height = 'auto';
+                              el.style.height = `${Math.max(60, el.scrollHeight)}px`;
+                            }
+                          }}
+                          value={editContent}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setEditContent(val);
+                            e.target.style.height = 'auto';
+                            e.target.style.height = `${e.target.scrollHeight}px`;
+
+                            // Mention / Task suggestion detection in Edit Mode
+                            const lastWord = val.split(/\s+/).pop() || '';
+                            if (lastWord.startsWith('@')) {
+                              setSuggestionType('both');
+                              setMentionQuery(lastWord.substring(1).toLowerCase());
+                              setShowSuggestions(true);
+                              setHighlightedIndex(0);
+                            } else if (lastWord.startsWith('#')) {
+                              setSuggestionType('task');
+                              setMentionQuery(lastWord.substring(1).toLowerCase());
+                              setShowSuggestions(true);
+                              setHighlightedIndex(0);
+                            } else {
+                              setShowSuggestions(false);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (showSuggestions) {
+                              const items = getFilteredSuggestions();
+                              if (items.length > 0) {
+                                if (e.key === 'ArrowDown') {
+                                  e.preventDefault();
+                                  setHighlightedIndex(prev => (prev + 1) % items.length);
+                                  return;
+                                } else if (e.key === 'ArrowUp') {
+                                  e.preventDefault();
+                                  setHighlightedIndex(prev => (prev - 1 + items.length) % items.length);
+                                  return;
+                                } else if (e.key === 'Enter' || e.key === 'Tab') {
+                                  e.preventDefault();
+                                  const item = items[highlightedIndex] || items[0];
+                                  if (item) {
+                                    insertMention(item.id, item.name || item.title, item.itemType);
+                                  }
+                                  return;
+                                } else if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  setShowSuggestions(false);
+                                  return;
+                                }
+                              }
+                            }
+                          }}
+                          placeholder="Write message... Use @ to mention user or # to link task"
+                          className="w-full bg-transparent text-xs text-slate-900 dark:text-white placeholder:text-slate-400/80 outline-none resize-none leading-relaxed border-0 focus:ring-0 p-0 pb-3 overflow-hidden min-h-[60px]"
+                          autoFocus
+                        />
+
+                        {/* Preview of attached files in Edit Mode (RENDERED BELOW TEXTAREA) */}
                         {(editAttachedFiles.length > 0 || msg.fileUrl) && (
                           <div className="my-2 space-y-2">
                             {editAttachedFiles.map((file, idx) => (
@@ -1311,84 +1474,6 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                           </div>
                         )}
 
-                        {/* Voice Recording Bar in Edit Mode (Image 2) */}
-                        {editVoiceRecording ? (
-                          <div className="flex items-center justify-between gap-3 p-2 rounded-full bg-slate-100 dark:bg-white/10 my-2">
-                            <button
-                              type="button"
-                              onClick={() => setEditVoiceRecording(false)}
-                              className="w-6 h-6 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-900 cursor-pointer shadow-2xs"
-                            >
-                              <X size={13} />
-                            </button>
-                            <span className="text-xs font-mono font-semibold text-slate-500">0:04</span>
-                            <div className="flex-1 flex items-center justify-center gap-1">
-                              <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-white/30" />
-                              <div className="w-1.5 h-3.5 rounded-full bg-slate-600 dark:bg-white/60" />
-                              <div className="w-1.5 h-4.5 rounded-full bg-slate-900 dark:bg-white" />
-                              <div className="w-1.5 h-2.5 rounded-full bg-slate-500 dark:bg-white/50" />
-                              <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-white/30" />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditVoiceRecording(false);
-                                setEditVoiceUrl(msg.fileUrl || '/sample-voice.mp3');
-                                toast.success("Voice note added to card!");
-                              }}
-                              className="px-3 py-1 bg-slate-200 dark:bg-white/20 text-slate-700 dark:text-slate-200 font-semibold rounded-full text-xs hover:bg-slate-300 cursor-pointer"
-                            >
-                              Voice note
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditVoiceRecording(false);
-                                setEditContent(prev => (prev ? prev + '\n' : '') + 'Hello, how are you? What are you doing?');
-                                toast.success("Voice note transcribed!");
-                              }}
-                              className="px-3.5 py-1 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold rounded-full text-xs shadow-2xs hover:bg-slate-800 cursor-pointer"
-                            >
-                              Transcribe
-                            </button>
-                          </div>
-                        ) : (
-                          /* Voice Note Audio Player Pill in Edit Mode (Playable Image 3) */
-                          (editVoiceUrl || msg.content?.includes('Voice Note') || msg.content?.includes('🎙️') || (msg.fileUrl && (msg.fileName?.toLowerCase().includes('voice') || msg.fileUrl.match(/\.(webm|mp3|wav|ogg|m4a)($|\?)/i)))) && (
-                            <div className="my-2">
-                              <VoiceNotePlayer
-                                src={editVoiceUrl || msg.fileUrl || ''}
-                                sender={msg.sender}
-                                createdAt={msg.createdAt}
-                                isCurrentUser={isMe}
-                              />
-                            </div>
-                          )
-                        )}
-
-                        {/* Textarea for edit (Auto-expanding height, pb-3 to prevent bottom text clipping) */}
-                        <textarea
-                          ref={(el) => {
-                            if (el) {
-                              el.style.height = 'auto';
-                              el.style.height = `${Math.max(60, el.scrollHeight)}px`;
-                            }
-                          }}
-                          value={editContent}
-                          onChange={(e) => {
-                            setEditContent(e.target.value);
-                            e.target.style.height = 'auto';
-                            e.target.style.height = `${e.target.scrollHeight}px`;
-                          }}
-                          onInput={(e: any) => {
-                            e.target.style.height = 'auto';
-                            e.target.style.height = `${e.target.scrollHeight}px`;
-                          }}
-                          placeholder="Write or type '/' for commands and AI actions"
-                          className="w-full bg-transparent text-xs text-slate-900 dark:text-white placeholder:text-slate-400/80 outline-none resize-none leading-relaxed border-0 focus:ring-0 p-0 pb-3 overflow-hidden min-h-[60px]"
-                          autoFocus
-                        />
-
                         {/* Edit Toolbar Row */}
                         <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-white/5">
                           <div className="flex items-center gap-1.5 sm:gap-2">
@@ -1410,7 +1495,12 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                             </button>
                             <button
                               type="button"
-                              onClick={() => setEditContent(prev => prev + ' @Sami Ullah')}
+                              onClick={() => {
+                                setEditContent(prev => prev + '@');
+                                setSuggestionType('both');
+                                setMentionQuery('');
+                                setShowSuggestions(true);
+                              }}
                               className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
                               title="Mention member"
                             >
@@ -1577,7 +1667,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                           className={`px-4 py-2 cursor-pointer flex items-center justify-between transition-colors ${
                             isHighlighted ? 'bg-slate-100 dark:bg-white/10 font-bold' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
                           }`}
-                          onClick={() => insertMention(u.id, u.name.replace(/\s+/g, ''), 'user')}
+                          onClick={() => insertMention(u.id, u.name, 'user')}
                         >
                           <div>
                             <p className="text-xs font-semibold text-slate-900 dark:text-white">@{u.name}</p>
@@ -1606,7 +1696,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                           className={`px-4 py-2 cursor-pointer flex items-center justify-between transition-colors ${
                             isHighlighted ? 'bg-slate-100 dark:bg-white/10 font-bold' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
                           }`}
-                          onClick={() => insertMention(t.id, t.title.replace(/\s+/g, ''), 'task')}
+                          onClick={() => insertMention(t.id, t.title, 'task')}
                         >
                           <p className="text-xs font-semibold text-slate-900 dark:text-white truncate max-w-[180px]">#{t.title}</p>
                           {t.status?.name && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">{t.status.name}</span>}

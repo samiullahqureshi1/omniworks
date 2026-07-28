@@ -472,7 +472,33 @@ export default function ConversationsClient({
           </span>
         );
       }
-      return part;
+
+      // Render links inside text segments
+      const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
+      const subParts = part.split(urlRegex);
+
+      return (
+        <React.Fragment key={index}>
+          {subParts.map((sub, i) => {
+            if (sub.match(/^(https?:\/\/[^\s]+|www\.[^\s]+)$/)) {
+              const href = sub.startsWith('www.') ? `https://${sub}` : sub;
+              return (
+                <a
+                  key={i}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-blue-600 dark:text-blue-400 font-semibold underline hover:text-blue-800 dark:hover:text-blue-300 break-all transition-colors cursor-pointer"
+                >
+                  {sub}
+                </a>
+              );
+            }
+            return sub;
+          })}
+        </React.Fragment>
+      );
     });
   };
 
