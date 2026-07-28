@@ -223,18 +223,14 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   const [taskModalInitialConfig, setTaskModalInitialConfig] = useState<any>(null);
 
   const handleOpenCreateTaskFromMessage = (msg: any) => {
-    let initialDesc = msg.content || '';
+    let initialDesc = (msg.content || '').replace(/<[^>]*>?/gm, ' ').trim();
     if (msg.fileUrl) {
-      if (msg.fileUrl.match(/\.(png|jpg|jpeg|gif|webp|svg)($|\?)/i) || msg.fileName?.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i)) {
-        initialDesc += `\n\n<p><img src="${msg.fileUrl}" alt="${msg.fileName || 'Attached image'}" class="max-h-64 rounded-xl border" /></p>`;
-      } else {
-        initialDesc += `\n\n<p><strong>Attached File:</strong> <a href="${msg.fileUrl}" target="_blank" rel="noopener noreferrer">${msg.fileName || 'Attached File'}</a></p>`;
-      }
+      initialDesc += `\n\nAttached File: ${msg.fileName || 'File'} (${msg.fileUrl})`;
     }
 
     setTaskModalInitialConfig({
       projectId: projectId,
-      title: msg.content ? (msg.content.length > 50 ? msg.content.slice(0, 50) + '...' : msg.content) : (msg.fileName ? `Task from ${msg.fileName}` : 'New Task from Chat'),
+      title: initialDesc ? (initialDesc.length > 50 ? initialDesc.slice(0, 50) + '...' : initialDesc) : (msg.fileName ? `Task from ${msg.fileName}` : 'New Task from Chat'),
       description: initialDesc,
       statusId: '',
       priority: 'MEDIUM',

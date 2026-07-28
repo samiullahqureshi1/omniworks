@@ -11,8 +11,9 @@ import {
   LayoutDashboard, CheckSquare, Users, Timer, Activity,
   Briefcase, MessageSquare, GripVertical, Plus, ShieldAlert,
   Search, Check, X, Hash, Trash2, Repeat, ChevronDown, ChevronUp, Award, UserCheck, CalendarDays, Globe, Mail, Phone, Type,
-  FolderKanban, Star, PhoneCall, Sparkles, Zap, Brain, UserPlus, Target, Edit2, Eye, EyeOff, TrendingUp, Flag
+  FolderKanban, Star, PhoneCall, Sparkles, Zap, Brain, UserPlus, Target, Edit2, Eye, EyeOff, TrendingUp, Flag, Pin
 } from 'lucide-react';
+import TaskFormModal from '@/app/workspace/tasks/TaskFormModal';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
@@ -61,6 +62,18 @@ const renderTrackedTime = (hours: number) => {
   );
 };
 
+const stripHtmlTags = (str?: string) => {
+  if (!str) return '';
+  return str
+    .replace(/<[^>]*>?/gm, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
 export default function ProjectDetailClient({ project, currentUser, users = [], taskStatuses = [], projectStatuses = [], milestones: initialMilestones = [] }: { project: any, currentUser: any, users?: any[], taskStatuses?: any[], projectStatuses?: any[], milestones?: any[] }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -68,6 +81,38 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
   const [activeTab, setActiveTab] = useState('overview');
   const [isPending, startTransition] = useTransition();
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<any | null>(null);
+  const [pinnedTaskIds, setPinnedTaskIds] = useState<string[]>([]);
+
+  const togglePinTask = (taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPinnedTaskIds(prev => {
+      const isPinned = prev.includes(taskId);
+      if (isPinned) {
+        toast.success("Task unpinned");
+        return prev.filter(id => id !== taskId);
+      } else {
+        toast.success("Task pinned to top");
+        return [...prev, taskId];
+      }
+    });
+  };
+
+  const handleOpenEditTask = (task: any) => {
+    setEditingTask(task);
+    setIsNewTaskModalOpen(true);
+  };
+
+  const sortedTasks = useMemo(() => {
+    if (!project.tasks) return [];
+    return [...project.tasks].sort((a, b) => {
+      const aPinned = pinnedTaskIds.includes(a.id);
+      const bPinned = pinnedTaskIds.includes(b.id);
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
+      return 0;
+    });
+  }, [project.tasks, pinnedTaskIds]);
   const [newTaskName, setNewTaskName] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState('MEDIUM');
@@ -510,7 +555,16 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
     setEditingMilestone(milestone);
     setEmTitle(milestone.title);
     setEmDescription(milestone.description || '');
-    setEmDueDate(milestone.dueDate ? milestone.dueDate.slice(0, 10) : '');
+    let formattedDueDate = '';
+    if (milestone.dueDate) {
+      try {
+        const d = new Date(milestone.dueDate);
+        if (!isNaN(d.getTime())) {
+          formattedDueDate = d.toISOString().slice(0, 10);
+        }
+      } catch (err) {}
+    }
+    setEmDueDate(formattedDueDate);
     setEmStatus(milestone.status);
     setEmProgress(milestone.progress);
     setEmClientVisible(milestone.clientVisible);
@@ -586,7 +640,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
         </div>
 
         {/* Right: View Tabs Header Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-nowrap shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab('overview')}
@@ -632,13 +686,35 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
             </span>
           </button>
 
+          {canManageTasks && (
+            <Button
+              type="button"
+              onClick={() => setIsNewTaskModalOpen(true)}
+              className="h-8 px-3 rounded-[8px] bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer ml-2"
+            >
+              <Plus size={14} />
+              <span>Create Task</span>
+            </Button>
+          )}
+
+          {(isOwner || isPM) && (
+            <Button
+              type="button"
+              onClick={() => setIsCreateMilestoneOpen(true)}
+              className="h-8 px-3 rounded-[8px] bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer ml-1.5"
+            >
+              <Plus size={14} />
+              <span>Add Milestone</span>
+            </Button>
+          )}
+
           {(isOwner || isPM) && (
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => setIsEditProjectOpen(true)}
-              className="h-8 rounded-[8px] border text-xs font-semibold flex items-center gap-1 ml-2"
+              className="h-8 rounded-[8px] border text-xs font-semibold flex items-center gap-1 ml-1.5"
             >
               <Settings size={13} />
               <span>Edit</span>
@@ -875,14 +951,14 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                     View and manage tasks for this project.
                   </p>
                 </div>
-                {canManageTasks && (
+                {/* {canManageTasks && (
                   <Button
                     onClick={() => setIsNewTaskModalOpen(true)}
                     className="flex items-center gap-2 rounded-[8px] bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800"
                   >
                     <Plus size={16} /> Create New Task
                   </Button>
-                )}
+                )} */}
               </div>
 
               {/* Tasks Table */}
@@ -890,173 +966,136 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                 <Table>
                   <TableHeader className="bg-slate-50/80 dark:bg-white/[0.03]">
                     <TableRow className="border-b border-slate-200 dark:border-white/10">
-                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Task Title</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Status</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Priority</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Milestone</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Assignees</TableHead>
-                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider text-right">Allocated</TableHead>
+                      <TableHead className="w-8 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap px-2"></TableHead>
+                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Task Title</TableHead>
+                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Status</TableHead>
+                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Priority</TableHead>
+                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Milestone</TableHead>
+                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Assignees</TableHead>
+                      <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider text-right whitespace-nowrap">Tracked / Total</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(!project.tasks || project.tasks.length === 0) ? (
+                    {(!sortedTasks || sortedTasks.length === 0) ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-12 text-xs text-slate-400">
+                        <TableCell colSpan={7} className="text-center py-12 text-xs text-slate-400">
                           No tasks found for this project.
                         </TableCell>
                       </TableRow>
                     ) : (
-                      project.tasks.map((t: any) => (
-                        <TableRow key={t.id} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] border-b border-slate-100 dark:border-white/5 transition-colors">
-                          <TableCell className="font-medium text-xs text-slate-900 dark:text-white">
-                            <div>
-                              <span className="font-bold text-slate-900 dark:text-slate-100">{t.title}</span>
-                              {t.description && (
-                                <p className="text-[11px] text-slate-400 line-clamp-1 font-normal mt-0.5">{t.description}</p>
+                      sortedTasks.map((t: any) => {
+                        const isPinned = pinnedTaskIds.includes(t.id);
+                        const trackedHours = getTaskTrackedHours(t.id);
+                        const formattedTracked = formatTrackedTime(trackedHours);
+                        const allocatedStr = t.allocatedHours ? `${t.allocatedHours}h` : '0h';
+
+                        return (
+                          <TableRow
+                            key={t.id}
+                            onClick={() => handleOpenEditTask(t)}
+                            className="group hover:bg-slate-50/80 dark:hover:bg-white/[0.04] border-b border-slate-100 dark:border-white/5 transition-colors cursor-pointer"
+                          >
+                            <TableCell className="w-8 text-center px-2 whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={(e) => togglePinTask(t.id, e)}
+                                className={`p-1 rounded-md transition-colors ${
+                                  isPinned
+                                    ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40'
+                                    : 'text-slate-300 dark:text-slate-600 group-hover:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'
+                                }`}
+                                title={isPinned ? 'Unpin task' : 'Pin task to top'}
+                              >
+                                <Pin size={13} className={isPinned ? 'fill-blue-600 dark:fill-blue-400' : ''} />
+                              </button>
+                            </TableCell>
+
+                            <TableCell className="font-medium text-xs text-slate-900 dark:text-white whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors whitespace-nowrap">
+                                  {t.title}
+                                </span>
+                                {isPinned && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800 whitespace-nowrap">
+                                    Pinned
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+
+                            <TableCell className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              <select
+                                value={t.statusId || taskStatuses[0]?.id || ''}
+                                onChange={(e) => handleTaskStatusChange(t.id, e.target.value)}
+                                disabled={!canManageTasks || isPending}
+                                className="text-[11px] font-bold bg-slate-100 dark:bg-white/10 border-0 rounded-[6px] px-2 py-1 cursor-pointer outline-none text-slate-700 dark:text-slate-300 whitespace-nowrap"
+                              >
+                                {taskStatuses.map((s: any) => (
+                                  <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                              </select>
+                            </TableCell>
+
+                            <TableCell className="whitespace-nowrap">
+                              <Badge variant="outline" className={`text-[10px] font-bold px-2 py-0.5 rounded-[6px] border whitespace-nowrap ${getPriorityColor(t.priority)}`}>
+                                {t.priority}
+                              </Badge>
+                            </TableCell>
+
+                            <TableCell className="whitespace-nowrap">
+                              {t.milestone ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 text-[10px] font-semibold border border-slate-200/60 dark:border-white/10 whitespace-nowrap">
+                                  <Target size={10} className="shrink-0" />
+                                  <span className="whitespace-nowrap">{t.milestone.title}</span>
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-slate-400 italic whitespace-nowrap">—</span>
                               )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <select
-                              value={t.statusId || taskStatuses[0]?.id || ''}
-                              onChange={(e) => handleTaskStatusChange(t.id, e.target.value)}
-                              disabled={!canManageTasks || isPending}
-                              className="text-[11px] font-bold bg-slate-100 dark:bg-white/10 border-0 rounded-[6px] px-2 py-1 cursor-pointer outline-none text-slate-700 dark:text-slate-300"
-                            >
-                              {taskStatuses.map((s: any) => (
-                                <option key={s.id} value={s.id}>{s.name}</option>
-                              ))}
-                            </select>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={`text-[10px] font-bold px-2 py-0.5 rounded-[6px] border ${getPriorityColor(t.priority)}`}>
-                              {t.priority}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {t.milestone ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 text-[10px] font-semibold border border-slate-200/60 dark:border-white/10">
-                                <Target size={10} />
-                                {t.milestone.title}
-                              </span>
-                            ) : (
-                              <span className="text-[11px] text-slate-400 italic">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex -space-x-1.5 items-center">
-                              {t.assignees?.map((a: any) => (
-                                <Avatar key={a.user.id} title={a.user.name} className="h-6 w-6 border-2 border-background">
-                                  <AvatarFallback className="text-[9px] bg-slate-500 text-white font-bold">{a.user.name.substring(0,2).toUpperCase()}</AvatarFallback>
-                                </Avatar>
-                              ))}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right text-xs font-semibold text-slate-700 dark:text-slate-300">
-                            {t.allocatedHours ? `${t.allocatedHours}h` : '—'}
-                          </TableCell>
-                        </TableRow>
-                      ))
+                            </TableCell>
+
+                            <TableCell className="whitespace-nowrap">
+                              <div className="flex -space-x-1.5 items-center whitespace-nowrap">
+                                {t.assignees?.map((a: any) => (
+                                  <Avatar key={a.user.id} title={a.user.name} className="h-6 w-6 border-2 border-background shrink-0">
+                                    <AvatarFallback className="text-[9px] bg-slate-500 text-white font-bold">{a.user.name.substring(0,2).toUpperCase()}</AvatarFallback>
+                                  </Avatar>
+                                ))}
+                              </div>
+                            </TableCell>
+
+                            <TableCell className="text-right text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                              <span className="font-bold text-blue-600 dark:text-blue-400">{formattedTracked}</span>
+                              <span className="text-slate-400 mx-1">/</span>
+                              <span className="text-slate-600 dark:text-slate-300">{allocatedStr}</span>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>
               </div>
 
-              {/* Create Task Modal */}
-              <Dialog open={isNewTaskModalOpen} onOpenChange={setIsNewTaskModalOpen}>
-                <DialogContent className="sm:max-w-[500px]">
-                  <DialogHeader>
-                    <DialogTitle>Create New Task</DialogTitle>
-                  </DialogHeader>
-                  <form onSubmit={handleCreateTask} className="space-y-4 pt-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Task Title</label>
-                      <Input placeholder="e.g. Design Landing Page" value={newTaskName} onChange={e => setNewTaskName(e.target.value)} required />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Description</label>
-                      <textarea 
-                        placeholder="Add more details about this task..."
-                        className="flex min-h-[80px] w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        value={newTaskDescription}
-                        onChange={e => setNewTaskDescription(e.target.value)}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Priority</label>
-                        <select 
-                          className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                          value={newTaskPriority}
-                          onChange={e => setNewTaskPriority(e.target.value)}
-                        >
-                          <option value="LOW">Low</option>
-                          <option value="MEDIUM">Medium</option>
-                          <option value="HIGH">High</option>
-                          <option value="CRITICAL">Critical</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Allocated Hours</label>
-                        <NumberStepper step={0.5} min={0} placeholder="e.g. 5.5" value={newTaskHours} onChange={e => setNewTaskHours(e.target.value)} />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Assignees (Project Members)</label>
-                      <div 
-                        className="flex items-center min-h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background cursor-pointer hover:bg-muted/50 transition-colors"
-                        onClick={() => setIsAssigneeModalOpen(true)}
-                      >
-                        {newTaskAssignees.length === 0 ? (
-                          <span className="text-muted-foreground">Select members...</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-2">
-                            {newTaskAssignees.map(id => {
-                              const member = project.assignees.find((a: any) => a.userId === id);
-                              return member ? (
-                                <Badge key={id} variant="secondary" className="gap-1 pr-1 pl-2 font-medium">
-                                  <Avatar className="h-4 w-4 mr-0.5">
-                                    <AvatarFallback className="text-[8px] bg-primary/20">{member.user.name.substring(0,2)}</AvatarFallback>
-                                  </Avatar>
-                                  {member.user.name}
-                                  <div 
-                                    className="hover:bg-muted rounded-full p-0.5 cursor-pointer ml-1"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setNewTaskAssignees(prev => prev.filter(a => a !== id));
-                                    }}
-                                  >
-                                    <X size={12} />
-                                  </div>
-                                </Badge>
-                              ) : null;
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {milestones.length > 0 && (
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Link to Milestone <span className="text-muted-foreground font-normal">(optional)</span></label>
-                        <select
-                          className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                          value={newTaskMilestoneId}
-                          onChange={e => setNewTaskMilestoneId(e.target.value)}
-                        >
-                          <option value="">No milestone</option>
-                          {milestones.map((m: any) => (
-                            <option key={m.id} value={m.id}>{m.title}</option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                    <div className="flex justify-end gap-2 pt-4">
-                      <Button type="button" variant="outline" onClick={() => setIsNewTaskModalOpen(false)}>Cancel</Button>
-                      <Button type="submit" disabled={isPending || !newTaskName.trim()}>Create Task</Button>
-                    </div>
-                  </form>
-                </DialogContent>
-              </Dialog>
+              {/* Task Form Modal for Create & Edit */}
+              {isNewTaskModalOpen && (
+                <TaskFormModal
+                  isOpen={isNewTaskModalOpen}
+                  onOpenChange={(open) => {
+                    setIsNewTaskModalOpen(open);
+                    if (!open) setEditingTask(null);
+                  }}
+                  task={editingTask}
+                  projects={[{ id: project.id, name: project.name, title: project.name }]}
+                  taskStatuses={taskStatuses}
+                  users={users}
+                  currentUser={currentUser}
+                  onSuccess={() => {
+                    setIsNewTaskModalOpen(false);
+                    setEditingTask(null);
+                    router.refresh();
+                  }}
+                />
+              )}
             </div>
           ) : activeTab === 'milestones' ? (
             /* ======= MILESTONES TAB ======= */
@@ -1072,7 +1111,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                 {isClient ? 'Track project milestones and deliverables.' : 'Manage project milestones. Clients see only client-visible milestones.'}
               </p>
             </div>
-            {(isOwner || isPM) && (
+            {/* {(isOwner || isPM) && (
               <Button
                 onClick={() => setIsCreateMilestoneOpen(true)}
                 className="flex items-center gap-2 rounded-[8px]"
@@ -1080,128 +1119,124 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                 <Plus size={16} />
                 Add Milestone
               </Button>
-            )}
+            )} */}
           </div>
 
-          {/* Milestone Cards */}
-          {milestones.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl gap-3">
-              <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center">
-                <Target size={28} className="text-slate-500 dark:text-slate-400" />
-              </div>
-              <div className="text-center">
-                <p className="font-bold text-slate-700 dark:text-slate-200">No milestones yet</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {(isOwner || isPM) ? 'Create the first milestone to track major deliverables.' : 'No milestones have been shared yet.'}
-                </p>
-              </div>
-              {(isOwner || isPM) && (
-                <Button variant="outline" className="rounded-[8px]" onClick={() => setIsCreateMilestoneOpen(true)}>
-                  <Plus size={14} className="mr-1.5" /> Create Milestone
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-              {milestones.map((milestone: any) => {
-                const sc = getMilestoneStatusColor(milestone.status);
-                const dueDate = milestone.dueDate ? new Date(milestone.dueDate) : null;
-                const isOverdue = dueDate && dueDate < new Date() && milestone.status !== 'COMPLETED';
-                return (
-                  <div
-                    key={milestone.id}
-                    className="group relative flex flex-col bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all gap-4"
-                  >
-                    {/* Top row: status + actions */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${sc.bg} ${sc.text} ${sc.border}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
-                          {milestone.status.replace('_', ' ')}
-                        </span>
-                        {milestone.clientVisible && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
-                            <Eye size={9} /> Client
-                          </span>
-                        )}
-                        {isOverdue && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800">
-                            Overdue
-                          </span>
-                        )}
-                      </div>
-                      {(isOwner || isPM) && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10">
-                              <MoreHorizontal size={16} className="text-slate-500" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-40">
-                            <DropdownMenuItem onClick={() => openEditMilestone(milestone)} className="gap-2">
-                              <Edit2 size={14} /> Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => handleDeleteMilestone(milestone.id)}
-                              className="gap-2 text-red-600 focus:text-red-600"
-                            >
-                              <Trash2 size={14} /> Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </div>
+          {/* ======= MILESTONES TAB - TABLE VIEW ======= */}
+          <div className="border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden bg-white dark:bg-[#151518]">
+            <Table>
+              <TableHeader className="bg-slate-50/80 dark:bg-white/[0.03]">
+                <TableRow className="border-b border-slate-200 dark:border-white/10">
+                  <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Milestone Name</TableHead>
+                  <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Status</TableHead>
+                  <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Progress</TableHead>
+                  <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Due Date</TableHead>
+                  <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Linked Tasks</TableHead>
+                  <TableHead className="text-[11px] font-bold text-slate-500 uppercase tracking-wider text-right whitespace-nowrap">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {milestones.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-12 text-xs text-slate-400 whitespace-nowrap">
+                      No milestones found for this project.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  milestones.map((milestone: any) => {
+                    const sc = getMilestoneStatusColor(milestone.status);
+                    const dueDate = milestone.dueDate ? new Date(milestone.dueDate) : null;
+                    const isOverdue = dueDate && dueDate < new Date() && milestone.status !== 'COMPLETED';
+                    const linkedTaskCount = project.tasks?.filter((t: any) => t.milestoneId === milestone.id).length || 0;
 
-                    {/* Title & Description */}
-                    <div>
-                      <h3 className="font-black text-slate-900 dark:text-white text-sm leading-snug">{milestone.title}</h3>
-                      {milestone.description && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{milestone.description}</p>
-                      )}
-                    </div>
-
-                    {/* Progress bar */}
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-extrabold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Progress</span>
-                        <span className="text-xs font-black text-slate-900 dark:text-white">{milestone.progress}%</span>
-                      </div>
-                      <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${Math.min(100, milestone.progress)}%`,
-                            background: milestone.progress === 100
-                              ? 'linear-gradient(90deg, #10b981, #059669)'
-                              : 'linear-gradient(90deg, #334155, #0f172a)'
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Footer: due date + linked tasks */}
-                    <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-white/5">
-                      <div className="flex items-center gap-1.5">
-                        {dueDate ? (
-                          <span className={`text-[10px] font-bold flex items-center gap-1 ${isOverdue ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>
-                            <Calendar size={11} />
-                            {dueDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    return (
+                      <TableRow key={milestone.id} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] border-b border-slate-100 dark:border-white/5 transition-colors">
+                        <TableCell className="font-medium text-xs text-slate-900 dark:text-white whitespace-nowrap">
+                          <div className="flex items-center gap-2 whitespace-nowrap">
+                            <span className="font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">{milestone.title}</span>
+                            {milestone.clientVisible && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-300 border border-sky-200 dark:border-sky-800 whitespace-nowrap">
+                                <Eye size={9} /> Client
+                              </span>
+                            )}
+                            {isOverdue && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800 whitespace-nowrap">
+                                Overdue
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border whitespace-nowrap ${sc.bg} ${sc.text} ${sc.border}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${sc.dot}`} />
+                            <span className="whitespace-nowrap">{milestone.status.replace('_', ' ')}</span>
                           </span>
-                        ) : (
-                          <span className="text-[10px] text-muted-foreground">No due date</span>
-                        )}
-                      </div>
-                      <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                        <CheckSquare size={11} />
-                        {milestone.tasks?.length || 0} task{milestone.tasks?.length !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <div className="space-y-1 w-32">
+                            <div className="flex items-center justify-between text-[10px] font-bold text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                              <span>Progress</span>
+                              <span>{milestone.progress}%</span>
+                            </div>
+                            <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-300"
+                                style={{
+                                  width: `${Math.min(100, milestone.progress)}%`,
+                                  background: milestone.progress === 100
+                                    ? 'linear-gradient(90deg, #10b981, #059669)'
+                                    : 'linear-gradient(90deg, #334155, #0f172a)'
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                          {dueDate ? (
+                            <span className={`flex items-center gap-1 text-[11px] whitespace-nowrap ${isOverdue ? 'text-red-500 font-bold' : ''}`}>
+                              <CalendarDays size={13} className="text-slate-400 shrink-0" />
+                              <span className="whitespace-nowrap">{dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-[11px] whitespace-nowrap">No due date</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                            <CheckSquare size={13} className="shrink-0" />
+                            <span className="whitespace-nowrap">{linkedTaskCount} {linkedTaskCount === 1 ? 'task' : 'tasks'}</span>
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {(isOwner || isPM) && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 cursor-pointer">
+                                  <MoreHorizontal size={16} />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem onClick={() => openEditMilestone(milestone)} className="gap-2 cursor-pointer">
+                                  <Edit2 size={14} /> Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleDeleteMilestone(milestone.id)}
+                                  className="gap-2 text-red-600 focus:text-red-600 cursor-pointer"
+                                >
+                                  <Trash2 size={14} /> Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
 
           {/* Create Milestone Dialog */}
           <Dialog open={isCreateMilestoneOpen} onOpenChange={setIsCreateMilestoneOpen}>
