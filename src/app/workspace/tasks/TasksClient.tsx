@@ -204,10 +204,10 @@ function TableTaskNameCell({ task, setTasks, currentUser, openEdit }: any) {
         if (isEditable) setIsEditing(true);
       }}
     >
-      <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex items-center gap-1.5 flex-nowrap whitespace-nowrap">
         {task.title}
         {task.isRepeated && (
-          <Badge variant="outline" className="text-[9px] bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0 px-1 font-semibold flex items-center gap-0.5 align-middle">
+          <Badge variant="outline" className="text-[9px] bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0 px-1 font-semibold flex items-center gap-0.5 align-middle shrink-0">
             <Repeat size={8} /> Recurring
           </Badge>
         )}
@@ -433,7 +433,7 @@ function TableTaskDueDateCell({ task, setTasks, currentUser }: any) {
 
   if (!isEditable) {
     return (
-      <div className="flex items-center gap-1.5 w-full h-full bg-transparent text-slate-700 dark:text-slate-300 font-medium px-4 py-3 text-[13px] tracking-wide text-left select-none">
+      <div className="flex items-center gap-1.5 w-full h-full bg-transparent text-slate-700 dark:text-slate-300 font-medium px-4 py-3 text-[13px] tracking-wide text-left select-none whitespace-nowrap">
         {task.dueDate ? (
           <span className={new Date(task.dueDate) < new Date() ? 'text-red-500 font-semibold' : ''}>
             {format(new Date(task.dueDate), 'MMM d, yyyy')}
@@ -448,7 +448,7 @@ function TableTaskDueDateCell({ task, setTasks, currentUser }: any) {
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-1.5 w-full h-full bg-transparent hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300 font-medium px-4 py-3 text-[13px] tracking-wide transition-colors outline-none text-left">
+        <button className="flex items-center gap-1.5 w-full h-full bg-transparent hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300 font-medium px-4 py-3 text-[13px] tracking-wide transition-colors outline-none text-left whitespace-nowrap">
           {task.dueDate ? (
             <span className={new Date(task.dueDate) < new Date() ? 'text-red-500 font-semibold' : ''}>
               {format(new Date(task.dueDate), 'MMM d, yyyy')}
@@ -1756,7 +1756,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                       <TableTaskNameCell task={task} setTasks={setTasks} currentUser={currentUser} openEdit={openEdit} />
                     </TableCell>
                     <TableCell className="border-l border-slate-100 dark:border-white/5">
-                      <div className="text-sm font-medium hover:underline cursor-pointer" onClick={() => router.push(`/workspace/projects/${task.projectId}`)}>
+                      <div className="text-sm font-medium hover:underline cursor-pointer whitespace-nowrap" onClick={() => router.push(`/workspace/projects/${task.projectId}`)}>
                         {task.project.name}
                       </div>
                     </TableCell>
@@ -1773,7 +1773,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                       <TableTaskAssigneeCell task={task} users={users} setTasks={setTasks} currentUser={currentUser} />
                     </TableCell>
                     <TableCell className="border-l border-slate-100 dark:border-white/5">
-                      <div className="text-xs">
+                      <div className="text-xs whitespace-nowrap">
                         <span className="font-medium text-emerald-600">{formatHours(task.trackedHours)}</span>
                         <span className="text-muted-foreground"> / {task.allocatedHours ? formatHours(task.allocatedHours) : '-'}</span>
                       </div>

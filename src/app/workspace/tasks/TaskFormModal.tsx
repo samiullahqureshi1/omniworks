@@ -1192,7 +1192,7 @@ export default function TaskFormModal({
                                 />
                               </div>
 
-                              {/* Milestone Selection */}
+                              {/* Milestone + Make Task Repeat row */}
                               <div className="space-y-2 col-span-2 sm:col-span-1">
                                 <div className="flex items-center justify-between">
                                   <label className="text-sm font-medium">Milestone</label>
@@ -1232,9 +1232,9 @@ export default function TaskFormModal({
                                 </select>
                               </div>
 
-                              {/* Make This Task Repeat */}
+                              {/* Make This Task Repeat — opposite side of Milestone */}
                               {!isEditing && tasksInput.length === 1 ? (
-                                <div className="space-y-2 col-span-2">
+                                <div className="space-y-2 col-span-2 sm:col-span-1">
                                   <label className="text-sm font-medium">Make task repeat</label>
                                   <div className="flex items-center gap-2 h-[36px]">
                                     <input
@@ -1248,44 +1248,48 @@ export default function TaskFormModal({
                                       Enable repeat
                                     </label>
                                   </div>
-                                  {isRepeatEnabled && (
-                                    <div className="grid grid-cols-3 gap-2 mt-1">
-                                      <div className="space-y-1">
-                                        <span className="text-[11px] text-slate-400">Frequency</span>
-                                        <select
-                                          value={repeatFrequency}
-                                          onChange={(e) => setRepeatFrequency(e.target.value as any)}
-                                          className="w-full h-8 bg-slate-100 dark:bg-white/5 border-0 px-2 text-xs text-slate-700 dark:text-slate-300 rounded-[6px] outline-none"
-                                        >
-                                          <option value="DAILY">Daily</option>
-                                          <option value="WEEKLY">Weekly</option>
-                                          <option value="MONTHLY">Monthly</option>
-                                        </select>
-                                      </div>
-                                      <div className="space-y-1">
-                                        <span className="text-[11px] text-slate-400">Start</span>
-                                        <input
-                                          type="date"
-                                          required={isRepeatEnabled}
-                                          value={repeatStartDate}
-                                          onChange={(e) => setRepeatStartDate(e.target.value)}
-                                          className="w-full h-8 bg-slate-100 dark:bg-white/5 border-0 px-2 text-xs text-slate-700 dark:text-slate-300 rounded-[6px] outline-none"
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <span className="text-[11px] text-slate-400">End</span>
-                                        <input
-                                          type="date"
-                                          required={isRepeatEnabled}
-                                          value={repeatEndDate}
-                                          onChange={(e) => setRepeatEndDate(e.target.value)}
-                                          className="w-full h-8 bg-slate-100 dark:bg-white/5 border-0 px-2 text-xs text-slate-700 dark:text-slate-300 rounded-[6px] outline-none"
-                                        />
-                                      </div>
-                                    </div>
-                                  )}
                                 </div>
                               ) : null}
+
+                              {/* Repeat options — full width below when enabled */}
+                              {!isEditing && tasksInput.length === 1 && isRepeatEnabled && (
+                                <div className="col-span-2">
+                                  <div className="flex flex-nowrap gap-4 w-full">
+                                    <div className="w-1/3 space-y-2">
+                                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Frequency</label>
+                                      <select
+                                        value={repeatFrequency}
+                                        onChange={(e) => setRepeatFrequency(e.target.value as any)}
+                                        className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none cursor-pointer"
+                                      >
+                                        <option value="DAILY">Daily</option>
+                                        <option value="WEEKLY">Weekly</option>
+                                        <option value="MONTHLY">Monthly</option>
+                                      </select>
+                                    </div>
+                                    <div className="w-1/3 space-y-2">
+                                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Start Date</label>
+                                      <input
+                                        type="date"
+                                        required={isRepeatEnabled}
+                                        value={repeatStartDate}
+                                        onChange={(e) => setRepeatStartDate(e.target.value)}
+                                        className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none"
+                                      />
+                                    </div>
+                                    <div className="w-1/3 space-y-2">
+                                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">End Date</label>
+                                      <input
+                                        type="date"
+                                        required={isRepeatEnabled}
+                                        value={repeatEndDate}
+                                        onChange={(e) => setRepeatEndDate(e.target.value)}
+                                        className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
 
