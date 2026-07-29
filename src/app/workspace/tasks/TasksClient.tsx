@@ -257,13 +257,13 @@ function TableTaskStatusCell({ task, taskStatuses, setTasks, currentUser }: any)
 
   if (!isEditable) {
     return (
-      <div className="flex items-center px-3 h-full min-h-[40px]">
+      <div className="flex items-center px-3 h-full min-h-[40px] whitespace-nowrap">
         {task.status ? (
-          <Badge variant="outline" style={{ borderColor: task.status.color, color: task.status.color, backgroundColor: `${task.status.color}10` }}>
+          <Badge variant="outline" className="whitespace-nowrap shrink-0" style={{ borderColor: task.status.color, color: task.status.color, backgroundColor: `${task.status.color}10` }}>
             {task.status.name}
           </Badge>
         ) : (
-          <Badge variant="outline">No Status</Badge>
+          <Badge variant="outline" className="whitespace-nowrap shrink-0">No Status</Badge>
         )}
       </div>
     );
@@ -272,15 +272,15 @@ function TableTaskStatusCell({ task, taskStatuses, setTasks, currentUser }: any)
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center justify-between w-full h-full min-h-[40px] px-3 hover:bg-slate-50 dark:hover:bg-white/5 outline-none text-left">
+        <button className="flex items-center justify-between w-full h-full min-h-[40px] px-3 hover:bg-slate-50 dark:hover:bg-white/5 outline-none text-left whitespace-nowrap">
           {task.status ? (
-            <Badge variant="outline" style={{ borderColor: task.status.color, color: task.status.color, backgroundColor: `${task.status.color}10` }}>
+            <Badge variant="outline" className="whitespace-nowrap shrink-0" style={{ borderColor: task.status.color, color: task.status.color, backgroundColor: `${task.status.color}10` }}>
               {task.status.name}
             </Badge>
           ) : (
-            <Badge variant="outline">No Status</Badge>
+            <Badge variant="outline" className="whitespace-nowrap shrink-0">No Status</Badge>
           )}
-          <ChevronDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <ChevronDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1 shrink-0" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-48 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1 z-50">
@@ -348,8 +348,8 @@ function TableTaskPriorityCell({ task, setTasks, currentUser }: any) {
 
   if (!isEditable) {
     return (
-      <div className="flex items-center px-3 h-full min-h-[40px]">
-        <Badge variant="outline" className={`${activeP.color} ${activeP.bg} border-transparent font-semibold`}>
+      <div className="flex items-center px-3 h-full min-h-[40px] whitespace-nowrap">
+        <Badge variant="outline" className={`${activeP.color} ${activeP.bg} border-transparent font-semibold whitespace-nowrap shrink-0`}>
           {activeP.label}
         </Badge>
       </div>
@@ -359,11 +359,11 @@ function TableTaskPriorityCell({ task, setTasks, currentUser }: any) {
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center justify-between w-full h-full min-h-[40px] px-3 hover:bg-slate-50 dark:hover:bg-white/5 outline-none text-left">
-          <Badge variant="outline" className={`${activeP.color} ${activeP.bg} border-transparent font-semibold`}>
+        <button className="flex items-center justify-between w-full h-full min-h-[40px] px-3 hover:bg-slate-50 dark:hover:bg-white/5 outline-none text-left whitespace-nowrap">
+          <Badge variant="outline" className={`${activeP.color} ${activeP.bg} border-transparent font-semibold whitespace-nowrap shrink-0`}>
             {activeP.label}
           </Badge>
-          <ChevronDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <ChevronDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1 shrink-0" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-36 bg-white dark:bg-[#1f1f1f] rounded-xl shadow-lg border border-black/5 dark:border-white/10 p-1 z-50">

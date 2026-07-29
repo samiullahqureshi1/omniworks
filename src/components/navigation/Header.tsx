@@ -2,9 +2,13 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ChevronDown, Search, Command, CheckSquare, Video, Mic, Sun, Moon, User, Shield, LogOut, Menu, Calendar, Smile, VolumeX, ChevronRight, Bell, Palette, Keyboard, Download, ExternalLink, Bug, HelpCircle, Settings, Plus, Users, FileText, Zap, Briefcase } from 'lucide-react';
+import { ChevronDown, Search, Command, CheckSquare, Video, Mic, Sun, Moon, User, Shield, LogOut, Menu, Calendar, Smile, VolumeX, ChevronRight, Bell, Palette, Keyboard, Download, ExternalLink, Bug, HelpCircle, Settings, Plus, Users, FileText, Zap, Briefcase, Play, Square, Clock, Loader2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { getMyAssignedTasksAction } from '@/app/actions/tasks';
+import { startTimerAction, stopTimerAction, getActiveTimerAction } from '@/app/actions/tracking';
+import { toast } from 'sonner';
 
 interface HeaderProps {
   user: any;
@@ -33,6 +37,105 @@ export function Header({
   setIsSecondaryCollapsed,
   setIsCreateChildModalOpen
 }: HeaderProps) {
+  // Time Tracker State
+  const [isTimerModalOpen, setIsTimerModalOpen] = React.useState(false);
+  const [assignedTasks, setAssignedTasks] = React.useState<any[]>([]);
+  const [isLoadingTasks, setIsLoadingTasks] = React.useState(false);
+  const [taskSearchQuery, setTaskSearchQuery] = React.useState("");
+  const [activeTimer, setActiveTimer] = React.useState<{
+    id: string;
+    taskId?: string;
+    projectId: string;
+    taskTitle?: string;
+    projectName?: string;
+    startTime: string;
+  } | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
+  const [isStartingTimerId, setIsStartingTimerId] = React.useState<string | null>(null);
+  const [isStoppingTimer, setIsStoppingTimer] = React.useState(false);
+
+  // Fetch active timer on mount
+  React.useEffect(() => {
+    getActiveTimerAction().then(res => {
+      if (res.success && res.timer) {
+        setActiveTimer({
+          id: res.timer.id,
+          taskId: res.timer.taskId || undefined,
+          projectId: res.timer.projectId,
+          taskTitle: res.timer.task?.title,
+          projectName: res.timer.project?.name,
+          startTime: res.timer.startTime.toISOString(),
+        });
+      }
+    });
+  }, []);
+
+  // Timer tick interval
+  React.useEffect(() => {
+    if (!activeTimer?.startTime) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const startMs = new Date(activeTimer.startTime).getTime();
+    const updateElapsed = () => {
+      const diffSec = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+      setElapsedSeconds(diffSec);
+    };
+    updateElapsed();
+    const interval = setInterval(updateElapsed, 1000);
+    return () => clearInterval(interval);
+  }, [activeTimer]);
+
+  const formatTimerDigits = (secs: number) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return `${h > 0 ? String(h).padStart(2, '0') + ':' : ''}${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  const openTimerModal = () => {
+    setIsTimerModalOpen(true);
+    setIsLoadingTasks(true);
+    getMyAssignedTasksAction().then(res => {
+      setIsLoadingTasks(false);
+      if (res.success && res.tasks) {
+        setAssignedTasks(res.tasks);
+      }
+    });
+  };
+
+  const handleStartTimer = async (task: any) => {
+    setIsStartingTimerId(task.id);
+    const res = await startTimerAction(task.projectId, task.id);
+    setIsStartingTimerId(null);
+    if (res.error) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success(`Timer started for "${task.title}"`);
+    setActiveTimer({
+      id: 'timer_' + Date.now(),
+      taskId: task.id,
+      projectId: task.projectId,
+      taskTitle: task.title,
+      projectName: task.project?.name || 'Project',
+      startTime: new Date().toISOString(),
+    });
+    setIsTimerModalOpen(false);
+  };
+
+  const handleStopTimer = async () => {
+    setIsStoppingTimer(true);
+    const res = await stopTimerAction();
+    setIsStoppingTimer(false);
+    if (res.error) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Timer stopped & time logged!");
+    setActiveTimer(null);
+  };
+
   return (
     <header className="h-[52px] bg-transparent flex items-center justify-between pl-2 pr-4 shrink-0 select-none z-30 relative shadow-none border-b border-transparent">
       {/* Left Section: Workspace Swapper & Menu Trigger */}
@@ -121,6 +224,38 @@ export function Header({
         <button className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:bg-white/5 rounded-full transition-colors hidden sm:inline-flex" title="Calendar">
           <Calendar size={14} />
         </button>
+
+        {/* Start Time Tracking Button */}
+        {activeTimer ? (
+          <div className="flex items-center gap-2 pl-2.5 pr-1.5 py-1 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-[8px] text-[12px] font-bold text-emerald-700 dark:text-emerald-400 shrink-0">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <span className="font-mono text-[12.5px] font-black">{formatTimerDigits(elapsedSeconds)}</span>
+            {activeTimer.taskTitle && (
+              <span className="truncate max-w-[120px] text-[11px] opacity-90 hidden lg:inline">
+                {activeTimer.taskTitle}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleStopTimer}
+              disabled={isStoppingTimer}
+              className="p-1 hover:bg-emerald-200/60 dark:hover:bg-emerald-900/60 rounded-md text-emerald-700 dark:text-emerald-300 transition-colors cursor-pointer ml-0.5"
+              title="Stop Timer"
+            >
+              {isStoppingTimer ? <Loader2 size={12} className="animate-spin" /> : <Square size={10} fill="currentColor" />}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={openTimerModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f0f0f4] dark:bg-white/5 hover:bg-[#e4e4ec] dark:hover:bg-white/10 text-slate-800 dark:text-slate-200 rounded-[8px] text-[12px] font-bold transition-all border-0 outline-none shrink-0 cursor-pointer"
+            title="Start Time Tracking"
+          >
+            <Play size={12} className="text-emerald-600 dark:text-emerald-400 fill-emerald-600 dark:fill-emerald-400" />
+            <span>Start Time</span>
+          </button>
+        )}
       </div>
 
       {/* Center Section: unified ClickUp Search & AI Chats */}
@@ -287,6 +422,98 @@ export function Header({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Start Time Tracking Dialog */}
+      <Dialog open={isTimerModalOpen} onOpenChange={setIsTimerModalOpen}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-md p-0 gap-0 flex flex-col rounded-[8px] sm:rounded-[8px] overflow-hidden border-slate-200 dark:border-white/10 bg-white dark:bg-[#1f1f1f] shadow-[0_24px_70px_rgba(0,0,0,0.28)] [&>button]:right-5 [&>button]:top-5 [&>button]:text-slate-400 [&>button]:opacity-100 [&>button_svg]:size-5">
+          <div className="px-6 py-[18px] border-b border-slate-200/80 dark:border-white/10">
+            <DialogTitle className="pr-10 text-[17px] font-bold text-slate-900 dark:text-white leading-tight tracking-[-0.01em] flex items-center gap-2">
+              <Clock size={16} className="text-emerald-600 dark:text-emerald-400" /> Start Time Tracking
+            </DialogTitle>
+            <DialogDescription className="text-[12.5px] leading-5 text-slate-500 dark:text-slate-400 mt-1">
+              Select an assigned task below to start tracking your time.
+            </DialogDescription>
+          </div>
+
+          {/* Search Input */}
+          <div className="p-3.5 border-b border-slate-200/80 dark:border-white/10 bg-slate-50/60 dark:bg-[#19191c]">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search your assigned tasks..."
+                value={taskSearchQuery}
+                onChange={e => setTaskSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 text-xs bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-[8px] outline-none focus:border-slate-400 dark:text-white placeholder:text-slate-400"
+              />
+            </div>
+          </div>
+
+          {/* Task List */}
+          <div className="max-h-[320px] overflow-y-auto custom-scrollbar divide-y divide-slate-100 dark:divide-white/5 p-2">
+            {isLoadingTasks ? (
+              <div className="py-10 text-center text-xs font-semibold text-slate-400 flex items-center justify-center gap-2">
+                <Loader2 size={16} className="animate-spin text-emerald-600" /> Loading your assigned tasks...
+              </div>
+            ) : (() => {
+              const filtered = assignedTasks.filter(t =>
+                t.title.toLowerCase().includes(taskSearchQuery.toLowerCase()) ||
+                (t.project?.name || '').toLowerCase().includes(taskSearchQuery.toLowerCase())
+              );
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="py-10 text-center text-xs font-medium text-slate-400">
+                    No assigned tasks found.
+                  </div>
+                );
+              }
+
+              return filtered.map(t => (
+                <div key={t.id} className="p-3 hover:bg-slate-50 dark:hover:bg-white/5 rounded-[8px] flex items-center justify-between gap-3 transition-colors">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-bold text-slate-800 dark:text-slate-200 truncate">
+                      {t.title}
+                    </div>
+                    <div className="text-[11px] text-slate-400 font-semibold truncate mt-0.5 flex items-center gap-2">
+                      <span className="text-slate-500 dark:text-slate-400">{t.project?.name || 'No Project'}</span>
+                      {t.status && (
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold" style={{ color: t.status.color, backgroundColor: `${t.status.color}15` }}>
+                          {t.status.name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isStartingTimerId === t.id}
+                    onClick={() => handleStartTimer(t)}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[8px] text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    {isStartingTimerId === t.id ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Play size={11} fill="currentColor" />
+                    )}
+                    <span>Start</span>
+                  </button>
+                </div>
+              ));
+            })()}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-3 border-t border-slate-200/80 dark:border-white/10 bg-slate-50/60 dark:bg-[#19191c] flex justify-end">
+            <button
+              type="button"
+              onClick={() => setIsTimerModalOpen(false)}
+              className="h-8 px-4 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 rounded-[8px] transition-colors outline-none cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }

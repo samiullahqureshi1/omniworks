@@ -1018,18 +1018,37 @@ const [isPMOpen, setIsPMOpen] = useState(false);
     const [formErrors, setFormErrors] = useState<Record<string, string>>({});
     const [descriptionExpanded, setDescriptionExpanded] = useState(false);
     const DESCRIPTION_COLLAPSE_HEIGHT = 80; // px
+    const descContainerRef = React.useRef<HTMLDivElement>(null);
+    const [isDescOverflowing, setIsDescOverflowing] = useState(false);
+
+    useEffect(() => {
+      if (descContainerRef.current) {
+        setIsDescOverflowing(descContainerRef.current.scrollHeight > 110);
+      }
+    }, [description]);
 
     // Checklist state
-    type ChecklistItem = { id: string; text: string; checked: boolean };
+    type ChecklistItem = { id: string; text: string; checked: boolean; assigneeIds?: string[] };
     type Checklist = { id: string; title: string; items: ChecklistItem[] };
     const [checklists, setChecklists] = useState<Checklist[]>([]);
     const [checklistsOpen, setChecklistsOpen] = useState(true);
     const addChecklist = () => {
-      setChecklists(prev => [...prev, { id: 'cl_' + Date.now(), title: 'Checklist', items: [] }]);
+      const newItemId = 'item_' + Date.now() + Math.random().toString(36).substring(2, 6);
+      setChecklists(prev => [...prev, { id: 'cl_' + Date.now(), title: 'Checklist', items: [{ id: newItemId, text: '', checked: false }] }]);
       setChecklistsOpen(true);
+      setTimeout(() => {
+        const el = document.getElementById(`cl-item-${newItemId}`);
+        if (el) el.focus();
+      }, 50);
     };
     const addChecklistItem = (clId: string) => {
-      setChecklists(prev => prev.map(cl => cl.id === clId ? { ...cl, items: [...cl.items, { id: 'item_' + Date.now() + Math.random(), text: '', checked: false }] } : cl));
+      const newItemId = 'item_' + Date.now() + Math.random().toString(36).substring(2, 6);
+      setChecklists(prev => prev.map(cl => cl.id === clId ? { ...cl, items: [...cl.items, { id: newItemId, text: '', checked: false }] } : cl));
+      setTimeout(() => {
+        const el = document.getElementById(`cl-item-${newItemId}`);
+        if (el) el.focus();
+      }, 50);
+      return newItemId;
     };
     const updateChecklistItem = (clId: string, itemId: string, patch: Partial<ChecklistItem>) => {
       setChecklists(prev => prev.map(cl => cl.id === clId ? { ...cl, items: cl.items.map(it => it.id === itemId ? { ...it, ...patch } : it) } : cl));
@@ -3849,8 +3868,9 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                 <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Add context, type “/” for blocks, or “@” to mention a teammate.</p>
               </div>
               <div
+                ref={descContainerRef}
                 className="relative overflow-hidden transition-all duration-300"
-                style={descriptionExpanded ? {} : { maxHeight: `${DESCRIPTION_COLLAPSE_HEIGHT}px` }}
+                style={isDescOverflowing && !descriptionExpanded ? { maxHeight: `${DESCRIPTION_COLLAPSE_HEIGHT}px` } : {}}
               >
                 <ProjectDescriptionEditor
                   content={description}
@@ -3859,21 +3879,23 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                   people={members}
                   plain
                 />
-                {!descriptionExpanded && (
+                {isDescOverflowing && !descriptionExpanded && (
                   <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white dark:from-[#0f0f11] to-transparent pointer-events-none" />
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => setDescriptionExpanded(v => !v)}
-                className="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors flex items-center gap-1"
-              >
-                {descriptionExpanded ? (
-                  <><ChevronUp size={13} /> Hide</>
-                ) : (
-                  <><ChevronDown size={13} /> View more</>
-                )}
-              </button>
+              {isDescOverflowing && (
+                <button
+                  type="button"
+                  onClick={() => setDescriptionExpanded(v => !v)}
+                  className="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  {descriptionExpanded ? (
+                    <><ChevronUp size={13} /> Hide</>
+                  ) : (
+                    <><ChevronDown size={13} /> View more</>
+                  )}
+                </button>
+              )}
             </div>
 
             {/* Checklist Section */}
@@ -3940,50 +3962,15 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                             onChange={e => setChecklists(prev => prev.map(c => c.id === cl.id ? { ...c, title: e.target.value } : c))}
                             className="text-sm font-semibold text-slate-900 dark:text-white bg-transparent outline-none border-0 w-full"
                           />
-                          {/* Checklist header ... menu */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                type="button"
-                                className="shrink-0 ml-2 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors border border-slate-200 dark:border-white/10"
-                                title="More options"
-                              >
-                                <MoreHorizontal size={14} />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                              align="end"
-                              className="w-44 rounded-xl shadow-lg border border-slate-100 dark:border-white/10 bg-white dark:bg-[#1c1c1c] p-1 z-[9999]"
-                            >
-                              <DropdownMenuItem
-                                onClick={() => addChecklistItem(cl.id)}
-                                className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium cursor-pointer rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5"
-                              >
-                                <Plus size={13} className="text-slate-400" /> Add Item
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  const input = document.querySelector(`[data-cl-title="${cl.id}"]`) as HTMLInputElement;
-                                  input?.focus();
-                                  input?.select();
-                                }}
-                                className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium cursor-pointer rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5"
-                              >
-                                <Edit3 size={13} className="text-slate-400" /> Rename
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium cursor-pointer rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5"
-                              >
-                                <UserPlus size={13} className="text-slate-400" /> Assign to
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => deleteChecklist(cl.id)}
-                                className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium cursor-pointer rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 focus:text-red-500"
-                              >
-                                <Trash2 size={13} /> Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          {/* Checklist header delete button */}
+                          <button
+                            type="button"
+                            onClick={() => deleteChecklist(cl.id)}
+                            className="shrink-0 ml-2 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 text-slate-400 hover:text-red-500 transition-colors border border-slate-200 dark:border-white/10"
+                            title="Delete checklist"
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
 
                         {/* Items */}
@@ -4000,45 +3987,101 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                               </button>
                               <input
                                 type="text"
+                                id={`cl-item-${item.id}`}
                                 value={item.text}
                                 onChange={e => updateChecklistItem(cl.id, item.id, { text: e.target.value })}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    addChecklistItem(cl.id);
+                                  }
+                                }}
                                 placeholder="Item"
                                 className={`flex-1 bg-transparent outline-none border-0 text-[13px] font-medium placeholder:text-slate-400 ${
                                   item.checked ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-300'
                                 }`}
                               />
-                              {/* Hover: ... dropdown with Delete */}
-                              <div className="hidden group-hover/item:flex items-center gap-1 shrink-0">
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <button
-                                      type="button"
-                                      className="p-1 rounded hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-600 transition-colors"
-                                      title="More"
-                                    >
-                                      <MoreHorizontal size={13} />
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent
-                                    align="end"
-                                    className="w-36 rounded-xl shadow-lg border border-slate-100 dark:border-white/10 bg-white dark:bg-[#1c1c1c] p-1 z-[9999]"
-                                  >
-                                    <DropdownMenuItem
-                                      onClick={() => deleteChecklistItem(cl.id, item.id)}
-                                      className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium cursor-pointer rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 focus:text-red-500"
-                                    >
-                                      <Trash2 size={13} /> Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
+                              {/* Hover: Delete item button */}
                               <button
                                 type="button"
-                                title="Assign"
-                                className="shrink-0 text-slate-300 hover:text-slate-500 dark:hover:text-slate-300 transition-colors"
+                                onClick={() => deleteChecklistItem(cl.id, item.id)}
+                                className="opacity-0 group-hover/item:opacity-100 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-red-500 transition-all shrink-0 cursor-pointer"
+                                title="Delete item"
                               >
-                                <UserPlus size={14} />
+                                <Trash2 size={13} />
                               </button>
+                              {/* Member Assignee Dropdown */}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="shrink-0 transition-colors cursor-pointer outline-none"
+                                    title={
+                                      item.assigneeIds && item.assigneeIds.length > 0
+                                        ? `Assigned to ${item.assigneeIds.map(id => users.find((u: any) => u.id === id)?.name).filter(Boolean).join(', ')}`
+                                        : "Assign members"
+                                    }
+                                  >
+                                    {item.assigneeIds && item.assigneeIds.length > 0 ? (
+                                      <div className="flex items-center -space-x-1.5 overflow-hidden">
+                                        {item.assigneeIds.slice(0, 3).map((aId) => {
+                                          const assignedU = users.find((u: any) => u.id === aId);
+                                          return (
+                                            <span key={aId} className="w-5 h-5 rounded-full bg-blue-600 text-white border border-white dark:border-[#1c1c1c] flex items-center justify-center text-[9px] font-bold shadow-xs shrink-0">
+                                              {(assignedU?.name || 'U').substring(0, 2).toUpperCase()}
+                                            </span>
+                                          );
+                                        })}
+                                        {item.assigneeIds.length > 3 && (
+                                          <span className="w-5 h-5 rounded-full bg-slate-700 text-white border border-white dark:border-[#1c1c1c] flex items-center justify-center text-[8px] font-bold shrink-0">
+                                            +{item.assigneeIds.length - 3}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <UserPlus size={14} className="text-slate-300 hover:text-slate-500 dark:hover:text-slate-300" />
+                                    )}
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                  align="end"
+                                  className="w-48 p-1 bg-white dark:bg-[#1c1c1c] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg z-[9999]"
+                                >
+                                  <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                    Assign Members
+                                  </div>
+                                  <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-0.5">
+                                    {users.filter((u: any) => u.role !== "CLIENT" && u.status === "ACTIVE").map((u: any) => {
+                                      const isAssigned = item.assigneeIds?.includes(u.id);
+                                      return (
+                                        <DropdownMenuItem
+                                          key={u.id}
+                                          onSelect={(e) => {
+                                            e.preventDefault();
+                                            const currentList = item.assigneeIds || [];
+                                            const nextList = isAssigned
+                                              ? currentList.filter(id => id !== u.id)
+                                              : [...currentList, u.id];
+                                            updateChecklistItem(cl.id, item.id, { assigneeIds: nextList });
+                                          }}
+                                          className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer"
+                                        >
+                                          <div className="flex items-center gap-2 min-w-0">
+                                            <span className="w-5 h-5 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center text-[9px] font-bold text-slate-700 dark:text-slate-300 shrink-0">
+                                              {(u.name || 'U').substring(0, 2).toUpperCase()}
+                                            </span>
+                                            <span className="truncate">{u.name}</span>
+                                          </div>
+                                          {isAssigned && <Check size={12} className="text-blue-500 shrink-0 ml-1" />}
+                                        </DropdownMenuItem>
+                                      );
+                                    })}
+                                    {users.filter((u: any) => u.role !== "CLIENT" && u.status === "ACTIVE").length === 0 && (
+                                      <div className="px-2.5 py-2 text-xs text-slate-400 text-center">No active members found</div>
+                                    )}
+                                  </div>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           ))}
 
@@ -4051,9 +4094,41 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                             >
                               <Plus size={13} /> Add item
                             </button>
-                            <button type="button" title="Assign" className="text-slate-300 hover:text-slate-500 transition-colors">
-                              <UserPlus size={14} />
-                            </button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button type="button" title="Assign members" className="text-slate-300 hover:text-slate-500 dark:hover:text-slate-300 transition-colors outline-none cursor-pointer">
+                                  <UserPlus size={14} />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent
+                                align="end"
+                                className="w-48 p-1 bg-white dark:bg-[#1c1c1c] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg z-[9999]"
+                              >
+                                <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                  Add & Assign Member
+                                </div>
+                                <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-0.5">
+                                  {users.filter((u: any) => u.role !== "CLIENT" && u.status === "ACTIVE").map((u: any) => (
+                                    <DropdownMenuItem
+                                      key={u.id}
+                                      onClick={() => {
+                                        const newItemId = addChecklistItem(cl.id);
+                                        updateChecklistItem(cl.id, newItemId, { assigneeIds: [u.id] });
+                                      }}
+                                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer"
+                                    >
+                                      <span className="w-5 h-5 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center text-[9px] font-bold text-slate-700 dark:text-slate-300 shrink-0">
+                                        {(u.name || 'U').substring(0, 2).toUpperCase()}
+                                      </span>
+                                      <span className="truncate">{u.name}</span>
+                                    </DropdownMenuItem>
+                                  ))}
+                                  {users.filter((u: any) => u.role !== "CLIENT" && u.status === "ACTIVE").length === 0 && (
+                                    <div className="px-2.5 py-2 text-xs text-slate-400 text-center">No active members found</div>
+                                  )}
+                                </div>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </div>
                       </div>
