@@ -14,5 +14,7 @@ export default async function RemindersPage() {
     return <div className="p-6 text-sm text-red-500">Failed to load reminders: {res.error}</div>;
   }
 
-  return <RemindersClient reminders={res.reminders as any[]} />;
+  const canManage = session.role !== 'MEMBER';
+
+  return <RemindersClient reminders={res.reminders as any[]} canManage={canManage} />;
 }

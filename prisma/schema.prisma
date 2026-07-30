@@ -46,6 +46,9 @@ model Organization {
   meetings         Meeting[]
   plannerEvents    PlannerEvent[]
   milestones       Milestone[]
+  hoursRequests    HoursRequest[]
+  pinnedTasks      PinnedTask[]
+  pinnedChats      PinnedChat[]
 }
 
 enum Role {
@@ -104,6 +107,10 @@ model User {
   meetingsAsClient      Meeting[]                @relation("MeetingClient")
   plannerEventsAssigned PlannerEvent[]           @relation("PlannerEventAssignee")
   createdMilestones     Milestone[]              @relation("MilestoneCreator")
+  hoursRequestsMade     HoursRequest[]           @relation("HoursRequestRequester")
+  hoursRequestsReviewed HoursRequest[]           @relation("HoursRequestReviewer")
+  pinnedTasks           PinnedTask[]
+  pinnedChats           PinnedChat[]
 
   @@unique([email, organizationId])
   @@index([organizationId])
@@ -244,6 +251,8 @@ model Task {
   messageMentions MessageTaskMention[]
   messages        ProjectMessage[]
   documents       Document[]
+  hoursRequests   HoursRequest[]
+  pinnedBy        PinnedTask[]
 
   @@index([organizationId])
   @@index([projectId])
@@ -613,6 +622,7 @@ model ChatGroup {
 
   members        ChatGroupMember[]
   messages       GroupMessage[]
+  pinnedBy       PinnedChat[]
 
   @@index([organizationId])
 }
@@ -883,4 +893,66 @@ model Milestone {
 
   @@index([organizationId])
   @@index([projectId])
+}
+
+enum HoursRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model HoursRequest {
+  id             String              @id @default(uuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  taskId         String
+  task           Task                @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  requestedById  String
+  requestedBy    User                @relation("HoursRequestRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  requestedHours Float               // additional hours requested
+  reason         String?
+  status         HoursRequestStatus  @default(PENDING)
+  reviewedById   String?
+  reviewedBy     User?               @relation("HoursRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([organizationId])
+  @@index([taskId])
+  @@index([requestedById])
+}
+
+// ─── Pinning Models ────────────────────────────────────────────────────────────
+
+model PinnedTask {
+  id             String       @id @default(uuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId         String
+  task           Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pinnedAt       DateTime     @default(now())
+
+  @@unique([userId, taskId])
+  @@index([userId, organizationId])
+}
+
+model PinnedChat {
+  id             String       @id @default(uuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatGroupId    String?
+  chatGroup      ChatGroup?   @relation(fields: [chatGroupId], references: [id], onDelete: Cascade)
+  projectId      String?      // for project chats
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  chatType       String       // "project" | "group" | "direct"
+  displayName    String       // cached for quick render
+  pinnedAt       DateTime     @default(now())
+
+  @@unique([userId, chatGroupId])
+  @@unique([userId, projectId])
+  @@index([userId, organizationId])
 }

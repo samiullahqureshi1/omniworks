@@ -39,6 +39,7 @@ export default function TimeClient({
   // Both OWNER, PM, and MEMBER will see the new dashboard view
   return (
     <OwnerTimeDashboard 
+      initialActiveTimer={initialActiveTimer}
       timeEntries={initialTimeEntries} 
       allUsers={allUsers} 
       allProjects={allProjects} 

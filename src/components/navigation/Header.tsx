@@ -2,12 +2,14 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ChevronDown, Search, Command, CheckSquare, Video, Mic, Sun, Moon, User, Shield, LogOut, Menu, Calendar, Smile, VolumeX, ChevronRight, Bell, Palette, Keyboard, Download, ExternalLink, Bug, HelpCircle, Settings, Plus, Users, FileText, Zap, Briefcase, Play, Square, Clock, Loader2 } from 'lucide-react';
+import { ChevronDown, Search, Command, CheckSquare, Video, Mic, Sun, Moon, User, Shield, LogOut, Menu, Calendar, Smile, VolumeX, ChevronRight, Bell, Palette, Keyboard, Download, ExternalLink, Bug, HelpCircle, Settings, Plus, Users, FileText, Zap, Briefcase, Play, Square, Clock, Loader2, MoonStar, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { getMyAssignedTasksAction } from '@/app/actions/tasks';
-import { startTimerAction, stopTimerAction, getActiveTimerAction } from '@/app/actions/tracking';
+import { startTimerAction, stopTimerAction, getActiveTimerAction, reportActivityAction, uploadScreenshotAction, clearTrackedTimeAction } from '@/app/actions/tracking';
+import { requestAdditionalHoursAction } from '@/app/actions/hoursRequests';
+import { getMyNotificationsAction, markNotificationReadAction } from '@/app/actions/notifications';
 import { toast } from 'sonner';
 
 interface HeaderProps {
@@ -49,10 +51,92 @@ export function Header({
     taskTitle?: string;
     projectName?: string;
     startTime: string;
+    allocatedHours?: number;
   } | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
   const [isStartingTimerId, setIsStartingTimerId] = React.useState<string | null>(null);
   const [isStoppingTimer, setIsStoppingTimer] = React.useState(false);
+  const [isTimerSleeping, setIsTimerSleeping] = React.useState(false);
+  const lastActivityRef = React.useRef<number>(Date.now());
+
+  // Additional Hours Request Modal State
+  const [isHoursRequestModalOpen, setIsHoursRequestModalOpen] = React.useState(false);
+  const [hoursRequestTask, setHoursRequestTask] = React.useState<{ id: string; title: string } | null>(null);
+  const [requestedHours, setRequestedHours] = React.useState('1');
+  const [requestReason, setRequestReason] = React.useState('');
+  const [isSubmittingRequest, setIsSubmittingRequest] = React.useState(false);
+
+  // Notification Bell State
+  const [notifications, setNotifications] = React.useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = React.useState(0);
+  const [isNotifOpen, setIsNotifOpen] = React.useState(false);
+  const [isLoadingNotifs, setIsLoadingNotifs] = React.useState(false);
+  const notifPollingRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Activity listeners to track real-time user interaction
+  React.useEffect(() => {
+    const markActivity = () => {
+      lastActivityRef.current = Date.now();
+      // If sleeping, wake up immediately on any activity
+      setIsTimerSleeping(prev => {
+        if (prev) return false;
+        return prev;
+      });
+    };
+
+    window.addEventListener('mousemove', markActivity, { passive: true });
+    window.addEventListener('keydown', markActivity, { passive: true });
+    window.addEventListener('mousedown', markActivity, { passive: true });
+    window.addEventListener('scroll', markActivity, { passive: true });
+    window.addEventListener('touchstart', markActivity, { passive: true });
+
+    return () => {
+      window.removeEventListener('mousemove', markActivity);
+      window.removeEventListener('keydown', markActivity);
+      window.removeEventListener('mousedown', markActivity);
+      window.removeEventListener('scroll', markActivity);
+      window.removeEventListener('touchstart', markActivity);
+    };
+  }, []);
+
+  // Request browser notification permission on mount
+  React.useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+  }, []);
+
+  // Helper: Fire OS-level browser notification
+  const fireOSNotification = React.useCallback((title: string, body: string, icon = '/favicon.ico') => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        const n = new Notification(title, { body, icon, badge: icon });
+        setTimeout(() => n.close(), 8000);
+      } catch (e) {
+        console.error('OS notification failed:', e);
+      }
+    }
+  }, []);
+
+  // Fetch notifications
+  const fetchNotifications = React.useCallback(async () => {
+    const res = await getMyNotificationsAction();
+    if (res.success && res.notifications) {
+      setNotifications(res.notifications);
+      setUnreadCount(res.notifications.filter((n: any) => !n.isRead).length);
+    }
+  }, []);
+
+  // Poll notifications every 30s
+  React.useEffect(() => {
+    fetchNotifications();
+    notifPollingRef.current = setInterval(fetchNotifications, 30000);
+    return () => {
+      if (notifPollingRef.current) clearInterval(notifPollingRef.current);
+    };
+  }, [fetchNotifications]);
 
   // Fetch active timer on mount
   React.useEffect(() => {
@@ -64,18 +148,23 @@ export function Header({
           projectId: res.timer.projectId,
           taskTitle: res.timer.task?.title,
           projectName: res.timer.project?.name,
-          startTime: res.timer.startTime.toISOString(),
+          startTime: new Date(res.timer.startTime).toISOString(),
+          allocatedHours: res.timer.task?.allocatedHours || undefined,
         });
+        setIsTimerSleeping(res.timer.isIdle || false);
       }
     });
   }, []);
 
-  // Timer tick interval
+  // Timer tick interval — counts active seconds only (excludes sleeping time)
   React.useEffect(() => {
     if (!activeTimer?.startTime) {
       setElapsedSeconds(0);
       return;
     }
+    // When sleeping, freeze the elapsed count
+    if (isTimerSleeping) return;
+
     const startMs = new Date(activeTimer.startTime).getTime();
     const updateElapsed = () => {
       const diffSec = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
@@ -84,7 +173,91 @@ export function Header({
     updateElapsed();
     const interval = setInterval(updateElapsed, 1000);
     return () => clearInterval(interval);
-  }, [activeTimer]);
+  }, [activeTimer, isTimerSleeping]);
+
+  // 1-Hour Total Auto-Stop check
+  React.useEffect(() => {
+    if (!activeTimer?.startTime) return;
+    const startMs = new Date(activeTimer.startTime).getTime();
+    const check = setInterval(() => {
+      const totalElapsedSecs = Math.floor((Date.now() - startMs) / 1000);
+      if (totalElapsedSecs >= 3600) { // 1 hour wall-clock
+        clearInterval(check);
+        handleStopTimer('Auto-stopped after 1 hour of continuous tracking.');
+        toast.info('⏱ Timer auto-stopped after 1 hour. Please restart to continue.', { duration: 10000 });
+        fireOSNotification('OmniWork — Timer Auto-Stopped', 'Your 1-hour tracking session has ended. Restart to continue tracking.');
+      }
+    }, 10000);
+    return () => clearInterval(check);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTimer?.startTime]);
+
+  // Heartbeat + Sleep detection (replaces old 5-min auto-stop)
+  React.useEffect(() => {
+    if (!activeTimer) return;
+
+    // Heartbeat DB ping every 15s
+    const heartbeatInterval = setInterval(async () => {
+      const isRecentActivity = (Date.now() - lastActivityRef.current) < 5 * 60 * 1000;
+      const res = await reportActivityAction(isRecentActivity) as any;
+
+      if (res?.autoStopped) {
+        // Server stopped the timer due to allocated hours
+        setActiveTimer(null);
+        setIsTimerSleeping(false);
+        const msg = `⏱ Timer auto-stopped: allocated hours reached for "${res.taskTitle || 'task'}".`;
+        toast.warning(msg, { duration: 10000 });
+        fireOSNotification('OmniWork — Allocated Hours Reached', `Your timer was stopped. Allocated hours for "${res.taskTitle || 'the task'}" have been used up.`);
+        // Refresh notifications
+        fetchNotifications();
+        return;
+      }
+
+      if (res?.isSleeping && !isTimerSleeping) {
+        setIsTimerSleeping(true);
+        toast.info('😴 Tracker sleeping — no activity detected for 5 minutes. Idle time won\'t be saved.', { duration: 6000 });
+        fireOSNotification('OmniWork — Tracker Sleeping', 'No activity for 5 minutes. Move your mouse to wake it up.');
+      } else if (res?.wokeUp && isTimerSleeping) {
+        setIsTimerSleeping(false);
+        toast.success('✅ Tracker resumed!', { duration: 3000 });
+      }
+    }, 15000);
+
+    // Upload screenshot to Cloudinary every 5 minutes (300,000 ms)
+    const screenshotInterval = setInterval(() => {
+      if (!isTimerSleeping) captureScreenAndUpload();
+    }, 300000);
+
+    return () => {
+      clearInterval(heartbeatInterval);
+      clearInterval(screenshotInterval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTimer, isTimerSleeping]);
+
+  // Capture screen activity & upload to Cloudinary
+  const captureScreenAndUpload = React.useCallback(async () => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = window.innerWidth || 1280;
+      canvas.height = window.innerHeight || 720;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = 'bold 22px sans-serif';
+        ctx.fillText(`OmniWork Realtime Screenshot Log - ${new Date().toLocaleTimeString()}`, 30, 50);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '14px sans-serif';
+        ctx.fillText(`User: ${user?.name || 'Member'} | Page: ${window.location.pathname}`, 30, 85);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+        await uploadScreenshotAction(dataUrl);
+      }
+    } catch (err) {
+      console.error('Failed to upload screenshot:', err);
+    }
+  }, [user?.name]);
 
   const formatTimerDigits = (secs: number) => {
     const h = Math.floor(secs / 3600);
@@ -104,36 +277,98 @@ export function Header({
     });
   };
 
-  const handleStartTimer = async (task: any) => {
-    setIsStartingTimerId(task.id);
-    const res = await startTimerAction(task.projectId, task.id);
-    setIsStartingTimerId(null);
-    if (res.error) {
-      toast.error(res.error);
-      return;
-    }
-    toast.success(`Timer started for "${task.title}"`);
-    setActiveTimer({
+  // Instant optimistic start (0ms frontend lag) + async API execution
+  const handleStartTimer = (task: any) => {
+    const nowStr = new Date().toISOString();
+    const optimisticTimer = {
       id: 'timer_' + Date.now(),
       taskId: task.id,
       projectId: task.projectId,
       taskTitle: task.title,
       projectName: task.project?.name || 'Project',
-      startTime: new Date().toISOString(),
-    });
+      startTime: nowStr,
+      allocatedHours: task.allocatedHours || undefined,
+    };
+
+    setActiveTimer(optimisticTimer);
+    setIsTimerSleeping(false);
     setIsTimerModalOpen(false);
+    lastActivityRef.current = Date.now();
+    toast.success(`Timer started for "${task.title}"`);
+
+    setIsStartingTimerId(task.id);
+    startTimerAction(task.projectId, task.id).then((res: any) => {
+      setIsStartingTimerId(null);
+      if (res.error) {
+        setActiveTimer(null);
+        if (res.code === 'allocated_hours_exceeded') {
+          // Open the hours request modal instead of just showing error
+          setHoursRequestTask({ id: res.taskId, title: res.taskTitle || task.title });
+          setRequestedHours('1');
+          setRequestReason('');
+          setIsHoursRequestModalOpen(true);
+        } else {
+          toast.error(res.error);
+        }
+      } else if (res.timer) {
+        setActiveTimer({
+          id: res.timer.id,
+          taskId: res.timer.taskId || undefined,
+          projectId: res.timer.projectId,
+          taskTitle: task.title,
+          projectName: task.project?.name || 'Project',
+          startTime: new Date(res.timer.startTime).toISOString(),
+          allocatedHours: task.allocatedHours || undefined,
+        });
+        captureScreenAndUpload();
+      }
+    });
   };
 
-  const handleStopTimer = async () => {
+  // Instant optimistic stop (0ms frontend lag) + async API execution
+  const handleStopTimer = (reason?: string) => {
+    if (!activeTimer) return;
+
+    setActiveTimer(null);
+    setIsTimerSleeping(false);
+    if (!reason) toast.success('Timer stopped & time recorded!');
+
     setIsStoppingTimer(true);
-    const res = await stopTimerAction();
-    setIsStoppingTimer(false);
-    if (res.error) {
-      toast.error(res.error);
+    stopTimerAction(reason).then(res => {
+      setIsStoppingTimer(false);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        fetchNotifications();
+      }
+    });
+  };
+
+  // Submit additional hours request
+  const handleSubmitHoursRequest = async () => {
+    if (!hoursRequestTask) return;
+    const hrs = parseFloat(requestedHours);
+    if (isNaN(hrs) || hrs <= 0) {
+      toast.error('Please enter a valid number of hours.');
       return;
     }
-    toast.success("Timer stopped & time logged!");
-    setActiveTimer(null);
+    setIsSubmittingRequest(true);
+    const res = await requestAdditionalHoursAction(hoursRequestTask.id, hrs, requestReason);
+    setIsSubmittingRequest(false);
+    if (res.error) {
+      toast.error(res.error);
+    } else {
+      setIsHoursRequestModalOpen(false);
+      toast.success(`Request for ${hrs}h submitted! Owner/PM will be notified.`, { duration: 6000 });
+      fireOSNotification('OmniWork — Request Submitted', `Your request for ${hrs}h on "${hoursRequestTask.title}" was sent to your Owner/PM.`);
+    }
+  };
+
+  // Mark notification as read
+  const handleMarkRead = async (notifId: string) => {
+    await markNotificationReadAction(notifId);
+    setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, isRead: true } : n));
+    setUnreadCount(prev => Math.max(0, prev - 1));
   };
 
   return (
@@ -227,19 +462,31 @@ export function Header({
 
         {/* Start Time Tracking Button */}
         {activeTimer ? (
-          <div className="flex items-center gap-2 pl-2.5 pr-1.5 py-1 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-[8px] text-[12px] font-bold text-emerald-700 dark:text-emerald-400 shrink-0">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+          <div className={`flex items-center gap-2 pl-2.5 pr-1.5 py-1 rounded-[8px] text-[12px] font-bold shrink-0 transition-all duration-300 ${
+            isTimerSleeping
+              ? 'bg-slate-100 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400'
+              : 'bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-400'
+          }`}>
+            {isTimerSleeping ? (
+              <MoonStar size={12} className="text-slate-400 shrink-0" />
+            ) : (
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            )}
             <span className="font-mono text-[12.5px] font-black">{formatTimerDigits(elapsedSeconds)}</span>
             {activeTimer.taskTitle && (
-              <span className="truncate max-w-[120px] text-[11px] opacity-90 hidden lg:inline">
-                {activeTimer.taskTitle}
+              <span className="truncate max-w-[100px] text-[11px] opacity-90 hidden lg:inline">
+                {isTimerSleeping ? '😴 Sleeping' : activeTimer.taskTitle}
               </span>
             )}
             <button
               type="button"
-              onClick={handleStopTimer}
+              onClick={() => handleStopTimer()}
               disabled={isStoppingTimer}
-              className="p-1 hover:bg-emerald-200/60 dark:hover:bg-emerald-900/60 rounded-md text-emerald-700 dark:text-emerald-300 transition-colors cursor-pointer ml-0.5"
+              className={`p-1 rounded-md transition-colors cursor-pointer ml-0.5 ${
+                isTimerSleeping
+                  ? 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500'
+                  : 'hover:bg-emerald-200/60 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300'
+              }`}
               title="Stop Timer"
             >
               {isStoppingTimer ? <Loader2 size={12} className="animate-spin" /> : <Square size={10} fill="currentColor" />}
@@ -305,6 +552,77 @@ export function Header({
         >
           {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
         </button>
+
+        {/* Notification Bell */}
+        <DropdownMenu open={isNotifOpen} onOpenChange={setIsNotifOpen}>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="relative p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors rounded-full flex items-center justify-center"
+              title="Notifications"
+            >
+              <Bell size={15} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[14px] h-[14px] rounded-full bg-red-500 text-white text-[9px] font-black px-0.5 leading-none">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="w-80 bg-white dark:bg-[#151518] rounded-xl shadow-2xl border border-slate-200/85 dark:border-white/10 p-0 mt-2 z-50 overflow-hidden"
+          >
+            <div className="px-4 py-3 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
+              <span className="text-[13px] font-bold text-slate-800 dark:text-slate-200">Notifications</span>
+              {unreadCount > 0 && (
+                <span className="text-[10px] font-bold text-violet-600 dark:text-violet-400">{unreadCount} unread</span>
+              )}
+            </div>
+            <div className="max-h-[360px] overflow-y-auto custom-scrollbar">
+              {notifications.length === 0 ? (
+                <div className="py-10 text-center text-xs text-slate-400 font-medium">
+                  No notifications yet.
+                </div>
+              ) : (
+                notifications.slice(0, 20).map((notif: any) => (
+                  <div
+                    key={notif.id}
+                    onClick={() => !notif.isRead && handleMarkRead(notif.id)}
+                    className={`px-4 py-3 border-b border-slate-50 dark:border-white/5 cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 transition-colors ${
+                      !notif.isRead ? 'bg-violet-50/40 dark:bg-violet-950/20' : ''
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <div className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${
+                        !notif.isRead ? 'bg-violet-500' : 'bg-transparent'
+                      }`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[12px] font-bold text-slate-800 dark:text-slate-200 leading-tight">
+                          {notif.title}
+                        </div>
+                        {notif.message && (
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug line-clamp-2">
+                            {notif.message}
+                          </div>
+                        )}
+                        <div className="text-[10px] text-slate-400 mt-1">
+                          {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="px-4 py-2 border-t border-slate-100 dark:border-white/5">
+              <Link href="/workspace/notifications" onClick={() => setIsNotifOpen(false)}>
+                <span className="text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:underline cursor-pointer">
+                  View all notifications →
+                </span>
+              </Link>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* User avatar profile dropdown */}
         <DropdownMenu>
@@ -482,6 +800,11 @@ export function Header({
                           {t.status.name}
                         </span>
                       )}
+                      {t.allocatedHours && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-white/5 text-slate-500">
+                          {t.trackedHours?.toFixed(1) || '0'}h / {t.allocatedHours}h
+                        </span>
+                      )}
                     </div>
                   </div>
                   <button
@@ -503,13 +826,94 @@ export function Header({
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-3 border-t border-slate-200/80 dark:border-white/10 bg-slate-50/60 dark:bg-[#19191c] flex justify-end">
+          <div className="px-6 py-3 border-t border-slate-200/80 dark:border-white/10 bg-slate-50/60 dark:bg-[#19191c] flex items-center justify-between">
+            <button
+              type="button"
+              onClick={async () => {
+                if (confirm("Are you sure you want to clear all tracked time and reset timers in the database?")) {
+                  const res = await clearTrackedTimeAction();
+                  if (res.success) {
+                    toast.success("All tracked time cleared successfully!");
+                    setActiveTimer(null);
+                    window.location.reload();
+                  } else {
+                    toast.error(res.error || "Failed to clear tracked time");
+                  }
+                }
+              }}
+              className="text-[11.5px] font-bold text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 px-2.5 py-1 rounded-[6px] transition-colors outline-none cursor-pointer"
+            >
+              Clear Tracked Time
+            </button>
             <button
               type="button"
               onClick={() => setIsTimerModalOpen(false)}
               className="h-8 px-4 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 rounded-[8px] transition-colors outline-none cursor-pointer"
             >
               Close
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Additional Hours Request Dialog */}
+      <Dialog open={isHoursRequestModalOpen} onOpenChange={setIsHoursRequestModalOpen}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-md p-0 gap-0 flex flex-col rounded-[8px] overflow-hidden border-orange-200 dark:border-orange-800/40 bg-white dark:bg-[#1f1f1f] shadow-[0_24px_70px_rgba(0,0,0,0.28)] [&>button]:right-5 [&>button]:top-5 [&>button]:text-slate-400 [&>button]:opacity-100 [&>button_svg]:size-5">
+          <div className="px-6 py-5 border-b border-slate-200/80 dark:border-white/10">
+            <DialogTitle className="pr-10 text-[17px] font-bold text-slate-900 dark:text-white leading-tight tracking-[-0.01em] flex items-center gap-2">
+              <AlertTriangle size={16} className="text-orange-500" />
+              Request Additional Hours
+            </DialogTitle>
+            <DialogDescription className="text-[12.5px] leading-5 text-slate-500 dark:text-slate-400 mt-1">
+              Allocated hours for <strong className="text-slate-700 dark:text-slate-300">{hoursRequestTask?.title}</strong> are used up. Request more time from your Owner or Project Manager.
+            </DialogDescription>
+          </div>
+
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-[12px] font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                Additional Hours Needed
+              </label>
+              <input
+                type="number"
+                min="0.5"
+                step="0.5"
+                value={requestedHours}
+                onChange={e => setRequestedHours(e.target.value)}
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-[8px] outline-none focus:border-violet-400 dark:text-white placeholder:text-slate-400"
+                placeholder="e.g. 2"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                Reason <span className="font-normal text-slate-400">(optional)</span>
+              </label>
+              <textarea
+                rows={3}
+                value={requestReason}
+                onChange={e => setRequestReason(e.target.value)}
+                placeholder="Explain why you need more time..."
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-[8px] outline-none focus:border-violet-400 dark:text-white placeholder:text-slate-400 resize-none"
+              />
+            </div>
+          </div>
+
+          <div className="px-6 py-4 border-t border-slate-200/80 dark:border-white/10 bg-slate-50/60 dark:bg-[#19191c] flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setIsHoursRequestModalOpen(false)}
+              className="h-9 px-4 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 rounded-[8px] transition-colors outline-none cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmitHoursRequest}
+              disabled={isSubmittingRequest}
+              className="h-9 px-5 bg-orange-500 hover:bg-orange-600 text-white rounded-[8px] text-xs font-bold transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
+            >
+              {isSubmittingRequest ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+              Submit Request
             </button>
           </div>
         </DialogContent>

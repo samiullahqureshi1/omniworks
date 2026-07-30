@@ -70,7 +70,13 @@ function relativeDateLabel(dateIso: string) {
 
 type TabFilter = 'all' | 'meetings' | 'tasks' | 'today' | 'snoozed' | 'completed';
 
-export default function RemindersClient({ reminders: serverReminders }: { reminders: Reminder[] }) {
+export default function RemindersClient({
+  reminders: serverReminders,
+  canManage = true,
+}: {
+  reminders: Reminder[];
+  canManage?: boolean;
+}) {
   const [state, setState] = useState<Record<string, number | 'done'>>({});
   const [customReminders, setCustomReminders] = useState<Reminder[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -221,13 +227,15 @@ export default function RemindersClient({ reminders: serverReminders }: { remind
             </button>
           )}
 
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-1.5 h-9 px-4 rounded-[8px] bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors"
-          >
-            <Plus size={15} />
-            Quick Reminder
-          </button>
+          {canManage && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="flex items-center gap-1.5 h-9 px-4 rounded-[8px] bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors"
+            >
+              <Plus size={15} />
+              Quick Reminder
+            </button>
+          )}
         </div>
       </div>
 

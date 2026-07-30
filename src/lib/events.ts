@@ -19,6 +19,9 @@ export type AppEventType =
   | 'timer_stopped'
   | 'timer_idle'
   | 'timer_resumed'
+  | 'timer_sleeping'
+  | 'timer_woke_up'
+  | 'timer_auto_stopped'
   | 'manual_time_added'
   | 'time_entry_updated'
   | 'time_entry_deleted'
@@ -28,7 +31,10 @@ export type AppEventType =
   | 'message_read'
   | 'presence_updated'
   | 'message_edited'
-  | 'message_deleted';
+  | 'message_deleted'
+  | 'hours_request_submitted'
+  | 'hours_request_approved'
+  | 'hours_request_rejected';
 
 export function emitAppEvent(event: AppEventType, channel: string, payload: any) {
   // We prefix the event name with the channel so clients can subscribe to specific channels.

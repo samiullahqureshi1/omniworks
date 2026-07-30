@@ -41,49 +41,93 @@ export async function getDashboardDataAction() {
    
     // 1. Owner Dashboard View
     if (role === "OWNER") {
-      const [totalProjects, totalUsers, totalHoursObj, activeTimersHoursObj, recentLogs, recentTasks, pendingPastDueCount, totalCompleteTasks, totalPendingTasks] =
-        await Promise.all([
-          prisma.project.count({ where: { organizationId } }),
-          prisma.user.count({ where: { organizationId } }),
-          prisma.timeEntry.aggregate({
-            where: { organizationId },
-            _sum: { duration: true },
-          }),
-          // Include time currently accumulating on running (not-yet-stopped) timers
-          prisma.activeTimer.aggregate({
-            where: { organizationId },
-            _sum: { activeWorkedDuration: true },
-          }),
-          prisma.timeEntry.findMany({
-            where: { organizationId },
-            include: { member: { select: { name: true, role: true } } },
-            orderBy: { createdAt: "desc" },
-            take: 5,
-          }),
-          prisma.task.findMany({
-            where: { organizationId },
-            include: {
-              project: { select: { name: true } },
-              assignees: { include: { user: { select: { name: true } } } },
-              status: true
-            },
-            orderBy: { createdAt: "desc" },
-            take: 10,
-          }),
-          prisma.task.count({
-            where: {
-              organizationId,
-              dueDate: { lt: new Date() },
-              status: { name: { not: "Done" } } // Approximation
-            }
-          }),
-          prisma.task.count({
-            where: { organizationId, status: { name: { in: ["Done", "Completed"] } } }
-          }),
-          prisma.task.count({
-            where: { organizationId, status: { name: { notIn: ["Done", "Completed"] } } }
-          })
-        ]);
+      const [
+        totalProjects,
+        totalTasks,
+        allocatedHoursObj,
+        totalHoursObj,
+        activeTimersHoursObj,
+        recentLogs,
+        recentTasks,
+        pendingPastDueCount,
+        totalCompleteTasks,
+        totalPendingTasks,
+        upcomingTasks,
+        upcomingMeetings,
+      ] = await Promise.all([
+        prisma.project.count({ where: { organizationId } }),
+        prisma.task.count({ where: { organizationId } }),
+        prisma.project.aggregate({
+          where: { organizationId },
+          _sum: { totalAllocatedHours: true },
+        }),
+        prisma.timeEntry.aggregate({
+          where: { organizationId },
+          _sum: { duration: true },
+        }),
+        prisma.activeTimer.aggregate({
+          where: { organizationId },
+          _sum: { activeWorkedDuration: true },
+        }),
+        prisma.timeEntry.findMany({
+          where: { organizationId },
+          include: { member: { select: { name: true, role: true } } },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+        }),
+        prisma.task.findMany({
+          where: { organizationId },
+          include: {
+            project: { select: { name: true } },
+            assignees: { include: { user: { select: { name: true } } } },
+            status: true,
+          },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+        }),
+        prisma.task.count({
+          where: {
+            organizationId,
+            dueDate: { lt: new Date() },
+            status: { name: { not: "Done" } },
+          },
+        }),
+        prisma.task.count({
+          where: { organizationId, status: { name: { in: ["Done", "Completed"] } } },
+        }),
+        prisma.task.count({
+          where: { organizationId, status: { name: { notIn: ["Done", "Completed"] } } },
+        }),
+        prisma.task.findMany({
+          where: {
+            organizationId,
+            dueDate: { gte: new Date() },
+          },
+          select: {
+            id: true,
+            title: true,
+            dueDate: true,
+            project: { select: { name: true } },
+          },
+          orderBy: { dueDate: "asc" },
+          take: 5,
+        }),
+        prisma.meeting.findMany({
+          where: {
+            organizationId,
+            startTime: { gte: new Date() },
+            status: { notIn: ["COMPLETED", "POSTPONED"] },
+          },
+          select: {
+            id: true,
+            startTime: true,
+            leadName: true,
+            project: { select: { name: true } },
+          },
+          orderBy: { startTime: "asc" },
+          take: 5,
+        }),
+      ]);
 
       const projects = await prisma.project.findMany({
         where: { organizationId },
@@ -91,31 +135,78 @@ export async function getDashboardDataAction() {
       });
       const projectStatusCounts = {
         PLANNING: projects.filter(
-          (p: any) => !p.status?.name || p.status?.name?.toLowerCase().includes('plan') || p.status?.name?.toLowerCase().includes('backlog')
+          (p: any) =>
+            !p.status?.name ||
+            p.status?.name?.toLowerCase().includes("plan") ||
+            p.status?.name?.toLowerCase().includes("backlog")
         ).length,
         IN_PROGRESS: projects.filter(
-          (p: any) => p.status?.name?.toLowerCase().includes('progress') || p.status?.name?.toLowerCase().includes('active')
+          (p: any) =>
+            p.status?.name?.toLowerCase().includes("progress") ||
+            p.status?.name?.toLowerCase().includes("active")
         ).length,
         ON_HOLD: projects.filter(
-          (p: any) => p.status?.name?.toLowerCase().includes('hold') || p.status?.name?.toLowerCase().includes('pause')
+          (p: any) =>
+            p.status?.name?.toLowerCase().includes("hold") ||
+            p.status?.name?.toLowerCase().includes("pause")
         ).length,
         COMPLETE: projects.filter(
-          (p: any) => p.status?.name?.toLowerCase().includes('complete') || p.status?.name?.toLowerCase().includes('done')
+          (p: any) =>
+            p.status?.name?.toLowerCase().includes("complete") ||
+            p.status?.name?.toLowerCase().includes("done")
         ).length,
       };
+
+      const realReminders = [
+        ...upcomingTasks.map((t) => ({
+          id: `task-${t.id}`,
+          title: t.title,
+          desc: `Task Due: ${t.project?.name ? t.project.name + " · " : ""}${new Date(
+            t.dueDate!
+          ).toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}`,
+          kind: "task",
+          date: t.dueDate,
+        })),
+        ...upcomingMeetings.map((m) => ({
+          id: `meeting-${m.id}`,
+          title: m.project
+            ? `Meeting: ${m.project.name}`
+            : `Meeting: ${m.leadName || "Intro Call"}`,
+          desc: `Scheduled: ${new Date(m.startTime).toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}`,
+          kind: "meeting",
+          date: m.startTime,
+        })),
+      ]
+        .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .slice(0, 5);
+
       return {
         success: true,
         view: "OWNER",
         metrics: {
           totalProjects,
-          totalUsers,
-          totalHours: (totalHoursObj._sum.duration || 0) + (activeTimersHoursObj._sum.activeWorkedDuration || 0) / 3600,
+          totalTasks,
+          totalAllocatedHours: allocatedHoursObj._sum.totalAllocatedHours || 0,
+          totalHours:
+            (totalHoursObj._sum.duration || 0) +
+            (activeTimersHoursObj._sum.activeWorkedDuration || 0) / 3600,
           projectStatusCounts,
           recentLogs,
           recentTasks,
           pendingPastDueCount,
           totalCompleteTasks,
-          totalPendingTasks
+          totalPendingTasks,
+          reminders: realReminders,
         },
       };
     }

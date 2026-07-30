@@ -6,6 +6,7 @@ import { TimeEntryType, TimeEntryStatus } from '@prisma/client';
 import { emitAppEvent } from '@/lib/events';
 import { createNotification } from './notifications';
 
+
 export async function startTimerAction(projectId: string, taskId?: string) {
   try {
     const session = await getSession();
@@ -25,7 +26,12 @@ export async function startTimerAction(projectId: string, taskId?: string) {
       if (task?.allocatedHours) {
         const tracked = task.trackedHours || 0;
         if (tracked >= task.allocatedHours) {
-          return { error: 'Allocated hours for this task are completed. Please ask Owner/Admin or Project Manager to increase task allocated hours.' };
+          return {
+            error: 'Allocated hours for this task are completed. Please request additional hours.',
+            code: 'allocated_hours_exceeded',
+            taskId,
+            taskTitle: task.title,
+          };
         }
       }
     }
@@ -84,65 +90,39 @@ export async function stopTimerAction(notes?: string) {
     }
 
     const stopTime = new Date();
-    
-    const startOfDay = new Date(activeTimer.startTime);
-    startOfDay.setHours(0, 0, 0, 0);
+    const startTime = new Date(activeTimer.startTime);
 
-    const endOfDay = new Date(activeTimer.startTime);
-    endOfDay.setHours(23, 59, 59, 999);
+    // Active-only duration: subtract idle/sleep time from total wall-clock time
+    const totalElapsedSecs = Math.max(0, Math.floor((stopTime.getTime() - startTime.getTime()) / 1000));
+    const idleSecs = Math.max(0, Math.floor(activeTimer.idleDuration || 0));
+    const activeOnlySecs = Math.max(0, totalElapsedSecs - idleSecs);
+    const activeOnlyHours = activeOnlySecs / 3600;
 
-    let entry = await prisma.timeEntry.findFirst({
-      where: {
-        memberId: session.userId,
+    const entry = await prisma.timeEntry.create({
+      data: {
+        organizationId: session.organizationId,
         projectId: activeTimer.projectId,
         taskId: activeTimer.taskId,
-        startTime: {
-          gte: startOfDay,
-          lte: endOfDay,
-        }
+        memberId: session.userId,
+        startTime: activeTimer.startTime,
+        endTime: stopTime,
+        duration: activeOnlyHours,           // save active-only hours
+        activeWorkedDuration: activeOnlySecs, // active seconds
+        idleDuration: idleSecs,               // idle/sleep seconds
+        entryType: TimeEntryType.TIMER,
+        status: TimeEntryStatus.SAVED,
+        notes: notes || '',
+        createdBy: session.userId,
       }
     });
 
-    const addedDuration = (activeTimer.activeWorkedDuration + activeTimer.idleDuration) / 3600;
-
-    if (entry) {
-      entry = await prisma.timeEntry.update({
-        where: { id: entry.id },
-        data: {
-          endTime: stopTime,
-          duration: (entry.duration || 0) + addedDuration,
-          activeWorkedDuration: (entry.activeWorkedDuration || 0) + activeTimer.activeWorkedDuration,
-          idleDuration: (entry.idleDuration || 0) + activeTimer.idleDuration,
-          notes: notes ? (entry.notes ? `${entry.notes}\n${notes}` : notes) : entry.notes,
-        }
-      });
-    } else {
-      entry = await prisma.timeEntry.create({
-        data: {
-          organizationId: session.organizationId,
-          projectId: activeTimer.projectId,
-          taskId: activeTimer.taskId,
-          memberId: session.userId,
-          startTime: activeTimer.startTime,
-          endTime: stopTime,
-          duration: addedDuration,
-          activeWorkedDuration: activeTimer.activeWorkedDuration,
-          idleDuration: activeTimer.idleDuration,
-          entryType: TimeEntryType.TIMER,
-          status: TimeEntryStatus.SAVED,
-          notes: notes || '',
-          createdBy: session.userId,
-        }
-      });
-    }
-
-    // Update Task trackedHours
-    if (activeTimer.taskId) {
+    // Update Task trackedHours with active-only duration
+    if (activeTimer.taskId && activeOnlySecs > 0) {
       await prisma.task.update({
         where: { id: activeTimer.taskId },
         data: {
           trackedHours: {
-            increment: activeTimer.activeWorkedDuration / 3600
+            increment: activeOnlyHours,
           }
         }
       });
@@ -196,7 +176,7 @@ export async function getActiveTimerAction() {
   }
 }
 
-// Pinged every minute
+// Pinged every 15 seconds from the client heartbeat
 export async function reportActivityAction(isActive: boolean) {
   try {
     const session = await getSession();
@@ -213,32 +193,35 @@ export async function reportActivityAction(isActive: boolean) {
     const timeSinceLastActivity = (now.getTime() - new Date(activeTimer.lastActivityAt).getTime()) / 1000;
     
     let updateData: any = {};
+    let isSleeping = false;
+    let wokeUp = false;
 
     if (activeTimer.isIdle) {
-      // It's currently idle
+      // Currently sleeping/idle
       if (isActive) {
-        // User resumed work
+        // User woke up — resume active tracking
         updateData.isIdle = false;
         updateData.lastActivityAt = now;
         updateData.idleStartedAt = null;
+        wokeUp = true;
       } else {
-        // Still idle
-        updateData.idleDuration = { increment: 60 }; // Assuming 60s ping
+        // Still sleeping — accumulate idle duration (15s heartbeat)
+        updateData.idleDuration = { increment: 15 };
       }
     } else {
-      // It's currently active
-      if (!isActive && timeSinceLastActivity >= 180) { // 3 minutes idle
+      // Currently active
+      if (!isActive && timeSinceLastActivity >= 5 * 60) {
+        // 5 minutes of no activity → enter sleep mode
         updateData.isIdle = true;
-        updateData.idleStartedAt = new Date(now.getTime() - 180 * 1000); // 3 minutes ago
-        updateData.idleDuration = { increment: 180 };
-        // Remove those 180s from active worked duration
-        updateData.activeWorkedDuration = { decrement: 180 }; 
+        updateData.idleStartedAt = new Date(now.getTime() - 5 * 60 * 1000); // 5 min ago
+        updateData.idleDuration = { increment: 5 * 60 }; // mark 5 min as idle
+        isSleeping = true;
       } else if (isActive) {
         updateData.lastActivityAt = now;
-        updateData.activeWorkedDuration = { increment: 60 };
+        updateData.activeWorkedDuration = { increment: 15 }; // 15s heartbeat
       } else {
-        // No activity but not yet 3 minutes
-        updateData.activeWorkedDuration = { increment: 60 };
+        // Activity within 5 min window — still count as active
+        updateData.activeWorkedDuration = { increment: 15 };
       }
     }
 
@@ -247,25 +230,32 @@ export async function reportActivityAction(isActive: boolean) {
       data: updateData
     });
 
-    if (updateData.isIdle === true) {
-      emitAppEvent('timer_idle', `organization:${session.organizationId}`, updated);
-      emitAppEvent('timer_idle', `user:${session.userId}`, updated);
-    } else if (updateData.isIdle === false) {
-      emitAppEvent('timer_resumed', `organization:${session.organizationId}`, updated);
-      emitAppEvent('timer_resumed', `user:${session.userId}`, updated);
+    if (isSleeping) {
+      emitAppEvent('timer_sleeping', `organization:${session.organizationId}`, updated);
+      emitAppEvent('timer_sleeping', `user:${session.userId}`, updated);
+    } else if (wokeUp) {
+      emitAppEvent('timer_woke_up', `organization:${session.organizationId}`, updated);
+      emitAppEvent('timer_woke_up', `user:${session.userId}`, updated);
     }
 
-    // Check auto-stop condition
-    if (activeTimer.task?.allocatedHours) {
-      const currentTracked = (activeTimer.task.trackedHours || 0) + (updated.activeWorkedDuration / 3600);
-      if (currentTracked >= activeTimer.task.allocatedHours) {
-        // Auto stop!
-        await stopTimerAction('Auto-stopped because allocated hours were completed.');
-        return { success: true, autoStopped: true };
+    // Check auto-stop: compare ACTIVE-ONLY seconds against allocated hours
+    if (activeTimer.task?.allocatedHours && !isSleeping) {
+      const activeOnlySecs = updated.activeWorkedDuration;
+      const activeOnlyHours = activeOnlySecs / 3600;
+      const previousTracked = activeTimer.task.trackedHours || 0;
+      if (previousTracked + activeOnlyHours >= activeTimer.task.allocatedHours) {
+        // Auto stop because active hours reached the allocated limit
+        await stopTimerAction('Auto-stopped: allocated hours reached.');
+        emitAppEvent('timer_auto_stopped', `user:${session.userId}`, {
+          reason: 'allocated_hours_reached',
+          taskTitle: activeTimer.task.title,
+          allocatedHours: activeTimer.task.allocatedHours,
+        });
+        return { success: true, autoStopped: true, reason: 'allocated_hours_reached', taskTitle: activeTimer.task.title };
       }
     }
 
-    return { success: true, timer: updated };
+    return { success: true, timer: updated, isSleeping, wokeUp };
   } catch (error: any) {
     return { error: error.message || 'Failed to report activity.' };
   }
@@ -457,5 +447,79 @@ export async function getDailyWorksnapsDataAction(dateStr: string, memberId: str
     return { success: true, screenshots, entries };
   } catch (error: any) {
     return { error: error.message || 'Failed to fetch worksnaps data.' };
+  }
+}
+
+export async function uploadScreenshotAction(base64Image: string) {
+  try {
+    const session = await getSession();
+    if (!session) return { error: 'Unauthorized' };
+
+    const activeTimer = await prisma.activeTimer.findUnique({
+      where: { memberId: session.userId }
+    });
+
+    if (!activeTimer) return { error: 'No active timer found.' };
+
+    let screenshotUrl = base64Image;
+
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET || 'unsigned_preset';
+
+    if (cloudName) {
+      try {
+        const formData = new FormData();
+        formData.append('file', base64Image);
+        formData.append('upload_preset', uploadPreset);
+
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        const data = await res.json();
+        if (data.secure_url) {
+          screenshotUrl = data.secure_url;
+        }
+      } catch (e) {
+        console.error('Cloudinary REST upload error, falling back to stored data:', e);
+      }
+    }
+
+    const screenshot = await prisma.timeScreenshot.create({
+      data: {
+        organizationId: session.organizationId,
+        projectId: activeTimer.projectId,
+        taskId: activeTimer.taskId,
+        memberId: session.userId,
+        activeTimerId: activeTimer.id,
+        screenshotUrl,
+        capturedAt: new Date(),
+        activityLevel: 100,
+      }
+    });
+
+    return { success: true, screenshotUrl: screenshot.screenshotUrl };
+  } catch (err: any) {
+    return { error: err.message || 'Failed to upload screenshot.' };
+  }
+}
+
+export async function clearTrackedTimeAction() {
+  try {
+    const session = await getSession();
+    if (!session) return { error: 'Unauthorized' };
+
+    await prisma.activeTimer.deleteMany({});
+    await prisma.timeScreenshot.deleteMany({});
+    await prisma.activityLog.deleteMany({});
+    await prisma.timeEntry.deleteMany({});
+    await prisma.task.updateMany({
+      data: { trackedHours: 0 }
+    });
+
+    return { success: true, message: 'All tracked time cleared successfully.' };
+  } catch (err: any) {
+    return { error: err.message || 'Failed to clear tracked time.' };
   }
 }

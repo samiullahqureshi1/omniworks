@@ -82,47 +82,23 @@ export async function POST(req: NextRequest) {
     const endOfDay = new Date(actualStartTime);
     endOfDay.setHours(23, 59, 59, 999);
 
-    let entry = await prisma.timeEntry.findFirst({
-      where: {
-        memberId,
+    const entry = await prisma.timeEntry.create({
+      data: {
+        organizationId,
         projectId,
         taskId,
-        startTime: {
-          gte: startOfDay,
-          lte: endOfDay,
-        }
+        memberId,
+        startTime: actualStartTime,
+        endTime: actualEndTime,
+        duration: duration,
+        activeWorkedDuration: duration * 3600,
+        idleDuration: 0,
+        entryType: TimeEntryType.MANUAL,
+        status: TimeEntryStatus.SAVED,
+        notes: notes || '',
+        createdBy: session.userId,
       }
     });
-
-    if (entry) {
-      entry = await prisma.timeEntry.update({
-        where: { id: entry.id },
-        data: {
-          endTime: actualEndTime > (entry.endTime || new Date(0)) ? actualEndTime : entry.endTime,
-          duration: (entry.duration || 0) + duration,
-          activeWorkedDuration: (entry.activeWorkedDuration || 0) + (duration * 3600),
-          notes: notes ? (entry.notes ? `${entry.notes}\n${notes}` : notes) : entry.notes,
-        }
-      });
-    } else {
-      entry = await prisma.timeEntry.create({
-        data: {
-          organizationId,
-          projectId,
-          taskId,
-          memberId,
-          startTime: actualStartTime,
-          endTime: actualEndTime,
-          duration: duration,
-          activeWorkedDuration: duration * 3600,
-          idleDuration: 0,
-          entryType: TimeEntryType.MANUAL,
-          status: TimeEntryStatus.SAVED,
-          notes: notes || '',
-          createdBy: session.userId,
-        }
-      });
-    }
 
     const updatedTask = await prisma.task.update({
       where: { id: taskId },

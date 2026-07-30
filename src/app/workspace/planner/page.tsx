@@ -24,12 +24,13 @@ export default async function PlannerPage() {
   }
 
   // Connected: normal Planner home (the secondary sidebar returns via the layout).
+  const isMember = session.role === 'MEMBER';
   const sections = [
     { name: 'My Calendar', icon: CalendarDays, desc: 'Your tasks and meetings in one view.' },
     { name: 'Meetings', icon: Video, desc: 'Bookings, Meet links, and AI notes.' },
     { name: 'Events', icon: Sparkles, desc: 'Milestones and org events.' },
     { name: 'Reminders', icon: Timer, desc: 'Upcoming deadlines and calls.' },
-    { name: 'Contacts', icon: Users, desc: 'Your leads and customers.' },
+    ...(!isMember ? [{ name: 'Contacts', icon: Users, desc: 'Your leads and customers.' }] : []),
   ];
 
   return (

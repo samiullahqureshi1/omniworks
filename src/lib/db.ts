@@ -6,7 +6,7 @@ const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
 let prismaInstance: PrismaClient;
 
-if (globalForPrisma.prisma) {
+if (globalForPrisma.prisma && ('pinnedChat' in globalForPrisma.prisma) && ('pinnedTask' in globalForPrisma.prisma)) {
   prismaInstance = globalForPrisma.prisma;
 } else {
   const connectionString =

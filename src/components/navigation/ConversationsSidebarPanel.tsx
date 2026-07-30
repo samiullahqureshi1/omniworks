@@ -15,7 +15,8 @@ import {
   Star,
   ChevronDown,
   X,
-  Check
+  Check,
+  Pin,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -73,6 +74,114 @@ export function ConversationsSidebarPanel({
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+
+  // Pinned chat IDs (loaded from DB)
+  const [pinnedGroupIds, setPinnedGroupIds] = useState<string[]>([]);
+  const [pinnedProjectIds, setPinnedProjectIds] = useState<string[]>([]);
+  const [isPinLoading, setIsPinLoading] = useState<string | null>(null);
+
+  // Load pinned IDs
+  useEffect(() => {
+    const loadPins = async () => {
+      try {
+        const { getMyPinnedChatIdsAction } = await import('@/app/actions/pinning');
+        const res = await getMyPinnedChatIdsAction();
+        if (res.success) {
+          setPinnedGroupIds(res.groupIds || []);
+          setPinnedProjectIds(res.projectIds || []);
+        }
+      } catch {}
+    };
+    loadPins();
+    window.addEventListener('omniwork_pins_changed', loadPins);
+    return () => window.removeEventListener('omniwork_pins_changed', loadPins);
+  }, []);
+
+  const handleTogglePinProject = (e: React.MouseEvent, project: any) => {
+    e.stopPropagation();
+    const isCurrentlyPinned = pinnedProjectIds.includes(project.id);
+    const nextPinned = !isCurrentlyPinned;
+
+    // 0ms Optimistic UI update for ConversationsSidebarPanel
+    setPinnedProjectIds((prev) =>
+      nextPinned ? [...prev, project.id] : prev.filter((id) => id !== project.id)
+    );
+
+    const chatItem = {
+      id: `proj-${project.id}`,
+      projectId: project.id,
+      chatType: 'project',
+      displayName: project.name,
+    };
+
+    // Dispatch 0ms event payload to instantly update SecondarySidebar
+    window.dispatchEvent(
+      new CustomEvent('omniwork_pins_changed', {
+        detail: { type: 'chat', item: chatItem, pinned: nextPinned },
+      })
+    );
+
+    // Persist to DB asynchronously in the background
+    import('@/app/actions/pinning').then(({ togglePinChatAction }) => {
+      togglePinChatAction({
+        chatType: 'project',
+        projectId: project.id,
+        displayName: project.name,
+      }).catch((err) => {
+        console.error('Failed to pin project chat:', err);
+        // Revert on error
+        setPinnedProjectIds((prev) =>
+          isCurrentlyPinned ? [...prev, project.id] : prev.filter((id) => id !== project.id)
+        );
+      });
+    });
+  };
+
+  const handleTogglePinGroup = (e: React.MouseEvent, group: any) => {
+    e.stopPropagation();
+    const isCurrentlyPinned = pinnedGroupIds.includes(group.id);
+    const nextPinned = !isCurrentlyPinned;
+
+    const otherMember = group.isDirect
+      ? group.members?.find((m: any) => m.userId !== currentUserId)?.user
+      : null;
+    const displayName = otherMember ? otherMember.name : group.name;
+    const chatType: 'group' | 'direct' = group.isDirect ? 'direct' : 'group';
+
+    // 0ms Optimistic UI update
+    setPinnedGroupIds((prev) =>
+      nextPinned ? [...prev, group.id] : prev.filter((id) => id !== group.id)
+    );
+
+    const chatItem = {
+      id: `grp-${group.id}`,
+      chatGroupId: group.id,
+      chatType,
+      displayName,
+    };
+
+    // Dispatch 0ms event payload to instantly update SecondarySidebar
+    window.dispatchEvent(
+      new CustomEvent('omniwork_pins_changed', {
+        detail: { type: 'chat', item: chatItem, pinned: nextPinned },
+      })
+    );
+
+    // Persist to DB asynchronously in the background
+    import('@/app/actions/pinning').then(({ togglePinChatAction }) => {
+      togglePinChatAction({
+        chatType,
+        chatGroupId: group.id,
+        displayName,
+      }).catch((err) => {
+        console.error('Failed to pin group chat:', err);
+        // Revert on error
+        setPinnedGroupIds((prev) =>
+          isCurrentlyPinned ? [...prev, group.id] : prev.filter((id) => id !== group.id)
+        );
+      });
+    });
+  };
 
   const handleOpenCreateModal = async () => {
     if (externalCreateGroup) {
@@ -435,10 +544,13 @@ export function ConversationsSidebarPanel({
             filteredProjects.map((project) => {
               const isSelected = selectedProjectId === project.id;
               return (
-                <button
+                <div
                   key={project.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => selectProject(project.id)}
-                  className={`group w-full text-left p-2.5 rounded-lg flex items-start gap-2.5 transition-all border ${
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') selectProject(project.id); }}
+                  className={`group w-full text-left p-2.5 rounded-lg flex items-start gap-2.5 transition-all border cursor-pointer ${
                     isSelected
                       ? 'bg-slate-200/80 dark:bg-white/10 text-slate-900 dark:text-white border-slate-300/50 dark:border-white/10 font-bold shadow-2xs'
                       : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white border-transparent'
@@ -463,14 +575,32 @@ export function ConversationsSidebarPanel({
                       <span className="font-semibold text-[12px] truncate leading-tight">
                         {project.name}
                       </span>
-                      <Star size={12} className={`shrink-0 ${isSelected ? 'text-amber-500' : 'text-slate-300 dark:text-slate-600'}`} />
+                      <button
+                        type="button"
+                        onClick={(e) => handleTogglePinProject(e, project)}
+                        className={`shrink-0 p-1 rounded-md transition-all cursor-pointer ${
+                          pinnedProjectIds.includes(project.id)
+                            ? 'bg-amber-500/15 text-amber-500 dark:bg-amber-500/20'
+                            : 'text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-white/10'
+                        }`}
+                        title={pinnedProjectIds.includes(project.id) ? 'Unpin chat' : 'Pin chat'}
+                      >
+                        <Pin
+                          size={12}
+                          className={
+                            pinnedProjectIds.includes(project.id)
+                              ? 'fill-amber-500 stroke-amber-500'
+                              : ''
+                          }
+                        />
+                      </button>
                     </div>
 
                     <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate font-medium">
                       {project.description ? stripHtml(project.description) : 'Project conversation'}
                     </div>
                   </div>
-                </button>
+                </div>
               );
             })
           ) : (
@@ -494,10 +624,13 @@ export function ConversationsSidebarPanel({
               ).length || 0;
 
             return (
-              <button
+              <div
                 key={group.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => selectGroup(group.id)}
-                className={`group w-full text-left p-2.5 rounded-lg flex items-start gap-2.5 transition-all border ${
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') selectGroup(group.id); }}
+                className={`group w-full text-left p-2.5 rounded-lg flex items-start gap-2.5 transition-all border cursor-pointer ${
                   isSelected
                     ? 'bg-slate-200/80 dark:bg-white/10 text-slate-900 dark:text-white border-slate-300/50 dark:border-white/10 font-bold shadow-2xs'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white border-transparent'
@@ -528,7 +661,25 @@ export function ConversationsSidebarPanel({
                     <span className="text-[12px] font-semibold truncate leading-tight">
                       {displayName}
                     </span>
-                    <Star size={12} className={`shrink-0 ${isSelected ? 'text-amber-500' : 'text-slate-300 dark:text-slate-600'}`} />
+                    <button
+                      type="button"
+                      onClick={(e) => handleTogglePinGroup(e, group)}
+                      className={`shrink-0 p-1 rounded-md transition-all cursor-pointer ${
+                        pinnedGroupIds.includes(group.id)
+                          ? 'bg-amber-500/15 text-amber-500 dark:bg-amber-500/20'
+                          : 'text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-white/10'
+                      }`}
+                      title={pinnedGroupIds.includes(group.id) ? 'Unpin chat' : 'Pin chat'}
+                    >
+                      <Pin
+                        size={12}
+                        className={
+                          pinnedGroupIds.includes(group.id)
+                            ? 'fill-amber-500 stroke-amber-500'
+                            : ''
+                        }
+                      />
+                    </button>
                   </div>
 
                   <div className="flex items-center justify-between gap-1 text-[10px]">
@@ -549,7 +700,7 @@ export function ConversationsSidebarPanel({
                     )}
                   </div>
                 </div>
-              </button>
+              </div>
             );
           })
         ) : (

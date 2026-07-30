@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
+import { formatHours } from '@/lib/utils';
 import { createTaskAction, updateTaskAction, deleteTaskAction } from '@/app/actions/tasks';
 import { updateProjectAction } from '@/app/actions/projects';
 import { getRulesAction, createRuleAction } from '@/app/actions/rules';
@@ -413,7 +414,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
     displayTotalAllocatedHours = getMemberAllocatedHours(currentUser.userId);
     displayTotalTrackedHours = getMemberTrackedHours(currentUser.userId);
     displayProgressPercent = displayTotalAllocatedHours 
-      ? Math.round((displayTotalTrackedHours / displayTotalAllocatedHours) * 100)
+      ? Number(((displayTotalTrackedHours / displayTotalAllocatedHours) * 100).toFixed(1))
       : 0;
   } else {
     const entryHours = project.timeEntries?.reduce((acc: number, t: any) => acc + (t.duration || 0), 0) || 0;
@@ -421,7 +422,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
     const activeHours = activeSeconds / 3600;
     displayTotalTrackedHours = Math.round((entryHours + activeHours) * 100) / 100;
     displayProgressPercent = project.totalAllocatedHours 
-      ? Math.round((displayTotalTrackedHours / project.totalAllocatedHours) * 100)
+      ? Number(((displayTotalTrackedHours / project.totalAllocatedHours) * 100).toFixed(1))
       : 0;
   }
 
@@ -841,7 +842,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                         Logged Hours
                       </span>
                       <div className="text-2xl font-black text-slate-900 dark:text-white">
-                        {displayTotalTrackedHours} <span className="text-xs font-semibold text-slate-400">h</span>
+                        {formatHours(displayTotalTrackedHours)}
                       </div>
                     </div>
                     <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
@@ -872,7 +873,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                   <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-white/10 overflow-hidden">
                     <div
                       className="h-full bg-indigo-600 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, displayProgressPercent)}%` }}
+                      style={{ width: `${Math.max(displayProgressPercent > 0 ? 1 : 0, Math.min(100, displayProgressPercent))}%` }}
                     />
                   </div>
                 </div>

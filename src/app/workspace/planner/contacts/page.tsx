@@ -10,6 +10,11 @@ export default async function ContactsPage() {
     redirect('/login');
   }
 
+  // Members cannot view Contacts
+  if (session.role === 'MEMBER') {
+    redirect('/workspace/planner/calendar');
+  }
+
   const [result, prefResult] = await Promise.all([
     getContactsAction(),
     getUserViewPreferenceAction('contacts_columns'),

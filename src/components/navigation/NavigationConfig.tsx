@@ -75,7 +75,7 @@ export const secondaryNavigation: Record<string, SecondarySection[]> = {
         { name: 'Dashboard', href: '/workspace', icon: LayoutDashboard, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
         { name: 'Projects', href: '/workspace/projects', icon: FolderKanban, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
         { name: 'Tasks', href: '/workspace/tasks', icon: CheckSquare, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
-        { name: 'Time', href: '/workspace/time', icon: Timer, exact: false, roles: ['OWNER', 'PM', 'MEMBER'] },
+        { name: 'Timesheet & Reports', href: '/workspace/time', icon: Timer, exact: false, roles: ['OWNER', 'PM', 'MEMBER'] },
         { name: 'Users', href: '/workspace/users', icon: UsersIcon, exact: false, roles: ['OWNER'] },
         { name: 'Clients', href: '/workspace/clients', icon: Briefcase, exact: false, roles: ['OWNER'] },
       ],
@@ -125,7 +125,7 @@ export const secondaryNavigation: Record<string, SecondarySection[]> = {
         { name: 'Meetings', href: '/workspace/planner/meetings', icon: Video, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
         { name: 'Events', href: '/workspace/planner/events', icon: Sparkles, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
         { name: 'Reminders', href: '/workspace/planner/reminders', icon: Timer, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
-        { name: 'Contacts', href: '/workspace/planner/contacts', icon: UsersIcon, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
+        { name: 'Contacts', href: '/workspace/planner/contacts', icon: UsersIcon, exact: true, roles: ['OWNER', 'PM'] },
       ],
     },
     {
@@ -143,7 +143,7 @@ export const secondaryNavigation: Record<string, SecondarySection[]> = {
         { name: 'Meetings', href: '/workspace/planner/meetings', icon: Video, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
         { name: 'Events', href: '/workspace/planner/events', icon: Sparkles, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
         { name: 'Reminders', href: '/workspace/planner/reminders', icon: Timer, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
-        { name: 'Contacts', href: '/workspace/planner/contacts', icon: UsersIcon, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
+        { name: 'Contacts', href: '/workspace/planner/contacts', icon: UsersIcon, exact: true, roles: ['OWNER', 'PM'] },
       ],
     },
     {

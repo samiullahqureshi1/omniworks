@@ -35,7 +35,11 @@ export async function getPlannerMeetingsAction() {
     } else if (role === 'MEMBER') {
       where = {
         organizationId,
-        OR: [{ pmId: userId }, { project: { projectManagerId: userId } }],
+        OR: [
+          { pmId: userId },
+          { project: { projectManagerId: userId } },
+          { project: { assignees: { some: { userId } } } },
+        ],
       };
     }
     // OWNER: all org meetings.
@@ -91,6 +95,9 @@ export async function createScheduledMeetingAction(input: CreateScheduledMeeting
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
+    if (session.role === 'CLIENT' || session.role === 'MEMBER') {
+      return { error: 'Only owners and project managers can schedule meetings.' };
+    }
 
     if (!input.startTime || !input.endTime) {
       return { error: 'Start date/time and end date/time are required.' };
@@ -434,6 +441,14 @@ export async function getPlannerEventsAction() {
         visibility: 'CLIENT_VISIBLE',
         OR: [{ projectId: null }, { project: { clientId: userId } }],
       };
+    } else if (role === 'MEMBER') {
+      where = {
+        organizationId,
+        OR: [
+          { assignedToId: userId },
+          { project: { assignees: { some: { userId } } } },
+        ],
+      };
     }
 
     const events = await prisma.plannerEvent.findMany({
@@ -445,7 +460,7 @@ export async function getPlannerEventsAction() {
       orderBy: { startDate: 'asc' },
     });
 
-    return { success: true, events, canManage: role === 'OWNER' || role === 'MEMBER' };
+    return { success: true, events, canManage: role === 'OWNER' || role === 'MASTER_ADMIN' };
   } catch (error: any) {
     return { error: error.message || 'Failed to load events.' };
   }
@@ -469,7 +484,7 @@ export async function createPlannerEventAction(input: PlannerEventInput) {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
-    if (session.role === 'CLIENT') return { error: 'Clients cannot create events.' };
+    if (session.role === 'CLIENT' || session.role === 'MEMBER') return { error: 'Only owners and project managers can create events.' };
     if (!input.title?.trim()) return { error: 'A title is required.' };
     if (!input.startDate) return { error: 'A start date is required.' };
 
@@ -575,7 +590,7 @@ export async function updatePlannerEventAction(id: string, input: Partial<Planne
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
-    if (session.role === 'CLIENT') return { error: 'Clients cannot edit events.' };
+    if (session.role === 'CLIENT' || session.role === 'MEMBER') return { error: 'Only owners and project managers can edit events.' };
 
     const existing = await prisma.plannerEvent.findFirst({
       where: { id, organizationId: session.organizationId },
@@ -608,7 +623,7 @@ export async function deletePlannerEventAction(id: string) {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
-    if (session.role === 'CLIENT') return { error: 'Clients cannot delete events.' };
+    if (session.role === 'CLIENT' || session.role === 'MEMBER') return { error: 'Only owners and project managers can delete events.' };
 
     const existing = await prisma.plannerEvent.findFirst({
       where: { id, organizationId: session.organizationId },
@@ -668,7 +683,11 @@ export async function getPlannerCalendarAction(fromIso: string, toIso: string, m
           organizationId,
           startTime: { gte: from, lte: to },
           status: { notIn: ['COMPLETED', 'POSTPONED'] },
-          OR: [{ pmId: userId }, { project: { projectManagerId: userId } }],
+          OR: [
+            { pmId: userId },
+            { project: { projectManagerId: userId } },
+            { project: { assignees: { some: { userId } } } },
+          ],
         },
         include: { project: { select: { id: true, name: true } } },
       }),
@@ -693,12 +712,18 @@ export async function getPlannerCalendarAction(fromIso: string, toIso: string, m
         where: {
           organizationId,
           startDate: { gte: from, lte: to },
-          OR: [
-            { assignedToId: userId },
-            { assignedToId: null }
-          ]
+          ...(role === 'MEMBER'
+            ? {
+                OR: [
+                  { assignedToId: userId },
+                  { project: { assignees: { some: { userId } } } },
+                ],
+              }
+            : {
+                OR: [{ assignedToId: userId }, { assignedToId: null }],
+              }),
         },
-        include: { project: { select: { id: true, name: true } } }
+        include: { project: { select: { id: true, name: true } } },
       })
     ]);
 
@@ -805,7 +830,15 @@ export async function getRemindersAction(days = 14) {
     const meetingWhere: any =
       role === 'CLIENT'
         ? { organizationId, startTime: { gte: now, lte: until }, OR: [{ clientId: userId }, { project: { clientId: userId } }] }
-        : { organizationId, startTime: { gte: now, lte: until }, OR: [{ pmId: userId }, { project: { projectManagerId: userId } }] };
+        : {
+            organizationId,
+            startTime: { gte: now, lte: until },
+            OR: [
+              { pmId: userId },
+              { project: { projectManagerId: userId } },
+              { project: { assignees: { some: { userId } } } },
+            ],
+          };
 
     const [tasks, meetings] = await Promise.all([
       role === 'CLIENT'

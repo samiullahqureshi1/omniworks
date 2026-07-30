@@ -23,6 +23,7 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, Edit, Trash2, Repeat, TrendingUp, Hourglass, ChevronRight, Star, Filter, Layers, Pin } from 'lucide-react';
 import { deleteTaskAction, updateTaskAction, getTaskTemplatesAction, deleteTaskTemplateAction, createTaskStatusAction, updateTaskStatusAction, deleteTaskStatusAction } from '@/app/actions/tasks';
+import { getActiveTimerAction, clearTrackedTimeAction } from '@/app/actions/tracking';
 import { getTaskHiddenColumnsAction, setTaskHiddenColumnsAction } from '@/app/actions/settings';
 import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -630,7 +631,7 @@ function TableTaskAssigneeCell({ task, users, setTasks, currentUser }: any) {
 
 // ─── Kanban helpers ───────────────────────────────────────────────────────────
 
-function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isDraggingOverlay = false }: any) {
+function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isDraggingOverlay = false, pinnedTaskIds = [], handleTogglePinTask }: any) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     data: task,
@@ -680,17 +681,11 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
                 className="cursor-pointer"
                 onClick={(e) => {
                   e.stopPropagation();
-                  const savedPinned = localStorage.getItem("omniwork_pinned_tasks");
-                  const pinnedIds: string[] = savedPinned ? JSON.parse(savedPinned) : [];
-                  const isPinned = pinnedIds.includes(task.id);
-                  const next = isPinned ? pinnedIds.filter(id => id !== task.id) : [...pinnedIds, task.id];
-                  localStorage.setItem("omniwork_pinned_tasks", JSON.stringify(next));
-                  window.dispatchEvent(new Event('omniwork_tasks_pinned_changed'));
-                  toast.success(isPinned ? "Task unpinned" : "Task pinned to sidebar");
+                  handleTogglePinTask(task.id);
                 }}
               >
                 <Pin className="w-4 h-4 mr-2" />
-                {typeof window !== 'undefined' && (JSON.parse(localStorage.getItem("omniwork_pinned_tasks") || "[]")).includes(task.id) ? "Unpin Task" : "Pin Task"}
+                {pinnedTaskIds.includes(task.id) ? 'Unpin Task' : 'Pin Task'}
               </DropdownMenuItem>
               {(currentUser.role === 'OWNER' || task.project?.projectManagerId === currentUser.userId) && (
                 <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={(e) => { e.stopPropagation(); handleDelete(task.id); }}>
@@ -1012,6 +1007,53 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
     }
   }, []);
 
+  // ── Pinned tasks — DB-backed ──────────────────────────────────────────────
+  const [pinnedTaskIds, setPinnedTaskIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const loadPinnedIds = async () => {
+      try {
+        const { getMyPinnedTaskIdsAction } = await import('@/app/actions/pinning');
+        const res = await getMyPinnedTaskIdsAction();
+        if (res.success && res.ids) {
+          setPinnedTaskIds(res.ids);
+        }
+      } catch {}
+    };
+    loadPinnedIds();
+    window.addEventListener('omniwork_pins_changed', loadPinnedIds);
+    return () => window.removeEventListener('omniwork_pins_changed', loadPinnedIds);
+  }, []);
+
+  const handleTogglePinTask = (taskId: string) => {
+    const isCurrentlyPinned = pinnedTaskIds.includes(taskId);
+    const nextPinned = !isCurrentlyPinned;
+
+    // 0ms Optimistic UI update
+    setPinnedTaskIds((prev) =>
+      nextPinned ? [...prev, taskId] : prev.filter((id) => id !== taskId)
+    );
+    toast.success(nextPinned ? 'Task pinned to sidebar' : 'Task unpinned');
+
+    const targetTask = tasks.find((t: any) => t.id === taskId) || { id: taskId, title: 'Task' };
+
+    window.dispatchEvent(
+      new CustomEvent('omniwork_pins_changed', {
+        detail: { type: 'task', item: targetTask, pinned: nextPinned },
+      })
+    );
+
+    // Background DB update
+    import('@/app/actions/pinning').then(({ togglePinTaskAction }) => {
+      togglePinTaskAction(taskId).catch(() => {
+        setPinnedTaskIds((prev) =>
+          isCurrentlyPinned ? [...prev, taskId] : prev.filter((id) => id !== taskId)
+        );
+      });
+    });
+  };
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const handleSetViewMode = (mode: 'table' | 'kanban') => {
     setViewMode(mode);
     localStorage.setItem("omniwork_task_view", mode);
@@ -1226,6 +1268,37 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
     }
   }, [isTemplateSelectOpen]);
 
+  // Real-time active timer tracking state
+  const [activeTimerInfo, setActiveTimerInfo] = useState<any>(null);
+  const [liveTimerSeconds, setLiveTimerSeconds] = useState(0);
+
+  useEffect(() => {
+    getActiveTimerAction().then((res: any) => {
+      if (res.success && res.timer) {
+        setActiveTimerInfo(res.timer);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!activeTimerInfo?.startTime) return;
+    const startMs = new Date(activeTimerInfo.startTime).getTime();
+    const updateSecs = () => {
+      setLiveTimerSeconds(Math.max(0, Math.floor((Date.now() - startMs) / 1000)));
+    };
+    updateSecs();
+    const interval = setInterval(updateSecs, 1000);
+    return () => clearInterval(interval);
+  }, [activeTimerInfo]);
+
+  const getTaskLiveTracked = (task: any) => {
+    const base = task.trackedHours || 0;
+    if (activeTimerInfo?.taskId === task.id) {
+      return base + liveTimerSeconds / 3600;
+    }
+    return base;
+  };
+
   const isClient = currentUser.role === 'CLIENT';
   const canCreateTask = currentUser.role === 'OWNER' ||
     (currentUser.role === 'MEMBER' && projects.some((p: any) => p.projectManagerId === currentUser.userId));
@@ -1245,7 +1318,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   });
 
   const totalAllocated = filteredTasks.reduce((acc, t) => acc + (t.allocatedHours || 0), 0);
-  const totalTracked = filteredTasks.reduce((acc, t) => acc + (t.trackedHours || 0), 0);
+  const totalTracked = filteredTasks.reduce((acc, t) => acc + getTaskLiveTracked(t), 0);
   const remainingHours = Math.max(0, totalAllocated - totalTracked);
 
   // ── Task deletion with modal confirm
@@ -1549,6 +1622,27 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
               </DropdownMenuContent>
             </DropdownMenu>
 
+            {currentUser.role === 'OWNER' && (
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  if (confirm("Are you sure you want to clear all tracked time and reset task hours in the database?")) {
+                    const res = await clearTrackedTimeAction();
+                    if (res.success) {
+                      toast.success("All tracked time cleared successfully!");
+                      window.location.reload();
+                    } else {
+                      toast.error(res.error || "Failed to clear tracked time");
+                    }
+                  }
+                }}
+                className="!rounded-[8px] h-9 border-red-200 bg-red-50/50 text-red-600 hover:bg-red-100 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-400 font-medium text-xs cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Clear Tracked Time
+              </Button>
+            )}
+
             {canManageStatuses && (
               <Button 
                 variant="outline" 
@@ -1774,7 +1868,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                     </TableCell>
                     <TableCell className="border-l border-slate-100 dark:border-white/5">
                       <div className="text-xs whitespace-nowrap">
-                        <span className="font-medium text-emerald-600">{formatHours(task.trackedHours)}</span>
+                        <span className="font-medium text-emerald-600">{formatHours(getTaskLiveTracked(task))}</span>
                         <span className="text-muted-foreground"> / {task.allocatedHours ? formatHours(task.allocatedHours) : '-'}</span>
                       </div>
                     </TableCell>
@@ -1794,18 +1888,10 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => openEdit(task)}><Edit className="w-4 h-4 mr-2" /> Edit Task</DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => {
-                                const savedPinned = localStorage.getItem("omniwork_pinned_tasks");
-                                const pinnedIds: string[] = savedPinned ? JSON.parse(savedPinned) : [];
-                                const isPinned = pinnedIds.includes(task.id);
-                                const next = isPinned ? pinnedIds.filter(id => id !== task.id) : [...pinnedIds, task.id];
-                                localStorage.setItem("omniwork_pinned_tasks", JSON.stringify(next));
-                                window.dispatchEvent(new Event('omniwork_tasks_pinned_changed'));
-                                toast.success(isPinned ? "Task unpinned" : "Task pinned to sidebar");
-                              }}
+                              onClick={() => handleTogglePinTask(task.id)}
                             >
                               <Pin className="w-4 h-4 mr-2" />
-                              {typeof window !== 'undefined' && (JSON.parse(localStorage.getItem("omniwork_pinned_tasks") || "[]")).includes(task.id) ? "Unpin Task" : "Pin Task"}
+                              {pinnedTaskIds.includes(task.id) ? 'Unpin Task' : 'Pin Task'}
                             </DropdownMenuItem>
                             {(currentUser.role === 'OWNER' || task.project.projectManagerId === currentUser.userId) && (
                               <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(task.id)}>
@@ -1854,6 +1940,8 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                         openEdit={openEdit}
                         handleDelete={handleDelete}
                         router={router}
+                        pinnedTaskIds={pinnedTaskIds}
+                        handleTogglePinTask={handleTogglePinTask}
                       />
                     ))}
                   </KanbanColumn>
@@ -1885,6 +1973,8 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                     handleDelete={handleDelete}
                     router={router}
                     isDraggingOverlay
+                    pinnedTaskIds={pinnedTaskIds}
+                    handleTogglePinTask={handleTogglePinTask}
                   />
                 </div>
               )

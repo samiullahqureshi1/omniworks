@@ -32,17 +32,7 @@ export default async function TimeTrackingPage() {
   const allTasks = tasksRes.success ? (tasksRes.tasks || []) : [];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-6xl mx-auto pb-10">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
-          <Timer className="text-primary" size={28} />
-          Time Tracking
-        </h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Start a live timer for your tasks, monitor active timers, or log time manually.
-        </p>
-      </div>
-      
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       <TimeClient 
         initialActiveTimer={activeTimer}
         initialTimeEntries={timeEntries}

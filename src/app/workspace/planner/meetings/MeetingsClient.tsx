@@ -747,7 +747,7 @@ export default function MeetingsClient({
   members?: MemberOption[];
 }) {
   const router = useRouter();
-  const canManage = role !== 'CLIENT';
+  const canManage = role !== 'CLIENT' && role !== 'MEMBER';
   const [isSubmitting, startTransition] = useTransition();
 
   // 3 Main View Tabs: active | rescheduled | postponed | all
