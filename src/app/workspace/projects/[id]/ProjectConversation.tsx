@@ -18,7 +18,11 @@ import { toast } from 'sonner';
 import TaskFormModal from '@/app/workspace/tasks/TaskFormModal';
 
 interface ProjectConversationProps {
-  projectId: string;
+  projectId?: string;
+  groupId?: string;
+  groupName?: string;
+  groupDesc?: string;
+  isDirect?: boolean;
   currentUser: any;
   organizationId: string;
   isClient: boolean;
@@ -204,11 +208,12 @@ const projectMessagesCache: Record<string, any[]> = {};
 const projectDetailsCache: Record<string, { name: string; users: any[]; tasks: any[] }> = {};
 
 const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversationProps>(
-  ({ projectId, currentUser, organizationId, isClient }, ref) => {
-  const [messages, setMessages] = useState<any[]>(() => projectMessagesCache[projectId] || []);
+  ({ projectId, groupId, groupName, groupDesc, isDirect, currentUser, organizationId, isClient }, ref) => {
+  const targetId = projectId || groupId || '';
+  const [messages, setMessages] = useState<any[]>(() => projectMessagesCache[targetId] || []);
   const [content, setContent] = useState('');
   const [visibility, setVisibility] = useState('PUBLIC');
-  const [loading, setLoading] = useState<boolean>(() => !projectMessagesCache[projectId]);
+  const [loading, setLoading] = useState<boolean>(() => !projectMessagesCache[targetId]);
   const [isSending, setIsSending] = useState(false);
   const [replyingTo, setReplyingTo] = useState<any>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -270,8 +275,8 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   
   // Mentions state
   const [suggestions, setSuggestions] = useState<{ users: any[], tasks: any[] }>(() => ({
-    users: projectDetailsCache[projectId]?.users || [],
-    tasks: projectDetailsCache[projectId]?.tasks || []
+    users: (targetId && projectDetailsCache[targetId]?.users) || [],
+    tasks: (targetId && projectDetailsCache[targetId]?.tasks) || []
   }));
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestionType, setSuggestionType] = useState<'user'|'task'|'both'|null>(null);
@@ -380,7 +385,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
       // 1. Instantly display voice note bubble in chat stream (0ms delay) with loader spinner!
       setMessages(prev => {
         const updated = [...prev, optimisticMsg];
-        projectMessagesCache[projectId] = updated;
+        projectMessagesCache[targetId] = updated;
         return updated;
       });
       setTimeout(() => {
@@ -403,7 +408,11 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
           const uploadData = await uploadRes.json();
           const serverUrl = uploadData.url;
 
-          const msgRes = await fetch(`/api/projects/${projectId}/messages`, {
+          const msgEndpoint = projectId
+            ? `/api/projects/${projectId}/messages`
+            : `/api/conversations/groups/${groupId}/messages`;
+
+          const msgRes = await fetch(msgEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -421,7 +430,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
             // Voice note successfully sent: replace loader with checkmark tick!
             setMessages(prev => {
               const updated = prev.map(m => m.id === tempId ? { ...savedMsg, fileUrl: serverUrl } : m);
-              projectMessagesCache[projectId] = updated;
+              projectMessagesCache[targetId] = updated;
               return updated;
             });
           } else {
@@ -546,12 +555,16 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
 
     setMessages(prev => {
       const updated = [...prev, optimisticMsg];
-      projectMessagesCache[projectId] = updated;
+      projectMessagesCache[targetId] = updated;
       return updated;
     });
 
     try {
-      const res = await fetch(`/api/projects/${projectId}/messages`, {
+      const msgEndpoint = projectId
+        ? `/api/projects/${projectId}/messages`
+        : `/api/conversations/groups/${groupId}/messages`;
+
+      const res = await fetch(msgEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -568,7 +581,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
         const savedMsg = data.message;
         setMessages(prev => {
           const updated = prev.map(m => m.id === tempId ? savedMsg : m);
-          projectMessagesCache[projectId] = updated;
+          projectMessagesCache[targetId] = updated;
           return updated;
         });
       }
@@ -604,15 +617,20 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
     insertMention
   }));
 
-  const { lastEvent } = useRealtime([{ projectId }]);
+  const channelConfig = projectId ? [{ projectId }] : groupId ? [{ groupId }] : [];
+  const { lastEvent } = useRealtime(channelConfig);
 
   const fetchMessages = async () => {
+    if (!targetId) return;
     try {
-      const res = await fetch(`/api/projects/${projectId}/messages`);
+      const endpoint = projectId
+        ? `/api/projects/${projectId}/messages`
+        : `/api/conversations/groups/${groupId}/messages`;
+      const res = await fetch(endpoint);
       if (res.ok) {
         const data = await res.json();
         const newMsgs = data.messages || [];
-        projectMessagesCache[projectId] = newMsgs;
+        projectMessagesCache[targetId] = newMsgs;
         setMessages(newMsgs);
       }
     } finally {
@@ -620,39 +638,57 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
     }
   };
 
-  const [projectName, setProjectName] = useState<string>(() => projectDetailsCache[projectId]?.name || 'Project Conversation');
+  const [projectName, setProjectName] = useState<string>(
+    groupName || (targetId && projectDetailsCache[targetId]?.name) || 'Conversation'
+  );
 
   const fetchSuggestions = async () => {
-    const res = await fetch(`/api/projects/${projectId}/mention-suggestions`);
-    if (res.ok) {
-      const data = await res.json();
-      const newSuggestions = { users: data.users || [], tasks: data.tasks || [] };
-      setSuggestions(newSuggestions);
-      const name = data.projectName || 'Project Conversation';
-      setProjectName(name);
-      projectDetailsCache[projectId] = { name, users: newSuggestions.users, tasks: newSuggestions.tasks };
+    if (projectId) {
+      const res = await fetch(`/api/projects/${projectId}/mention-suggestions`);
+      if (res.ok) {
+        const data = await res.json();
+        const newSuggestions = { users: data.users || [], tasks: data.tasks || [] };
+        setSuggestions(newSuggestions);
+        const name = data.projectName || 'Project Conversation';
+        setProjectName(name);
+        projectDetailsCache[targetId] = { name, users: newSuggestions.users, tasks: newSuggestions.tasks };
+      }
+    } else if (groupId) {
+      if (groupName) setProjectName(groupName);
+      try {
+        const res = await fetch(`/api/conversations/groups/${groupId}/members`);
+        if (res.ok) {
+          const data = await res.json();
+          const members = (data.members || []).map((m: any) => m.user || m);
+          setSuggestions({ users: members, tasks: [] });
+        }
+      } catch (err) {
+        console.error('Fetch group members error:', err);
+      }
     }
   };
 
   useEffect(() => {
-    if (projectMessagesCache[projectId] && projectMessagesCache[projectId].length > 0) {
-      setMessages(projectMessagesCache[projectId]);
+    if (targetId && projectMessagesCache[targetId] && projectMessagesCache[targetId].length > 0) {
+      setMessages(projectMessagesCache[targetId]);
       setLoading(false);
     } else {
       setLoading(true);
     }
 
-    if (projectDetailsCache[projectId]) {
-      setProjectName(projectDetailsCache[projectId].name);
+    if (groupName) {
+      setProjectName(groupName);
+    } else if (targetId && projectDetailsCache[targetId]) {
+      setProjectName(projectDetailsCache[targetId].name);
       setSuggestions({
-        users: projectDetailsCache[projectId].users || [],
-        tasks: projectDetailsCache[projectId].tasks || []
+        users: projectDetailsCache[targetId].users || [],
+        tasks: projectDetailsCache[targetId].tasks || []
       });
     }
 
     fetchMessages();
     fetchSuggestions();
-  }, [projectId]);
+  }, [projectId, groupId, groupName]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
@@ -849,7 +885,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
 
     setMessages(prev => {
       const updated = [...prev, optimisticMessage];
-      projectMessagesCache[projectId] = updated;
+      projectMessagesCache[targetId] = updated;
       return updated;
     });
     setContent('');
@@ -859,6 +895,10 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
     setIsSending(false);
 
     try {
+      const msgEndpoint = projectId
+        ? `/api/projects/${projectId}/messages`
+        : `/api/conversations/groups/${groupId}/messages`;
+
       if (currentFiles.length > 0) {
         for (let i = 0; i < currentFiles.length; i++) {
           const file = currentFiles[i];
@@ -873,7 +913,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
             fileSize: file.size
           };
 
-          await fetch(`/api/projects/${projectId}/messages`, {
+          await fetch(msgEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -887,7 +927,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
           taskMentions: currentTaskMentions,
           parentMessageId: replyingTo?.id || undefined
         };
-        await fetch(`/api/projects/${projectId}/messages`, {
+        await fetch(msgEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -925,7 +965,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
         }
         return m;
       });
-      projectMessagesCache[projectId] = updated;
+      projectMessagesCache[targetId] = updated;
       return updated;
     });
 
@@ -933,7 +973,11 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
     setEditVoiceRecording(false);
 
     try {
-      const res = await fetch(`/api/projects/${projectId}/messages/${messageId}`, {
+      const msgDetailEndpoint = projectId
+        ? `/api/projects/${projectId}/messages/${messageId}`
+        : `/api/conversations/groups/${groupId}/messages/${messageId}`;
+
+      const res = await fetch(msgDetailEndpoint, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -958,13 +1002,17 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
     // 1. Instantly remove message card from view & cache (0ms delay)
     setMessages(prev => {
       const updated = prev.filter(m => m.id !== messageId);
-      projectMessagesCache[projectId] = updated;
+      projectMessagesCache[targetId] = updated;
       return updated;
     });
 
     // 2. API executes in background
     try {
-      const res = await fetch(`/api/projects/${projectId}/messages/${messageId}`, {
+      const msgDetailEndpoint = projectId
+        ? `/api/projects/${projectId}/messages/${messageId}`
+        : `/api/conversations/groups/${groupId}/messages/${messageId}`;
+
+      const res = await fetch(msgDetailEndpoint, {
         method: 'DELETE'
       });
       if (res.ok) {

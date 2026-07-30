@@ -912,12 +912,12 @@ export default function TaskFormModal({
                                     onChange={handleProjectSelectChange}
                                     className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none cursor-pointer"
                                   >
-                                    <option value="" disabled>Select a project</option>
-                                    {assignableProjects.map((p) => (
-                                      <option key={p.id} value={p.id}>{p.name}</option>
+                                    <option key="select-project-placeholder" value="" disabled>Select a project</option>
+                                    {assignableProjects.map((p, idx) => (
+                                      <option key={p.id || `proj-${idx}`} value={p.id}>{p.name}</option>
                                     ))}
                                     {isOwner && (
-                                      <option value="NEW_PROJECT" className="font-bold text-primary">
+                                      <option key="create-new-project-option" value="NEW_PROJECT" className="font-bold text-primary">
                                         + Create New Project
                                       </option>
                                     )}
@@ -1218,14 +1218,14 @@ export default function TaskFormModal({
                                   }}
                                   className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none cursor-pointer"
                                 >
-                                  <option value="">No Milestone</option>
-                                  {milestones.map((m) => (
-                                    <option key={m.id} value={m.id}>
+                                  <option key="no-milestone-option" value="">No Milestone</option>
+                                  {milestones.map((m, idx) => (
+                                    <option key={m.id || `ms-${idx}`} value={m.id}>
                                       {m.title}
                                     </option>
                                   ))}
                                   {(isOwner || isPM) && (
-                                    <option value="NEW_MILESTONE" className="font-bold text-slate-900">
+                                    <option key="create-new-milestone-option" value="NEW_MILESTONE" className="font-bold text-slate-900">
                                       + Create New Milestone
                                     </option>
                                   )}
@@ -1367,8 +1367,8 @@ export default function TaskFormModal({
                                 case 'dropdown':
                                   return (
                                     <select value={field.value || ''} onChange={e => updateValue(e.target.value)} className={commonClasses}>
-                                      <option value="">—</option>
-                                      {(field.options || []).map((o: string) => <option key={o} value={o}>{o}</option>)}
+                                      <option key="empty-dropdown-opt" value="">—</option>
+                                      {(field.options || []).map((o: string, idx: number) => <option key={o || `opt-${idx}`} value={o}>{o}</option>)}
                                     </select>
                                   );
                                 case 'checkbox':
@@ -1396,8 +1396,8 @@ export default function TaskFormModal({
                                         }}
                                         className="bg-transparent text-[11px] text-slate-500 outline-none cursor-pointer"
                                       >
-                                        <option value="" disabled>+ Add label</option>
-                                        {(field.options || []).filter((o: string) => !currentValues.includes(o)).map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                                        <option key="add-label-placeholder" value="" disabled>+ Add label</option>
+                                        {(field.options || []).filter((o: string) => !currentValues.includes(o)).map((opt: string, idx: number) => <option key={opt || `lbl-${idx}`} value={opt}>{opt}</option>)}
                                       </select>
                                     </div>
                                   );
