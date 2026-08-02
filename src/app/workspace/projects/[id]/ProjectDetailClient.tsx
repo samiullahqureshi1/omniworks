@@ -718,18 +718,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('discussion')}
-            className={`px-3.5 py-1.5 rounded-[8px] text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === 'discussion'
-                ? 'bg-slate-100 dark:bg-white/10 text-slate-900 dark:text-white border border-slate-200/80 dark:border-white/10 shadow-2xs'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-            }`}
-          >
-            <MessageSquare size={14} />
-            <span>Discussion</span>
-          </button>
+
 
           {canManageTasks && (
             <Button
@@ -1142,17 +1131,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                 />
               )}
             </div>
-          ) : activeTab === 'discussion' ? (
-            /* ======= DISCUSSION TAB ======= */
-            <div className="h-full w-full flex flex-col overflow-hidden bg-white dark:bg-[#151518]">
-              <ProjectConversation
-                projectId={project.id}
-                currentUser={currentUser}
-                organizationId={project.organizationId || currentUser?.organizationId || ''}
-                isClient={isClient}
-                hideHeader={false}
-              />
-            </div>
+
           ) : activeTab === 'milestones' ? (
             /* ======= MILESTONES TAB ======= */
             <div className="p-6 space-y-6">

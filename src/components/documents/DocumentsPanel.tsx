@@ -4,6 +4,7 @@ import * as React from "react";
 import { ChevronDown, FileText, ListPlus, Paperclip, Plus, Upload, Trash2, Loader2, ExternalLink, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { ProjectDescriptionEditor, RichTextEditor } from "@/components/ui/RichTextEditor";
+import CloudinaryAttachmentCard, { AttachmentItem } from "@/components/common/CloudinaryAttachmentCard";
 import {
   getDocumentsAction,
   createDocumentAction,
@@ -19,6 +20,9 @@ export type DraftDocument = {
   fileUrl?: string;
   fileName?: string;
   fileSize?: number;
+  uploadedAt?: string;
+  uploaderInitials?: string;
+  uploaderName?: string;
 };
 
 /** Minimal ClickUp-style document composer used inside create-project modals. */
@@ -241,38 +245,50 @@ export function DocumentsPanel({
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const resp = await fetch("/api/conversations/upload", { method: "POST", body: fd });
+      const resp = await fetch("/api/upload/cloudinary", { method: "POST", body: fd });
       const data = await resp.json();
       if (!resp.ok || !data.success) {
-        return toast.error(data.error || "Upload failed");
+        return toast.error(data.error || "Cloudinary upload failed");
       }
 
       if (isLive) {
         const res = await createDocumentAction({
           type: "FILE",
-          title: data.name,
+          title: data.fileName,
           fileUrl: data.url,
-          fileName: data.name,
-          fileSize: data.size,
+          fileName: data.fileName,
+          fileSize: data.fileSize,
           projectId: projectId ?? null,
           taskId: taskId ?? null,
         });
         if (res.error) return toast.error(res.error);
-        setLiveDocs((prev) => [res.document, ...prev]);
-        toast.success("File attached");
+        setLiveDocs((prev) => [
+          {
+            ...res.document,
+            uploadedAt: data.uploadedAt,
+            uploaderInitials: data.uploaderInitials,
+            uploaderName: data.uploaderName,
+          },
+          ...prev,
+        ]);
+        toast.success("File uploaded to Cloudinary & attached!");
       } else {
         const next = [
           {
             tempId: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
             type: "FILE" as const,
-            title: data.name,
+            title: data.fileName,
             fileUrl: data.url,
-            fileName: data.name,
-            fileSize: data.size,
+            fileName: data.fileName,
+            fileSize: data.fileSize,
+            uploadedAt: data.uploadedAt,
+            uploaderInitials: data.uploaderInitials,
+            uploaderName: data.uploaderName,
           },
           ...(drafts ?? []),
         ];
         onDraftsChange?.(next);
+        toast.success("File uploaded to Cloudinary & attached!");
       }
     } catch (err: any) {
       toast.error("Upload failed");
@@ -295,6 +311,21 @@ export function DocumentsPanel({
     }
   };
 
+  const handleRenameItem = async (item: any, newName: string) => {
+    if (isLive) {
+      const res = await updateDocumentAction(item.id, { title: newName });
+      if (res.error) return toast.error(res.error);
+      setLiveDocs((prev) =>
+        prev.map((d) => (d.id === item.id ? { ...d, title: newName, fileName: newName } : d))
+      );
+    } else {
+      const next = (drafts ?? []).map((d) =>
+        d.tempId === item.tempId ? { ...d, title: newName, fileName: newName } : d
+      );
+      onDraftsChange?.(next);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -302,7 +333,7 @@ export function DocumentsPanel({
         <button
           type="button"
           onClick={openNewDoc}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-semibold hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors outline-none"
+          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-semibold hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors outline-none cursor-pointer"
         >
           <Plus className="h-4 w-4" /> New doc
         </button>
@@ -310,7 +341,7 @@ export function DocumentsPanel({
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-white/5 transition-colors outline-none disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-white/5 transition-colors outline-none disabled:opacity-50 cursor-pointer"
         >
           {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
           Upload file
@@ -363,59 +394,91 @@ export function DocumentsPanel({
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {items.map((item: any) => {
-            const key = isLive ? item.id : item.tempId;
-            const isFile = item.type === "FILE";
-            return (
-              <div
-                key={key}
-                className="group flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1f1f1f] hover:border-slate-300 dark:hover:border-white/20 transition-colors"
-              >
-                <div className={`h-9 w-9 shrink-0 rounded-lg flex items-center justify-center ${isFile ? "bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400" : "bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300"}`}>
-                  {isFile ? <Paperclip className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{item.title}</p>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
-                    {isFile
-                      ? `File${item.fileSize ? ` · ${formatSize(item.fileSize)}` : ""}`
-                      : `Doc${item.createdBy?.name ? ` · ${item.createdBy.name}` : ""}`}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {isFile ? (
-                    <a
-                      href={item.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
-                      aria-label="Open file"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => openEditDoc(item)}
-                      className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
-                      aria-label="Edit document"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => removeItem(item)}
-                    className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
-                    aria-label="Delete"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
+        <div className="space-y-6">
+          {/* File attachments rendered using CloudinaryAttachmentCard */}
+          {items.some((i: any) => i.type === "FILE") && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Attached Files
+              </h4>
+              <div className="flex flex-wrap gap-4">
+                {items
+                  .filter((i: any) => i.type === "FILE")
+                  .map((item: any, idx: number) => {
+                    const key = isLive ? item.id : item.tempId || idx;
+                    const attachmentObj: AttachmentItem = {
+                      id: item.id || item.tempId,
+                      fileUrl: item.fileUrl || "",
+                      fileName: item.fileName || item.title || "File",
+                      fileSize: item.fileSize,
+                      fileType: item.fileType,
+                      uploadedAt: item.uploadedAt || item.createdAt,
+                      uploaderInitials: item.uploaderInitials || (item.createdBy?.name ? item.createdBy.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) : 'SU'),
+                      uploaderName: item.uploaderName || item.createdBy?.name || 'User',
+                    };
+                    return (
+                      <CloudinaryAttachmentCard
+                        key={key}
+                        attachment={attachmentObj}
+                        index={idx}
+                        onDelete={() => removeItem(item)}
+                        onRename={(_, newName) => handleRenameItem(item, newName)}
+                      />
+                    );
+                  })}
               </div>
-            );
-          })}
+            </div>
+          )}
+
+          {/* Doc items rendered as rows */}
+          {items.some((i: any) => i.type === "DOC") && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Rich Text Docs
+              </h4>
+              <div className="flex flex-col gap-2">
+                {items
+                  .filter((i: any) => i.type === "DOC")
+                  .map((item: any) => {
+                    const key = isLive ? item.id : item.tempId;
+                    return (
+                      <div
+                        key={key}
+                        className="group flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1f1f1f] hover:border-slate-300 dark:hover:border-white/20 transition-colors"
+                      >
+                        <div className="h-9 w-9 shrink-0 rounded-lg flex items-center justify-center bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300">
+                          <FileText className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{item.title}</p>
+                          <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+                            Doc{item.createdBy?.name ? ` · ${item.createdBy.name}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => openEditDoc(item)}
+                            className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                            aria-label="Edit document"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeItem(item)}
+                            className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
+                            aria-label="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
