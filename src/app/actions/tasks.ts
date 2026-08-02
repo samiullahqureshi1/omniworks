@@ -84,9 +84,28 @@ export async function deleteTaskStatusAction(id: string) {
 }
 
 
-/**
- * Task Management Actions
- */
+export async function getTaskByIdAction(taskId: string) {
+  try {
+    const session = await getSession();
+    if (!session) return { error: 'Unauthorized' };
+
+    const task = await prisma.task.findFirst({
+      where: { id: taskId, organizationId: session.organizationId },
+      include: {
+        project: { select: { id: true, name: true, projectManagerId: true, clientId: true, totalAllocatedHours: true } },
+        status: true,
+        assignees: { include: { user: { select: { id: true, name: true, email: true, role: true } } } },
+        milestone: true,
+      }
+    });
+
+    if (!task) return { error: 'Task not found.' };
+
+    return { success: true, task };
+  } catch (error: any) {
+    return { error: error.message || 'Failed to fetch task.' };
+  }
+}
 
 export async function getTasksAction(projectIdFilter?: string) {
   try {
@@ -191,8 +210,9 @@ export async function createTaskAction(
     const isOwner = session.role === 'OWNER';
     const isPM = project.projectManagerId === session.userId;
     const isClient = session.role === 'CLIENT' && project.clientId === session.userId;
+    const isMember = session.role === 'MEMBER';
 
-    if (!isOwner && !isPM && !isClient) {
+    if (!isOwner && !isPM && !isClient && !isMember) {
       return { error: 'Unauthorized to create tasks in this project.' };
     }
 
@@ -203,8 +223,8 @@ export async function createTaskAction(
       assigneeIds = [];
       statusId = undefined;
     } else {
-      if (allocatedHours === undefined || allocatedHours === null || allocatedHours <= 0) {
-        return { error: 'Allocated Hours is required and must be greater than 0.' };
+      if (allocatedHours === undefined || allocatedHours === null || Number(allocatedHours) <= 0) {
+        allocatedHours = 1;
       }
     }
 

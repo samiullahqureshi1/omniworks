@@ -639,6 +639,12 @@ export async function getProjectsAction() {
     const projects = await prisma.project.findMany({
       where: whereClause,
       include: {
+        _count: {
+          select: {
+            messages: true,
+            tasks: true,
+          },
+        },
         status: true,
         client: {
           select: { id: true, name: true, email: true },

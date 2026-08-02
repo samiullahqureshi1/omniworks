@@ -48,3 +48,44 @@ export async function DELETE(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ groupId: string }> }
+) {
+  try {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { groupId } = await context.params;
+    const body = await request.json();
+    const { name, description } = body;
+
+    const group = await prisma.chatGroup.findUnique({
+      where: { id: groupId },
+      include: { members: true }
+    });
+
+    if (!group) {
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    }
+
+    const isOwner = group.ownerId === session.userId || group.members.some(m => m.userId === session.userId);
+    if (!isOwner) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
+    const updated = await prisma.chatGroup.update({
+      where: { id: groupId },
+      data: {
+        ...(name ? { name } : {}),
+        ...(description !== undefined ? { description } : {})
+      }
+    });
+
+    return NextResponse.json({ success: true, group: updated });
+  } catch (error: any) {
+    console.error('Update group route error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

@@ -8,6 +8,13 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
   import Link from "next/link";
   import { Button } from "@/components/ui/button";
   import { Input } from "@/components/ui/input";
+  import {
+    FormDialog,
+    FormDialogCancelButton,
+    FormDialogSubmitButton,
+    formFieldLabel,
+    formInputClass,
+  } from "@/components/ui/FormDialog";
   import { NumberStepper } from "@/components/ui/NumberStepper";
   import {
     FolderKanban,
@@ -73,6 +80,8 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
     Folder,
     Maximize2,
     ChevronUp,
+    ChevronLeft,
+    ChevronRight,
     Edit3,
     Link as LinkIcon,
   } from "lucide-react";
@@ -94,6 +103,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
     DialogHeader,
     DialogTitle,
   } from "@/components/ui/dialog";
+  import ProjectConversation from "./[id]/ProjectConversation";
   import {
     DropdownMenu,
     DropdownMenuContent,
@@ -117,7 +127,6 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
     updateProjectCustomFieldsAction,
   } from "@/app/actions/projects";
   import { addDays, addWeeks, format } from "date-fns";
-  import { ChevronRight } from "lucide-react";
   import { Calendar } from "@/components/ui/calendar";
   import { ProjectDescriptionEditor } from "@/components/ui/RichTextEditor";
   import { ProjectRulesHeaderControl } from "@/components/modals/ProjectRulesHeaderControl";
@@ -658,6 +667,21 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
     );
   }
 
+  function formatProjectDueDate(dateInput: any) {
+    if (!dateInput) return null;
+    try {
+      const d = new Date(dateInput);
+      if (isNaN(d.getTime())) return `Due: ${String(dateInput)}`;
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const month = months[d.getUTCMonth()];
+      const day = d.getUTCDate();
+      const year = d.getUTCFullYear();
+      return `Due: ${month} ${day}, ${year}`;
+    } catch (e) {
+      return `Due: ${dateInput}`;
+    }
+  }
+
   function KanbanColumn({ status, title, count, projectStatuses, children, onAddProject, currentUser, handleDeleteStage, handleRenameStage }: any) {
     const { setNodeRef, attributes, listeners, transform, transition, isDragging, isOver } = useSortable({
       id: status,
@@ -674,18 +698,9 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
 
     const statusColor = getStatusColor(status);
 
-    const getStatusIcon = (name: string) => {
-      const t = name.toLowerCase();
-      if (t.includes('todo') || t.includes('to do') || t.includes('pending')) return <CircleDashed size={14} />;
-      if (t.includes('progress') || t.includes('doing') || t.includes('active')) return <CircleDot size={14} />;
-      if (t.includes('done') || t.includes('complete') || t.includes('finish')) return <CheckCircle2 size={14} />;
-      return <Circle size={14} />;
-    };
-
     const style = {
       transform: CSS.Transform.toString(transform),
       transition,
-      backgroundColor: `${statusColor}15`
     };
 
     const submitRename = () => {
@@ -701,13 +716,14 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
       <div 
         ref={setNodeRef} 
         style={style}
-        className={`flex flex-col min-w-[320px] max-w-[320px] rounded-2xl p-3.5 transition-all duration-300 ${isOver ? 'shadow-md scale-[1.01] opacity-90' : ''} ${isDragging ? 'opacity-50 z-50 shadow-2xl scale-105 rotate-1 cursor-grabbing' : ''}`}
+        className={`flex flex-col min-w-[310px] max-w-[310px] bg-slate-50/70 dark:bg-white/[0.02] border border-slate-200/50 dark:border-white/5 rounded-2xl p-3 transition-all duration-300 ${isOver ? 'shadow-md scale-[1.01] opacity-90' : ''} ${isDragging ? 'opacity-50 z-50 shadow-2xl scale-105 rotate-1 cursor-grabbing' : ''}`}
       >
-        <div className="flex items-center justify-between mb-4 px-1" {...attributes} {...listeners}>
+        {/* Column Header */}
+        <div className="flex items-center justify-between bg-white dark:bg-[#18181b] border border-slate-200/70 dark:border-white/10 rounded-xl px-3 py-2 mb-3 shadow-xs" {...attributes} {...listeners}>
           <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-[3px] shrink-0" style={{ backgroundColor: statusColor }} />
             {isEditing ? (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-slate-300 shadow-sm" onPointerDown={(e) => e.stopPropagation()}>
-                {getStatusIcon(title)}
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white border border-slate-300 shadow-xs" onPointerDown={(e) => e.stopPropagation()}>
                 <input 
                   autoFocus
                   type="text" 
@@ -717,7 +733,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
                     if (e.key === 'Enter') submitRename();
                     if (e.key === 'Escape') { setEditName(title); setIsEditing(false); }
                   }}
-                  className="font-bold text-[12px] tracking-wide uppercase bg-transparent outline-none w-28 text-slate-800"
+                  className="font-bold text-[13px] bg-transparent outline-none w-24 text-slate-800 dark:text-white"
                 />
                 <button onClick={submitRename} className="text-emerald-600 hover:text-emerald-700 ml-1">
                   <Check size={14} />
@@ -725,8 +741,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
               </div>
             ) : (
               <div 
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-white shadow-sm cursor-pointer hover:opacity-90" 
-                style={{ backgroundColor: statusColor }}
+                className="flex items-center gap-2 cursor-pointer hover:opacity-80" 
                 onPointerDown={(e) => {
                   if (currentUser?.role === 'OWNER') {
                     e.stopPropagation();
@@ -734,48 +749,47 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
                   }
                 }}
               >
-                {getStatusIcon(title)}
-                <h3 className="font-bold text-[12px] tracking-wide uppercase">{title}</h3>
+                <span className="bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 text-[11px] font-bold px-1.5 py-0.5 rounded-[4px] min-w-[20px] text-center">
+                  {count}
+                </span>
+                <h3 className="font-bold text-[14px] text-slate-900 dark:text-white capitalize">{title}</h3>
               </div>
             )}
-            <span className="text-[13px] font-medium text-slate-500 dark:text-slate-400 ml-1">
-              {count}
-            </span>
           </div>
           
-          {currentUser?.role === 'OWNER' && (
-            <div className="flex items-center gap-1 text-slate-400" onPointerDown={(e) => e.stopPropagation()}>
-              <button 
-                onClick={() => handleDeleteStage(status)}
-                className="hover:text-red-500 p-1 rounded-md transition-colors"
-              >
-                <Trash2 size={14} />
-              </button>
-              <button className="hover:text-slate-700 dark:hover:text-slate-200 p-1 rounded-md transition-colors">
-                <MoreHorizontal size={14} />
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-1 text-slate-400" onPointerDown={(e) => e.stopPropagation()}>
+            <button 
+              onClick={onAddProject}
+              className="p-1 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white rounded-md transition-colors cursor-pointer"
+              title="Add Project"
+            >
+              <Plus size={16} />
+            </button>
+            {currentUser?.role === 'OWNER' && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="p-1 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-md transition-colors cursor-pointer">
+                    <MoreHorizontal size={14} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={() => handleDeleteStage(status)}>
+                    <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete Column
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
         </div>
-        
-        {currentUser?.role === 'OWNER' && (
-          <button 
-            onClick={onAddProject}
-            className="flex items-center gap-2 px-2 py-1.5 mb-3 text-sm font-medium transition-colors hover:opacity-80 rounded-md hover:bg-black/5 dark:hover:bg-white/5"
-            style={{ color: statusColor }}
-          >
-            <Plus size={16} /> Add Project
-          </button>
-        )}
 
-        <div className="flex flex-col gap-2.5 overflow-y-auto custom-scrollbar pr-1 flex-1 pb-2">
+        <div className="flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-0.5 flex-1 pb-2 min-h-[150px]">
           {children}
         </div>
       </div>
     );
   }
 
-  function KanbanCard({ project, currentUser, handleDelete, handleEdit }: any) {
+  function KanbanCard({ project, currentUser, handleDelete, handleEdit, onOpenChatModal }: any) {
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
       id: project.id,
       data: project,
@@ -786,61 +800,467 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
       transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
     } : undefined;
 
+    const isUrgentOrHigh = project.priority === 'CRITICAL' || project.priority === 'HIGH';
+
+    // Progress percentage calculation
+    let progressPct: number | null = null;
+    if (project.tasks && project.tasks.length > 0) {
+      const completed = project.tasks.filter((t: any) => t.status?.name?.toLowerCase().includes('done') || t.status?.name?.toLowerCase().includes('complete')).length;
+      progressPct = Math.round((completed / project.tasks.length) * 100);
+    } else if (project.progress !== undefined && project.progress !== null) {
+      progressPct = Math.min(100, Math.max(0, Number(project.progress)));
+    }
+
+    const dueDateText = project.endDate || project.dueDate ? formatProjectDueDate(project.endDate || project.dueDate) : (project.startDate ? formatProjectDueDate(project.startDate) : null);
+    const attachmentCount = project.files?.length || project.attachments?.length || project._count?.files || 0;
+    const messageCount = project._count?.messages ?? project.messages?.length ?? project.messagesCount ?? 0;
+
     return (
       <div
         ref={setNodeRef}
         style={style}
-        className={`bg-white dark:bg-[#252525] border border-black/5 dark:border-white/10 rounded-xl p-4 shadow-sm hover:border-black/10 dark:hover:border-white/20 transition-all duration-200 group flex flex-col gap-3 cursor-grab active:cursor-grabbing relative overflow-hidden ${isDragging ? 'opacity-50 scale-95 z-50 shadow-2xl rotate-2' : ''}`}
+        className={`bg-white dark:bg-[#18181b] border border-slate-200/70 dark:border-white/10 rounded-2xl p-4 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-white/20 transition-all duration-200 group flex flex-col justify-between cursor-grab active:cursor-grabbing relative ${isDragging ? 'opacity-40 scale-95 z-50 shadow-2xl rotate-2' : ''}`}
         {...attributes}
         {...listeners}
       >
-        <div className="flex justify-between items-start gap-3 relative z-10">
-          <Link href={`/workspace/projects/${project.id}`} className="font-semibold text-[14px] leading-snug text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 pr-4" onPointerDown={(e) => e.stopPropagation()}>
-            {project.name}
-          </Link>
-
-          {currentUser.role === "OWNER" && (
-            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 shrink-0 absolute right-0 -top-1 bg-white/90 dark:bg-[#252525]/90 backdrop-blur-sm p-1 rounded-lg" onPointerDown={(e) => e.stopPropagation()}>
-              <button onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); handleEdit(project); }} className="p-1 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-md cursor-pointer">
-                <Edit2 size={14} />
-              </button>
-              <div onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(project.id); }} className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 hover:text-red-600 rounded-md cursor-pointer">
-                <Trash2 size={14} />
-              </div>
+        {/* Top Row: Due Date & Options Menu */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          {dueDateText ? (
+            <div className="inline-flex items-center gap-1.5 bg-slate-100/90 dark:bg-white/5 text-[11px] font-semibold text-slate-600 dark:text-slate-400 px-2.5 py-1 rounded-md border border-slate-200/40 dark:border-white/5">
+              <Clock size={12} className="text-slate-400 shrink-0" />
+              <span>{dueDateText}</span>
             </div>
+          ) : <div />}
+
+          {currentUser?.role === 'OWNER' && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button 
+                  type="button"
+                  className="opacity-60 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-100 dark:hover:bg-white/10 rounded-md cursor-pointer shrink-0" 
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <MoreHorizontal size={16} className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEdit(project); }} className="cursor-pointer">
+                  <Edit2 className="w-3.5 h-3.5 mr-2" /> Edit Project
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={(e) => { e.stopPropagation(); handleDelete(project.id); }}>
+                  <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete Project
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
-        
-        <div className="flex flex-col gap-2.5 mt-1 relative z-10">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="outline" className={`text-[10px] uppercase font-bold border-0 px-1.5 py-0.5 rounded-md ${getPriorityColor(project.priority)}`}>
-              {project.priority}
-            </Badge>
-            {(project.startDate || project.endDate) && (
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium bg-slate-50 dark:bg-white/5 px-1.5 py-0.5 rounded-md border border-slate-100 dark:border-white/10">
-                <CalendarIcon size={10} className="text-slate-400" />
-                <span>{project.startDate ? formatDate(project.startDate) : '--'} - {project.endDate ? formatDate(project.endDate) : '--'}</span>
+
+        {/* Project Name & Category/Client Subtitle */}
+        <div className="mb-2">
+          <Link 
+            href={`/workspace/projects/${project.id}`} 
+            className="font-bold text-[15px] leading-snug text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors flex items-start gap-1.5"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {isUrgentOrHigh && (
+              <Flag size={14} className="text-red-500 fill-red-500 shrink-0 mt-0.5" />
+            )}
+            <span className="line-clamp-2">{project.name}</span>
+          </Link>
+          <p className="text-[12px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">
+            {project.clientName || project.client?.name || project.category || "Project Dashboard"}
+          </p>
+        </div>
+
+        {/* Progress Bar (if exists) */}
+        {progressPct !== null && (
+          <div className="mb-3 mt-1">
+            <div className="flex justify-between items-center text-[11px] mb-1">
+              <span className="font-medium text-slate-400 dark:text-slate-500">Progress</span>
+              <span className="font-bold text-slate-700 dark:text-slate-300">{progressPct}%</span>
+            </div>
+            <div className="w-full h-2 bg-slate-100 dark:bg-white/10 rounded-full overflow-hidden">
+              <div 
+                className="bg-slate-900 dark:bg-white h-full rounded-full transition-all duration-300"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Card Footer: PM/Members on left, Metrics on right */}
+        <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 dark:border-white/5 mt-auto">
+          <div className="flex -space-x-1.5 overflow-hidden py-0.5">
+            {project.projectManager && (
+              <div key={project.projectManager.id} className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-[#18181b] flex items-center justify-center font-bold text-slate-700 dark:text-slate-200 text-[9px] shrink-0" title={project.projectManager.name}>
+                {(project.projectManager.name || 'P').substring(0, 1).toUpperCase()}
+              </div>
+            )}
+            {project.members?.map((m: any) => (
+              <div key={m.userId || m.user?.id} className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-white dark:border-[#18181b] flex items-center justify-center font-bold text-slate-600 dark:text-slate-300 text-[9px] shrink-0" title={m.user?.name || m.name}>
+                {(m.user?.name || m.name || 'M').substring(0, 1).toUpperCase()}
+              </div>
+            ))}
+            {(!project.projectManager && (!project.members || project.members.length === 0)) && (
+              <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-white dark:border-[#18181b] flex items-center justify-center">
+                <Plus size={10} className="text-slate-400" />
               </div>
             )}
           </div>
-          
-          {project.tasks && project.tasks.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <div className="text-[12px] text-slate-600 dark:text-slate-300 flex items-center gap-2 bg-slate-50 dark:bg-[#202020] px-2 py-1.5 rounded-lg border border-slate-100 dark:border-white/5">
-                <CheckCircle2 size={12} className="text-slate-400 shrink-0" />
-                <span className="truncate">{project.tasks[0].title}</span>
+
+          <div className="flex items-center gap-2 text-[12px] font-semibold text-slate-500 dark:text-slate-400">
+            {attachmentCount > 0 && (
+              <span className="flex items-center gap-1">
+                <Paperclip size={13} className="text-slate-400" />
+                <span>{attachmentCount}</span>
+              </span>
+            )}
+            {attachmentCount > 0 && (
+              <span className="text-slate-300 dark:text-slate-600">|</span>
+            )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                if (onOpenChatModal) onOpenChatModal(project);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="flex items-center gap-1.5 text-[12px] font-bold text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors p-1.5 -my-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer group/chat"
+              title="Open Project Chat"
+            >
+              <MessageSquare size={13} className="text-slate-400 shrink-0 group-hover/chat:text-blue-500" />
+              <span>{messageCount}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function ProjectDiscussionView({ projects, currentUser }: { projects: any[]; currentUser: any }) {
+    const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projects[0]?.id || null);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [newComment, setNewComment] = useState("");
+    const [discussions, setDiscussions] = useState<Record<string, Array<{ id: string; author: string; avatar?: string; time: string; text: string; topic?: string }>>>({});
+
+    const filteredProjects = projects.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    const activeProject = projects.find((p) => p.id === selectedProjectId) || projects[0];
+
+    const handlePostComment = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newComment.trim() || !activeProject) return;
+      const commentItem = {
+        id: Date.now().toString(),
+        author: currentUser.name || currentUser.email || "You",
+        avatar: currentUser.image,
+        time: "Just now",
+        text: newComment.trim(),
+        topic: "General Discussion",
+      };
+      setDiscussions((prev) => ({
+        ...prev,
+        [activeProject.id]: [...(prev[activeProject.id] || []), commentItem],
+      }));
+      setNewComment("");
+    };
+
+    const projectComments = activeProject ? (discussions[activeProject.id] || [
+      {
+        id: "1",
+        author: "System Bot",
+        time: "2 hours ago",
+        text: `Welcome to the discussion thread for ${activeProject.name}. Post updates, share links, and collaborate with your project team members.`,
+        topic: "Kickoff & Strategy",
+      },
+      {
+        id: "2",
+        author: activeProject.owner?.name || "Project Lead",
+        time: "1 hour ago",
+        text: `Key objectives and timeline milestones have been logged. Please review active tasks under the board view.`,
+        topic: "Milestone Sync",
+      }
+    ]) : [];
+
+    return (
+      <div className="flex flex-col lg:flex-row gap-5 min-h-[550px] animate-in fade-in zoom-in-95 duration-200">
+        {/* Left Panel: Project List */}
+        <div className="w-full lg:w-80 shrink-0 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl p-4 flex flex-col gap-3 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <MessageSquare size={16} className="text-blue-600 dark:text-blue-400" />
+              Project Discussions
+            </h3>
+            <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full">
+              {projects.length}
+            </span>
+          </div>
+
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search discussions..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-[8px] focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          <div className="flex-1 overflow-y-auto max-h-[440px] space-y-2 pr-1">
+            {filteredProjects.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-8">No project discussions found.</p>
+            ) : (
+              filteredProjects.map((p) => {
+                const isSelected = activeProject?.id === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setSelectedProjectId(p.id)}
+                    className={`w-full text-left p-3 rounded-[8px] transition-all cursor-pointer border ${
+                      isSelected
+                        ? "bg-blue-50/80 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800/60 shadow-2xs"
+                        : "bg-slate-50/50 dark:bg-zinc-900/40 border-transparent hover:bg-slate-100 dark:hover:bg-zinc-900"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate max-w-[170px]">
+                        {p.name}
+                      </span>
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: p.status?.color || "#94a3b8" }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                      <span className="truncate max-w-[130px]">{p.clientName || p.status?.name || "Active"}</span>
+                      <span className="flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400">
+                        <MessageSquare size={10} /> {(discussions[p.id]?.length || 2)}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Right Panel: Selected Project Thread */}
+        <div className="flex-1 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl p-5 flex flex-col shadow-2xs">
+          {activeProject ? (
+            <>
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 dark:border-zinc-800 gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold text-slate-900 dark:text-white">{activeProject.name}</h2>
+                    <span
+                      className="px-2 py-0.5 rounded-full text-[11px] font-semibold text-white"
+                      style={{ backgroundColor: activeProject.status?.color || "#3b82f6" }}
+                    >
+                      {activeProject.status?.name || "Active"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
+                    {activeProject.description || "Project channel for team discussion, milestones, and status updates."}
+                  </p>
+                </div>
+                <Button size="sm" asChild className="rounded-[8px] bg-blue-600 text-white hover:bg-blue-700 text-xs font-semibold shrink-0">
+                  <Link href={`/workspace/projects/${activeProject.id}?tab=conversation`}>
+                    <MessageSquare size={13} className="mr-1.5" /> Full Conversation
+                  </Link>
+                </Button>
               </div>
-              {project.tasks.length > 1 && (
-                <Link 
-                  href={`/workspace/tasks?projectId=${project.id}`} 
-                  className="text-[11px] font-medium text-slate-400 hover:text-blue-500 transition-colors inline-block pl-1" 
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  + {project.tasks.length - 1} more tasks
-                </Link>
-              )}
+
+              {/* Messages Stream */}
+              <div className="flex-1 overflow-y-auto my-4 space-y-3.5 max-h-[360px] pr-2">
+                {projectComments.map((msg) => (
+                  <div key={msg.id} className="p-3.5 bg-slate-50 dark:bg-zinc-900/60 rounded-[8px] border border-slate-100 dark:border-zinc-800/80">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold">
+                          {msg.author.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">{msg.author}</span>
+                        {msg.topic && (
+                          <span className="text-[10px] font-medium bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md">
+                            {msg.topic}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-slate-400">{msg.time}</span>
+                    </div>
+                    <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed pl-8">{msg.text}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Post Comment Input */}
+              <form onSubmit={handlePostComment} className="pt-3 border-t border-slate-200 dark:border-zinc-800 flex gap-2">
+                <input
+                  type="text"
+                  placeholder={`Post update or note for ${activeProject.name}...`}
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  className="flex-1 px-3 py-2 text-xs bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-[8px] focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <Button type="submit" size="sm" className="rounded-[8px] bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-slate-800 text-xs font-semibold px-4">
+                  Post
+                </Button>
+              </form>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
+              <MessageSquare size={36} className="opacity-20 mb-2" />
+              <p className="text-xs">Select a project to view its discussions.</p>
             </div>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  function ProjectCalendarView({ projects }: { projects: any[] }) {
+    const [currentDate, setCurrentDate] = useState(new Date());
+
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+
+    const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
+    const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+    const totalDaysPrevMonth = new Date(year, month, 0).getDate();
+
+    const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+    const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+    const goToday = () => setCurrentDate(new Date());
+
+    const cells: Array<{ day: number; isCurrentMonth: boolean; dateObj: Date }> = [];
+
+    for (let i = firstDayOfMonth - 1; i >= 0; i--) {
+      const dayNum = totalDaysPrevMonth - i;
+      cells.push({ day: dayNum, isCurrentMonth: false, dateObj: new Date(year, month - 1, dayNum) });
+    }
+
+    for (let d = 1; d <= totalDaysInMonth; d++) {
+      cells.push({ day: d, isCurrentMonth: true, dateObj: new Date(year, month, d) });
+    }
+
+    const remainingCells = (cells.length % 7 === 0) ? 0 : 7 - (cells.length % 7);
+    for (let n = 1; n <= remainingCells; n++) {
+      cells.push({ day: n, isCurrentMonth: false, dateObj: new Date(year, month + 1, n) });
+    }
+
+    const todayStr = new Date().toDateString();
+
+    return (
+      <div className="flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+        {/* Calendar Header / Controls */}
+        <div className="flex flex-col sm:flex-row items-center justify-between bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl p-4 shadow-2xs gap-3">
+          <div className="flex items-center gap-3">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <CalendarIcon size={18} className="text-blue-600 dark:text-blue-400" />
+              {monthNames[month]} {year}
+            </h2>
+            <span className="text-xs font-medium text-slate-500 bg-slate-100 dark:bg-zinc-800 px-2.5 py-0.5 rounded-full">
+              {projects.length} Projects
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={goToday} className="h-8 text-xs font-semibold rounded-[8px] border-slate-200 dark:border-zinc-800">
+              Today
+            </Button>
+            <div className="flex items-center border border-slate-200 dark:border-zinc-800 rounded-[8px] overflow-hidden">
+              <Button variant="ghost" size="icon" onClick={prevMonth} className="h-8 w-8 rounded-none hover:bg-slate-100 dark:hover:bg-zinc-800">
+                <ChevronLeft size={15} />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={nextMonth} className="h-8 w-8 rounded-none border-l border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800">
+                <ChevronRight size={15} />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Calendar Grid Container */}
+        <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-2xs">
+          {/* Days of Week Header */}
+          <div className="grid grid-cols-7 border-b border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/60 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 py-2.5">
+            {daysOfWeek.map((day) => (
+              <div key={day}>{day}</div>
+            ))}
+          </div>
+
+          {/* Grid Cells */}
+          <div className="grid grid-cols-7 divide-x divide-y divide-slate-100 dark:divide-zinc-800/80 bg-slate-100/30 dark:bg-zinc-900/20">
+            {cells.map((cell, idx) => {
+              const isToday = cell.dateObj.toDateString() === todayStr;
+              const cellDateStr = cell.dateObj.toISOString().slice(0, 10);
+
+              const dayProjects = projects.filter((p) => {
+                if (p.dueDate && p.dueDate.slice(0, 10) === cellDateStr) return true;
+                if (p.createdAt && new Date(p.createdAt).toISOString().slice(0, 10) === cellDateStr) return true;
+                return false;
+              });
+
+              return (
+                <div
+                  key={idx}
+                  className={`min-h-[110px] p-2 flex flex-col transition-colors ${
+                    cell.isCurrentMonth
+                      ? "bg-white dark:bg-zinc-950"
+                      : "bg-slate-50/50 dark:bg-zinc-900/40 text-slate-400"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span
+                      className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold ${
+                        isToday
+                          ? "bg-blue-600 text-white"
+                          : cell.isCurrentMonth
+                          ? "text-slate-700 dark:text-slate-300"
+                          : "text-slate-400 dark:text-slate-600"
+                      }`}
+                    >
+                      {cell.day}
+                    </span>
+                    {dayProjects.length > 0 && (
+                      <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-zinc-800 px-1.5 py-0.2 rounded">
+                        {dayProjects.length}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Day Projects Chips */}
+                  <div className="flex-1 space-y-1 overflow-y-auto max-h-[80px]">
+                    {dayProjects.map((p) => (
+                      <Link
+                        key={p.id}
+                        href={`/workspace/projects/${p.id}`}
+                        className="block p-1.5 rounded-[6px] text-[11px] font-medium transition-all hover:scale-[1.02] border border-slate-200 dark:border-zinc-800 shadow-2xs"
+                        style={{
+                          backgroundColor: (p.status?.color ? `${p.status.color}15` : "#3b82f615"),
+                          borderLeftWidth: "3px",
+                          borderLeftColor: p.status?.color || "#3b82f6",
+                        }}
+                      >
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate block">
+                          {p.name}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
@@ -902,6 +1322,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
     const [isDeleteTemplateOpen, setIsDeleteTemplateOpen] = useState(false);
     const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
     const [isFieldsDrawerOpen, setIsFieldsDrawerOpen] = useState(false);
+    const [chatModalProject, setChatModalProject] = useState<any | null>(null);
     const [fieldsTab, setFieldsTab] = useState(currentUser?.role === 'OWNER' ? "create_new" : "add_existing");
     const [selectedFieldType, setSelectedFieldType] = useState<string | null>(null);
     const [newFieldOptions, setNewFieldOptions] = useState<string[]>([]);
@@ -928,6 +1349,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
       }
     }, [searchParams, router]);
     // Form States
+    const [description, setDescription] = useState("");
     const [isOngoing, setIsOngoing] = useState(false);
 
     type DraftTask = {
@@ -956,8 +1378,10 @@ const [isPMOpen, setIsPMOpen] = useState(false);
     const [customFields, setCustomFields] = useState<
       { name: string; type: string; value: any; options?: string[] }[]
     >([]);
-    const [description, setDescription] = useState("");
-    const [viewMode, setViewMode] = useState<"TABLE" | "KANBAN" | "LIST">("KANBAN");
+    const [viewMode, setViewMode] = useState<"TABLE" | "KANBAN" | "LIST" | "DISCUSSION" | "CALENDAR">("KANBAN");
+    const [selectedDiscussionProjectId, setSelectedDiscussionProjectId] = useState<string | null>(null);
+    const [discussionSearch, setDiscussionSearch] = useState("");
+    const [calendarViewDate, setCalendarViewDate] = useState<Date>(new Date());
     const [groupByField, setGroupByField] = useState<"Status" | "Assignee" | "Priority" | "Due date" | "Task Type" | "start date">("Status");
     const [groupByOrder, setGroupByOrder] = useState<"Ascending" | "Descending">("Descending");
 
@@ -1418,8 +1842,8 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 
     useEffect(() => {
       const savedView = localStorage.getItem("omniwork_project_view");
-      if (savedView === "TABLE" || savedView === "KANBAN" || savedView === "LIST") {
-        setViewMode(savedView);
+      if (savedView === "TABLE" || savedView === "KANBAN" || savedView === "LIST" || savedView === "DISCUSSION" || savedView === "CALENDAR") {
+        setViewMode(savedView as any);
       }
       const savedPinned = localStorage.getItem("omniwork_pinned_templates");
       if (savedPinned) {
@@ -1434,7 +1858,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
       fetchTemplates();
     }, []);
 
-    const handleSetViewMode = (mode: "TABLE" | "KANBAN" | "LIST") => {
+    const handleSetViewMode = (mode: "TABLE" | "KANBAN" | "LIST" | "DISCUSSION" | "CALENDAR") => {
       setViewMode(mode);
       localStorage.setItem("omniwork_project_view", mode);
     };
@@ -2037,12 +2461,12 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 </div>
         </div>
 
-        {/* Tabs Bar: Kanban, Table, List */}
-        <div className="flex items-center gap-1 px-4 md:px-8 mt-0.5">
+        {/* Tabs Bar: Kanban, Table, List, Discussion, Calendar */}
+        <div className="flex items-center gap-1 px-4 md:px-8 mt-0.5 overflow-x-auto">
           <button
             type="button"
             onClick={() => handleSetViewMode("KANBAN")}
-            className={`flex items-center gap-1.5 pl-0 pr-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 pl-0 pr-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
               viewMode === "KANBAN"
                 ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
                 : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
@@ -2053,7 +2477,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
           <button
             type="button"
             onClick={() => handleSetViewMode("TABLE")}
-            className={`flex items-center gap-1.5 px-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
               viewMode === "TABLE"
                 ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
                 : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
@@ -2064,13 +2488,35 @@ const [isPMOpen, setIsPMOpen] = useState(false);
           <button
             type="button"
             onClick={() => handleSetViewMode("LIST")}
-            className={`flex items-center gap-1.5 px-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
               viewMode === "LIST"
                 ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
                 : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
             }`}
           >
             <ListIcon size={14} /> List
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSetViewMode("DISCUSSION")}
+            className={`flex items-center gap-1.5 px-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              viewMode === "DISCUSSION"
+                ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
+                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
+            }`}
+          >
+            <MessageSquare size={14} /> Discussion
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSetViewMode("CALENDAR")}
+            className={`flex items-center gap-1.5 px-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              viewMode === "CALENDAR"
+                ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
+                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
+            }`}
+          >
+            <CalendarIcon size={14} /> Calendar
           </button>
         </div>
       </div>
@@ -2454,7 +2900,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                       handleRenameStage={handleRenameStage}
                     >
                       {statusProjects.map((p: any) => (
-                        <KanbanCard key={p.id} project={p} currentUser={currentUser} handleDelete={handleDelete} handleEdit={openEditModal} />
+                        <KanbanCard key={p.id} project={p} currentUser={currentUser} handleDelete={handleDelete} handleEdit={openEditModal} onOpenChatModal={setChatModalProject} />
                       ))}
                     </KanbanColumn>
                   );
@@ -2478,7 +2924,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                   <div className="opacity-80 scale-105 transition-transform cursor-grabbing w-[320px] rounded-2xl border-2 border-dashed border-primary bg-background shadow-2xl h-[200px]" />
                 ) : (
                   <div className="opacity-80 rotate-2 scale-105 transition-transform cursor-grabbing">
-                    <KanbanCard project={activeDragProject} currentUser={currentUser} handleDelete={handleDelete} handleEdit={openEditModal} />
+                    <KanbanCard project={activeDragProject} currentUser={currentUser} handleDelete={handleDelete} handleEdit={openEditModal} onOpenChatModal={setChatModalProject} />
                   </div>
                 )
               ) : null}
@@ -2493,90 +2939,259 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                 <FolderKanban size={40} className="opacity-20" />
                 <p className="text-muted-foreground text-sm">No projects found.</p>
               </div>
-            ) : (
-              sortedProjects.map(p => (
-                <div key={p.id} className="bg-background border rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row gap-5 items-start sm:items-center relative overflow-hidden group">
-                  <div className="absolute left-0 top-0 w-1.5 h-full" style={{ backgroundColor: getPriorityColor(p.priority).includes("red") ? "#ef4444" : getPriorityColor(p.priority).includes("orange") ? "#f97316" : getPriorityColor(p.priority).includes("blue") ? "#3b82f6" : "#cbd5e1" }} />
-                  
-                  <div className="flex-1 min-w-0 pl-2">
-                    <div className="flex items-center gap-3 mb-1">
-                      <Link href={`/workspace/projects/${p.id}`} className="text-lg font-bold text-foreground hover:text-primary transition-colors truncate">
-                        {p.name}
-                      </Link>
-                      {p.isRepeated && (
-                        <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0 px-1.5 font-semibold flex items-center gap-1">
-                          <Repeat size={8} /> Recurring
-                        </Badge>
-                      )}
-                      <Badge variant="outline" className="border-transparent font-medium text-white" style={{ backgroundColor: p.status?.color || '#cccccc' }}>{p.status?.name || "No Status"}</Badge>
+            ) : groupByField === "Status" ? (
+              projectStatuses.map(status => {
+                const statusProjects = sortedProjects.filter(p => p.statusId === status.id || p.status?.id === status.id);
+                if (statusProjects.length === 0) return null;
+                return (
+                  <div key={status.id} className="bg-background border border-slate-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-2xs">
+                    {/* Status Group Header */}
+                    <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/90 dark:bg-zinc-900/80 border-b border-slate-200 dark:border-zinc-800">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: status.color || "#94a3b8" }} />
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">{status.name}</span>
+                        <span className="text-[11px] font-semibold text-slate-500 bg-slate-200/60 dark:bg-zinc-800 px-2 py-0.5 rounded-full">{statusProjects.length}</span>
+                      </div>
                     </div>
-                    {p.description ? (
-                      <div className="text-sm text-muted-foreground line-clamp-2 max-w-3xl" dangerouslySetInnerHTML={{ __html: p.description }} />
-                    ) : (
-                      <p className="text-sm text-muted-foreground italic">No description provided.</p>
-                    )}
-                    {p.client && currentUser.role !== "MEMBER" && <p className="text-xs text-muted-foreground mt-2 font-medium">Client: {p.client.name}</p>}
+
+                    {/* Column Headers */}
+                    <div className="flex items-center justify-between px-4 py-2 bg-slate-100/50 dark:bg-zinc-900/40 border-b border-slate-100 dark:border-zinc-800/50 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                      <div className="flex-1 min-w-0 pl-3">Project Name</div>
+                      <div className="w-32 shrink-0 hidden sm:block">Status</div>
+                      {currentUser.role !== "MEMBER" && <div className="w-28 shrink-0 hidden md:block">Client</div>}
+                      <div className="w-48 shrink-0 hidden lg:block">Timeline</div>
+                      <div className="w-32 shrink-0 hidden sm:block">Team</div>
+                      <div className="w-24 shrink-0 text-right">Actions</div>
+                    </div>
+
+                    {/* Project Rows */}
+                    <div className="divide-y divide-slate-100 dark:divide-zinc-800/70">
+                      {statusProjects.map(p => (
+                        <div 
+                          key={p.id} 
+                          className="group relative flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-950 hover:bg-slate-50/80 dark:hover:bg-zinc-900/60 transition-colors"
+                        >
+                          {/* Left Priority Accent Line */}
+                          <div 
+                            className="absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all group-hover:w-1.5" 
+                            style={{ backgroundColor: status.color || (getPriorityColor(p.priority).includes("red") ? "#ef4444" : getPriorityColor(p.priority).includes("orange") ? "#f97316" : getPriorityColor(p.priority).includes("blue") ? "#3b82f6" : "#cbd5e1") }} 
+                          />
+
+                          {/* Name & Badge */}
+                          <div className="flex-1 min-w-0 pl-3 pr-4 flex items-center gap-2.5">
+                            <Link 
+                              href={`/workspace/projects/${p.id}`} 
+                              className="text-[14px] font-semibold text-slate-900 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors truncate"
+                            >
+                              {p.name}
+                            </Link>
+                            {p.isRepeated && (
+                              <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0 px-1.5 font-medium shrink-0 flex items-center gap-1">
+                                <Repeat size={8} /> Recurring
+                              </Badge>
+                            )}
+                          </div>
+
+                          {/* Status Badge */}
+                          <div className="w-32 shrink-0 hidden sm:flex items-center">
+                            <span 
+                              className="px-2.5 py-0.5 rounded-full text-xs font-semibold text-white truncate max-w-[120px] shadow-2xs"
+                              style={{ backgroundColor: status.color || '#94a3b8' }}
+                            >
+                              {status.name}
+                            </span>
+                          </div>
+
+                          {/* Client Column */}
+                          {currentUser.role !== "MEMBER" && (
+                            <div className="w-28 shrink-0 hidden md:flex items-center text-xs font-medium text-slate-600 dark:text-slate-400 truncate">
+                              {p.client?.name ? p.client.name : "—"}
+                            </div>
+                          )}
+
+                          {/* Timeline Column (One line!) */}
+                          <div className="w-48 shrink-0 hidden lg:flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">
+                            <CalendarIcon size={13} className="text-slate-400 shrink-0" />
+                            <span>{formatDate(p.startDate)}</span>
+                            {p.isOngoing ? (
+                              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">→ Ongoing</span>
+                            ) : p.endDate ? (
+                              <span className="text-slate-500">→ {formatDate(p.endDate)}</span>
+                            ) : null}
+                          </div>
+
+                          {/* Team Column */}
+                          <div className="w-32 shrink-0 hidden sm:flex items-center">
+                            <div className="flex -space-x-1.5 overflow-hidden py-0.5">
+                              {p.projectManager && (
+                                <Avatar className="h-7 w-7 border-2 border-white dark:border-zinc-950 ring-1 ring-purple-500 z-10" title={`PM: ${p.projectManager.name}`}>
+                                  <AvatarFallback className="bg-purple-100 text-purple-700 text-[10px] font-bold">{p.projectManager.name.substring(0,2)}</AvatarFallback>
+                                </Avatar>
+                              )}
+                              {getProjectMembers(p).slice(0, 3).map((u: any) => (
+                                <Avatar key={u.id} className="h-7 w-7 border-2 border-white dark:border-zinc-950" title={u.name}>
+                                  <AvatarFallback className="bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold">{u.name.substring(0,2)}</AvatarFallback>
+                                </Avatar>
+                              ))}
+                              {getProjectMembers(p).length > 3 && (
+                                <div className="h-7 w-7 rounded-full border-2 border-white dark:border-zinc-950 bg-slate-100 dark:bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-slate-500 z-10">
+                                  +{getProjectMembers(p).length - 3}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Actions Column */}
+                          <div className="flex items-center justify-end gap-1.5 shrink-0 pl-2">
+                            <Button variant="outline" size="sm" asChild className="h-8 px-3 text-xs font-medium rounded-[6px] border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800">
+                              <Link href={`/workspace/projects/${p.id}`}>View</Link>
+                            </Button>
+                            {currentUser.role === "OWNER" && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-[6px] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-40">
+                                  <DropdownMenuItem onClick={() => openEditModal(p)} className="cursor-pointer text-xs">Edit Project</DropdownMenuItem>
+                                  <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer text-xs" onClick={() => handleDelete(p.id)}>
+                                    <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete Project
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  
-                  <div className="flex items-center gap-6 sm:ml-auto w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0">
-                    <div className="flex flex-col gap-1 min-w-[120px]">
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Timeline</span>
-                      <div className="flex flex-col gap-0.5 text-xs font-medium">
-                        <span className="flex items-center gap-1.5 text-foreground"><CalendarIcon size={12} className="text-muted-foreground" /> {formatDate(p.startDate)}</span>
+                );
+              })
+            ) : (
+              <div className="bg-background border border-slate-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-2xs">
+                {/* Column Headers */}
+                <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/90 dark:bg-zinc-900/80 border-b border-slate-200 dark:border-zinc-800 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                  <div className="flex-1 min-w-0 pl-3">Project Name</div>
+                  <div className="w-32 shrink-0 hidden sm:block">Status</div>
+                  {currentUser.role !== "MEMBER" && <div className="w-28 shrink-0 hidden md:block">Client</div>}
+                  <div className="w-48 shrink-0 hidden lg:block">Timeline</div>
+                  <div className="w-32 shrink-0 hidden sm:block">Team</div>
+                  <div className="w-24 shrink-0 text-right">Actions</div>
+                </div>
+
+                {/* Project Rows */}
+                <div className="divide-y divide-slate-100 dark:divide-zinc-800/70">
+                  {sortedProjects.map(p => (
+                    <div 
+                      key={p.id} 
+                      className="group relative flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-950 hover:bg-slate-50/80 dark:hover:bg-zinc-900/60 transition-colors"
+                    >
+                      {/* Priority Left Accent Line */}
+                      <div 
+                        className="absolute left-0 top-2 bottom-2 w-1 rounded-r-md transition-all group-hover:w-1.5" 
+                        style={{ backgroundColor: p.status?.color || (getPriorityColor(p.priority).includes("red") ? "#ef4444" : getPriorityColor(p.priority).includes("orange") ? "#f97316" : getPriorityColor(p.priority).includes("blue") ? "#3b82f6" : "#cbd5e1") }} 
+                      />
+
+                      {/* Name & Badge */}
+                      <div className="flex-1 min-w-0 pl-3 pr-4 flex items-center gap-2.5">
+                        <Link 
+                          href={`/workspace/projects/${p.id}`} 
+                          className="text-[14px] font-semibold text-slate-900 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors truncate"
+                        >
+                          {p.name}
+                        </Link>
+                        {p.isRepeated && (
+                          <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0 px-1.5 font-medium shrink-0 flex items-center gap-1">
+                            <Repeat size={8} /> Recurring
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Status Badge */}
+                      <div className="w-32 shrink-0 hidden sm:flex items-center">
+                        <span 
+                          className="px-2.5 py-0.5 rounded-full text-xs font-semibold text-white truncate max-w-[120px] shadow-2xs"
+                          style={{ backgroundColor: p.status?.color || '#94a3b8' }}
+                        >
+                          {p.status?.name || "No Status"}
+                        </span>
+                      </div>
+
+                      {/* Client Column */}
+                      {currentUser.role !== "MEMBER" && (
+                        <div className="w-28 shrink-0 hidden md:flex items-center text-xs font-medium text-slate-600 dark:text-slate-400 truncate">
+                          {p.client?.name ? p.client.name : "—"}
+                        </div>
+                      )}
+
+                      {/* Timeline Column (One line!) */}
+                      <div className="w-48 shrink-0 hidden lg:flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">
+                        <CalendarIcon size={13} className="text-slate-400 shrink-0" />
+                        <span>{formatDate(p.startDate)}</span>
                         {p.isOngoing ? (
-                          <span className="flex items-center gap-1.5 text-emerald-600"><Clock size={12} /> Ongoing</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">→ Ongoing</span>
                         ) : p.endDate ? (
-                          <span className="flex items-center gap-1.5 text-foreground"><ArrowRight size={12} className="text-muted-foreground" /> {formatDate(p.endDate)}</span>
+                          <span className="text-slate-500">→ {formatDate(p.endDate)}</span>
                         ) : null}
                       </div>
-                    </div>
-                    
-                    <div className="flex flex-col gap-1 min-w-[120px]">
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Team</span>
-                      <div className="flex -space-x-2 overflow-hidden py-1">
-                        {p.projectManager && (
-                          <Avatar className="h-8 w-8 border-2 border-background ring-2 ring-purple-500 z-10" title={`PM: ${p.projectManager.name}`}>
-                            <AvatarFallback className="bg-purple-100 text-purple-700 text-xs">{p.projectManager.name.substring(0,2)}</AvatarFallback>
-                          </Avatar>
-                        )}
-                        {getProjectMembers(p).slice(0, 4).map((u: any) => (
-                          <Avatar key={u.id} className="h-8 w-8 border-2 border-background" title={u.name}>
-                            <AvatarFallback className="bg-primary/10 text-primary text-xs">{u.name.substring(0,2)}</AvatarFallback>
-                          </Avatar>
-                        ))}
-                        {getProjectMembers(p).length > 4 && (
-                          <div className="h-8 w-8 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-medium text-muted-foreground z-10">
-                            +{getProjectMembers(p).length - 4}
-                          </div>
+
+                      {/* Team Column */}
+                      <div className="w-32 shrink-0 hidden sm:flex items-center">
+                        <div className="flex -space-x-1.5 overflow-hidden py-0.5">
+                          {p.projectManager && (
+                            <Avatar className="h-7 w-7 border-2 border-white dark:border-zinc-950 ring-1 ring-purple-500 z-10" title={`PM: ${p.projectManager.name}`}>
+                              <AvatarFallback className="bg-purple-100 text-purple-700 text-[10px] font-bold">{p.projectManager.name.substring(0,2)}</AvatarFallback>
+                            </Avatar>
+                          )}
+                          {getProjectMembers(p).slice(0, 3).map((u: any) => (
+                            <Avatar key={u.id} className="h-7 w-7 border-2 border-white dark:border-zinc-950" title={u.name}>
+                              <AvatarFallback className="bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold">{u.name.substring(0,2)}</AvatarFallback>
+                            </Avatar>
+                          ))}
+                          {getProjectMembers(p).length > 3 && (
+                            <div className="h-7 w-7 rounded-full border-2 border-white dark:border-zinc-950 bg-slate-100 dark:bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-slate-500 z-10">
+                              +{getProjectMembers(p).length - 3}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Actions Column */}
+                      <div className="flex items-center justify-end gap-1.5 shrink-0 pl-2">
+                        <Button variant="outline" size="sm" asChild className="h-8 px-3 text-xs font-medium rounded-[6px] border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800">
+                          <Link href={`/workspace/projects/${p.id}`}>View</Link>
+                        </Button>
+                        {currentUser.role === "OWNER" && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-[6px] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              <DropdownMenuItem onClick={() => openEditModal(p)} className="cursor-pointer text-xs">Edit Project</DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer text-xs" onClick={() => handleDelete(p.id)}>
+                                <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete Project
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         )}
                       </div>
                     </div>
-                    
-                    <div className="flex items-center gap-2 pl-4 border-l border-border/50">
-                      <Button variant="outline" size="sm" asChild className="h-9 font-medium shadow-sm">
-                        <Link href={`/workspace/projects/${p.id}`}>View</Link>
-                      </Button>
-                      {currentUser.role === "OWNER" && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-9 w-9">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEditModal(p)} className="cursor-pointer">Edit Project</DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={() => handleDelete(p.id)}>
-                              <Trash2 className="mr-2 h-4 w-4" /> Delete Project
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))
+              </div>
             )}
           </div>
+        )}
+
+        {viewMode === "DISCUSSION" && (
+          <ProjectDiscussionView projects={sortedProjects} currentUser={currentUser} />
+        )}
+
+        {viewMode === "CALENDAR" && (
+          <ProjectCalendarView projects={sortedProjects} />
         )}
 
         {/* Create / Edit Project Modal */}
@@ -5052,49 +5667,56 @@ const [isPMOpen, setIsPMOpen] = useState(false);
         </Dialog>
 
         {/* CREATE STATUS DIALOG */}
-        <Dialog open={isCreateStatusOpen} onOpenChange={setIsCreateStatusOpen}>
-          <DialogContent className="sm:max-w-sm bg-background border-border">
-            <DialogHeader>
-              <DialogTitle>Add New Group</DialogTitle>
-              <DialogDescription>
-                Create a new status column for your workflow.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreateStatus} className="space-y-4 py-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Status Name</label>
-                <Input 
-                  value={newStatusName} 
-                  onChange={(e) => setNewStatusName(e.target.value)} 
-                  placeholder="e.g. In Review" 
-                  required 
-                />
+        <FormDialog
+          open={isCreateStatusOpen}
+          onOpenChange={setIsCreateStatusOpen}
+          title="Add New Group"
+          description="Create a new status column for your workflow."
+          footer={
+            <>
+              <FormDialogCancelButton
+                onClick={() => setIsCreateStatusOpen(false)}
+                disabled={isCreatingStatus}
+              >
+                Cancel
+              </FormDialogCancelButton>
+              <FormDialogSubmitButton
+                type="submit"
+                form="create-status-form-projects"
+                disabled={isCreatingStatus || !newStatusName.trim()}
+              >
+                {isCreatingStatus ? "Creating..." : "Create"}
+              </FormDialogSubmitButton>
+            </>
+          }
+        >
+          <form id="create-status-form-projects" onSubmit={handleCreateStatus} className="px-6 pt-6 pb-6 space-y-5">
+            <div className="space-y-1.5">
+              <label className={formFieldLabel}>Status Name</label>
+              <Input 
+                value={newStatusName} 
+                onChange={(e) => setNewStatusName(e.target.value)} 
+                placeholder="e.g. In Review" 
+                required 
+                className={formInputClass}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className={formFieldLabel}>Color</label>
+              <div className="flex gap-2.5 pt-1">
+                {["#94a3b8", "#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7"].map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setNewStatusColor(color)}
+                    className={`w-7 h-7 rounded-full transition-transform cursor-pointer ${newStatusColor === color ? 'scale-110 ring-2 ring-offset-2 ring-slate-400 dark:ring-offset-zinc-900' : 'hover:scale-105'}`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Color</label>
-                <div className="flex gap-2">
-                  {["#94a3b8", "#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7"].map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setNewStatusColor(color)}
-                      className={`w-8 h-8 rounded-full transition-transform ${newStatusColor === color ? 'scale-110 ring-2 ring-offset-2 ring-slate-400' : 'hover:scale-105'}`}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
-              </div>
-              <DialogFooter className="mt-6">
-                <Button type="button" variant="outline" onClick={() => setIsCreateStatusOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isCreatingStatus || !newStatusName.trim()}>
-                  {isCreatingStatus ? "Creating..." : "Create"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </div>
+          </form>
+        </FormDialog>
 
         {/* Delete Project Confirmation Modal */}
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
@@ -5165,6 +5787,28 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                 Delete Template
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Project Chat Modal */}
+        <Dialog open={!!chatModalProject} onOpenChange={(open) => !open && setChatModalProject(null)}>
+          <DialogContent className="max-w-4xl w-[90vw] h-[85vh] p-0 flex flex-col overflow-hidden bg-background rounded-[8px] border border-slate-200 dark:border-white/10 shadow-2xl">
+            <DialogHeader className="p-4 border-b flex flex-row items-center justify-between space-y-0 bg-slate-50 dark:bg-zinc-900/50">
+              <DialogTitle className="flex items-center gap-2 text-base font-semibold text-slate-800 dark:text-slate-100">
+                <MessageSquare className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                {chatModalProject?.name || "Project Chat"}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-hidden relative">
+              {chatModalProject && (
+                <ProjectConversation
+                  projectId={chatModalProject.id}
+                  currentUser={currentUser}
+                  organizationId={currentUser.organizationId}
+                  isClient={currentUser.role === 'CLIENT'}
+                />
+              )}
+            </div>
           </DialogContent>
         </Dialog>
 

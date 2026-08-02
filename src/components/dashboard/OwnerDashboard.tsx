@@ -6,11 +6,15 @@ import { FolderKanban, Clock, Activity, ListTodo, Search, ArrowUpDown, Filter, C
 import { motion } from 'framer-motion';
 import { formatHours } from '@/lib/utils';
 
+import DashboardTaskModal from './DashboardTaskModal';
+
 export default function OwnerDashboard({ metrics }: { metrics: any }) {
   const [taskSummaryMonth, setTaskSummaryMonth] = useState('2025-04');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: '', direction: '' });
   const [filterStatus, setFilterStatus] = useState('');
+  const [selectedTask, setSelectedTask] = useState<any | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   
   const container = {
     hidden: { opacity: 0 },
@@ -31,7 +35,7 @@ export default function OwnerDashboard({ metrics }: { metrics: any }) {
   const totalAllocatedHours = metrics?.totalAllocatedHours || 0;
   const totalHours = metrics?.totalHours || 0;
   const projectStatusCounts = metrics?.projectStatusCounts || { COMPLETE: 0, IN_PROGRESS: 0, PLANNING: 0, ON_HOLD: 0 };
-  const recentTasks = metrics?.recentTasks || [];
+  const recentTasks = (metrics?.recentTasks || []).slice(0, 5);
   const totalCompleteTasks = metrics?.totalCompleteTasks || 0;
   const totalPendingTasks = metrics?.totalPendingTasks || 0;
   const dbReminders = metrics?.reminders || [];
@@ -73,7 +77,8 @@ export default function OwnerDashboard({ metrics }: { metrics: any }) {
       assignee: t.assignees?.[0]?.user?.name || "Unassigned",
       status: t.status?.name || "To Do",
       date: new Date(t.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
-      sColor
+      sColor,
+      rawTask: t
     };
   });
 
@@ -101,6 +106,8 @@ export default function OwnerDashboard({ metrics }: { metrics: any }) {
       return 0;
     });
   }
+
+  processedTasks = processedTasks.slice(0, 5);
 
   // Dynamic percentages for radial chart
   const projectDonePercent = totalProjects > 0 ? Math.round((projectStatusCounts.COMPLETE / totalProjects) * 100) : 0;
@@ -436,7 +443,17 @@ export default function OwnerDashboard({ metrics }: { metrics: any }) {
                   ) : processedTasks.map((task: any) => (
                     <tr key={task.id} className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors">
                       <td className="px-4 py-4 font-semibold text-slate-500 dark:text-slate-400">{task.id}</td>
-                      <td className="px-4 py-4 font-bold text-slate-900 dark:text-white">{task.name}</td>
+                      <td 
+                        className="px-4 py-4 font-bold text-slate-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer underline-offset-2 hover:underline transition-colors"
+                        onClick={() => {
+                          if (task.rawTask) {
+                            setSelectedTask(task.rawTask);
+                            setIsModalOpen(true);
+                          }
+                        }}
+                      >
+                        {task.name}
+                      </td>
                       <td className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300">{task.project}</td>
                       <td className="px-4 py-4 font-medium text-slate-600 dark:text-slate-300">{task.deadline}</td>
                       <td className="px-4 py-4 font-semibold text-slate-700 dark:text-slate-300">{task.priority}</td>
@@ -455,7 +472,15 @@ export default function OwnerDashboard({ metrics }: { metrics: any }) {
           </Card>
         </motion.div>
       </div>
-      
+
+      <DashboardTaskModal
+        task={selectedTask}
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedTask(null);
+        }}
+      />
     </motion.div>
   );
 }

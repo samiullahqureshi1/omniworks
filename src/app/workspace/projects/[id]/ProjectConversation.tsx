@@ -26,6 +26,7 @@ interface ProjectConversationProps {
   currentUser: any;
   organizationId: string;
   isClient: boolean;
+  hideHeader?: boolean;
 }
 
 export interface ProjectConversationRef {
@@ -105,7 +106,7 @@ const VoiceNotePlayer = ({
   const activeBarIndex = Math.floor(progressPercent * waveformHeights.length);
 
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 rounded-[20px] max-w-sm relative shadow-2xs ${
+    <div className={`flex items-center gap-3 p-2.5 rounded-[8px] max-w-xs transition-all border ${
       isCurrentUser 
         ? 'bg-[#16181a] text-white' 
         : 'bg-[#e5e5ea] dark:bg-[#26262a] text-slate-900 dark:text-white'
@@ -205,10 +206,10 @@ const VoiceNotePlayer = ({
 };
 
 const projectMessagesCache: Record<string, any[]> = {};
-const projectDetailsCache: Record<string, { name: string; users: any[]; tasks: any[] }> = {};
+const projectDetailsCache: Record<string, { name: string; users: any[]; tasks: any[]; projects?: any[] }> = {};
 
 const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversationProps>(
-  ({ projectId, groupId, groupName, groupDesc, isDirect, currentUser, organizationId, isClient }, ref) => {
+  ({ projectId, groupId, groupName, groupDesc, isDirect, currentUser, organizationId, isClient, hideHeader = false }, ref) => {
   const targetId = projectId || groupId || '';
   const [messages, setMessages] = useState<any[]>(() => projectMessagesCache[targetId] || []);
   const [content, setContent] = useState('');
@@ -274,16 +275,219 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   };
   
   // Mentions state
-  const [suggestions, setSuggestions] = useState<{ users: any[], tasks: any[] }>(() => ({
+  const [suggestions, setSuggestions] = useState<{ users: any[], tasks: any[], projects: any[] }>(() => ({
     users: (targetId && projectDetailsCache[targetId]?.users) || [],
-    tasks: (targetId && projectDetailsCache[targetId]?.tasks) || []
+    tasks: (targetId && projectDetailsCache[targetId]?.tasks) || [],
+    projects: (targetId && projectDetailsCache[targetId]?.projects) || []
   }));
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [suggestionType, setSuggestionType] = useState<'user'|'task'|'both'|null>(null);
+  const [suggestionType, setSuggestionType] = useState<'user'|'task'|'project'|'both'|null>(null);
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentions, setMentions] = useState<string[]>([]);
   const [taskMentions, setTaskMentions] = useState<string[]>([]);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+
+  const [dynamicTasks, setDynamicTasks] = useState<any[]>([]);
+  const [dynamicUsers, setDynamicUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!showSuggestions || !groupId) return;
+
+    const evaluateGroupContext = async () => {
+      // Check for mentioned project @@ProjectName in content
+      const projMatch = content.match(/@@([^\s@#]+)/g);
+      let targetProjectId = '';
+
+      if (projMatch && projMatch.length > 0) {
+        const lastProjName = projMatch[projMatch.length - 1].substring(2).trim().toLowerCase();
+        const matchedProj = (suggestions.projects || []).find(p =>
+          (p.name || '').toLowerCase() === lastProjName || (p.name || '').toLowerCase().startsWith(lastProjName)
+        );
+        if (matchedProj) {
+          targetProjectId = matchedProj.id;
+        }
+      }
+
+      // If user typed # in Group Chat
+      if (suggestionType === 'task') {
+        if (targetProjectId) {
+          try {
+            const res = await fetch(`/api/projects/${targetProjectId}/mention-suggestions`);
+            if (res.ok) {
+              const data = await res.json();
+              setDynamicTasks(data.tasks || []);
+              return;
+            }
+          } catch (e) {
+            console.error('Error fetching project tasks:', e);
+          }
+        }
+        setDynamicTasks(suggestions.tasks || []);
+      }
+
+      // If user typed @ in Group Chat
+      if (suggestionType === 'user') {
+        // Check if a task #TaskTitle was mentioned
+        const taskMatch = content.match(/#([^\s@#]+)/g);
+        let taskProjectId = targetProjectId;
+
+        if (!taskProjectId && taskMatch && taskMatch.length > 0) {
+          const lastTaskTitle = taskMatch[taskMatch.length - 1].substring(1).trim().toLowerCase();
+          const matchedTask = (suggestions.tasks || []).find(t =>
+            (t.title || t.name || '').toLowerCase() === lastTaskTitle || (t.title || t.name || '').toLowerCase().startsWith(lastTaskTitle)
+          );
+          if (matchedTask && matchedTask.projectId) {
+            taskProjectId = matchedTask.projectId;
+          }
+        }
+
+        if (taskProjectId) {
+          try {
+            const res = await fetch(`/api/projects/${taskProjectId}/mention-suggestions`);
+            if (res.ok) {
+              const data = await res.json();
+              setDynamicUsers(data.users || []);
+              return;
+            }
+          } catch (e) {
+            console.error('Error fetching project users:', e);
+          }
+        }
+
+        setDynamicUsers(suggestions.users || []);
+      }
+    };
+
+    evaluateGroupContext();
+  }, [showSuggestions, suggestionType, content, groupId, suggestions]);
+
+  const effectiveUsers = (groupId && suggestionType === 'user' && dynamicUsers.length > 0) ? dynamicUsers : suggestions.users;
+  const effectiveTasks = (groupId && suggestionType === 'task' && dynamicTasks.length > 0) ? dynamicTasks : suggestions.tasks;
+
+  const filteredUsers = effectiveUsers.filter(u => (u.name || '').toLowerCase().includes(mentionQuery));
+  const filteredTasks = effectiveTasks.filter(t => (t.title || t.name || '').toLowerCase().includes(mentionQuery));
+  const filteredProjects = (suggestions.projects || []).filter(p => (p.name || '').toLowerCase().includes(mentionQuery));
+
+  const getFilteredSuggestions = () => {
+    if (suggestionType === 'project') {
+      return filteredProjects.map(p => ({ ...p, itemType: 'project' as const }));
+    }
+    const userMatches = (suggestionType === 'both' || suggestionType === 'user') ? filteredUsers : [];
+    const taskMatches = (suggestionType === 'both' || suggestionType === 'task') ? filteredTasks : [];
+    return [
+      ...userMatches.map(u => ({ ...u, itemType: 'user' as const })),
+      ...taskMatches.map(t => ({ ...t, itemType: 'task' as const }))
+    ];
+  };
+
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setContent(value);
+
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.max(38, textareaRef.current.scrollHeight)}px`;
+    }
+
+    const lastWord = value.split(/\s+/).pop() || '';
+    if (lastWord.startsWith('@@')) {
+      setSuggestionType('project');
+      setMentionQuery(lastWord.substring(2).toLowerCase());
+      setShowSuggestions(true);
+      setHighlightedIndex(0);
+    } else if (lastWord.startsWith('@')) {
+      setSuggestionType('user');
+      setMentionQuery(lastWord.substring(1).toLowerCase());
+      setShowSuggestions(true);
+      setHighlightedIndex(0);
+    } else if (lastWord.startsWith('#')) {
+      setSuggestionType('task');
+      setMentionQuery(lastWord.substring(1).toLowerCase());
+      setShowSuggestions(true);
+      setHighlightedIndex(0);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showSuggestions) {
+      const items = getFilteredSuggestions();
+      if (items.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setHighlightedIndex(prev => (prev + 1) % items.length);
+          return;
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setHighlightedIndex(prev => (prev - 1 + items.length) % items.length);
+          return;
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+          e.preventDefault();
+          const item = items[highlightedIndex] || items[0];
+          if (item) {
+            insertMention(item.id, item.name || item.title, item.itemType);
+          }
+          return;
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          setShowSuggestions(false);
+          return;
+        }
+      }
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  const insertMention = (id: string, name: string, type: 'user' | 'task' | 'project') => {
+    if (editingMessageId) {
+      const words = editContent.trimEnd().split(/\s+/);
+      const lastWord = words[words.length - 1] || '';
+      if (lastWord.startsWith('@@') || lastWord.startsWith('@') || lastWord.startsWith('#')) {
+        words.pop();
+      }
+      if (type === 'project') {
+        words.push(`@@${name} `);
+      } else if (type === 'user') {
+        words.push(`@${name} `);
+      } else {
+        words.push(`#${name} `);
+      }
+      setEditContent(words.join(' '));
+      setShowSuggestions(false);
+      return;
+    }
+
+    const words = content.trimEnd().split(/\s+/);
+    const lastWord = words[words.length - 1] || '';
+    if (lastWord.startsWith('@@') || lastWord.startsWith('@') || lastWord.startsWith('#')) {
+      words.pop();
+    }
+    
+    if (type === 'project') {
+      words.push(`@@${name} `);
+    } else if (type === 'user') {
+      words.push(`@${name} `);
+      if (!mentions.includes(id)) setMentions(prev => [...prev, id]);
+    } else {
+      words.push(`#${name} `);
+      if (!taskMentions.includes(id)) setTaskMentions(prev => [...prev, id]);
+    }
+
+    const newContent = words.join(' ');
+    setContent(newContent);
+    setShowSuggestions(false);
+
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.max(38, textareaRef.current.scrollHeight)}px`;
+    }
+  };
 
   // Voice Recording State
   const [isRecording, setIsRecording] = useState(false);
@@ -643,28 +847,52 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
   );
 
   const fetchSuggestions = async () => {
-    if (projectId) {
-      const res = await fetch(`/api/projects/${projectId}/mention-suggestions`);
-      if (res.ok) {
-        const data = await res.json();
-        const newSuggestions = { users: data.users || [], tasks: data.tasks || [] };
-        setSuggestions(newSuggestions);
-        const name = data.projectName || 'Project Conversation';
-        setProjectName(name);
-        projectDetailsCache[targetId] = { name, users: newSuggestions.users, tasks: newSuggestions.tasks };
-      }
-    } else if (groupId) {
-      if (groupName) setProjectName(groupName);
+    try {
+      let orgProjects: any[] = [];
       try {
-        const res = await fetch(`/api/conversations/groups/${groupId}/members`);
+        const projRes = await fetch('/api/projects');
+        if (projRes.ok) {
+          const pData = await projRes.json();
+          orgProjects = pData.projects || pData || [];
+        }
+      } catch {}
+
+      if (projectId) {
+        const res = await fetch(`/api/projects/${projectId}/mention-suggestions`);
         if (res.ok) {
           const data = await res.json();
-          const members = (data.members || []).map((m: any) => m.user || m);
-          setSuggestions({ users: members, tasks: [] });
+          const newSuggestions = {
+            users: data.users || [],
+            tasks: data.tasks || [],
+            projects: orgProjects,
+          };
+          setSuggestions(newSuggestions);
+          const name = data.projectName || 'Project Conversation';
+          setProjectName(name);
+          projectDetailsCache[targetId] = {
+            name,
+            users: newSuggestions.users,
+            tasks: newSuggestions.tasks,
+            projects: orgProjects,
+          };
         }
-      } catch (err) {
-        console.error('Fetch group members error:', err);
+      } else if (groupId) {
+        if (groupName) setProjectName(groupName);
+        try {
+          const res = await fetch(`/api/conversations/groups/${groupId}/members`);
+          if (res.ok) {
+            const data = await res.json();
+            const members = (data.members || []).map((m: any) => m.user || m);
+            setSuggestions({ users: members, tasks: [], projects: orgProjects });
+          }
+        } catch (err) {
+          console.error('Fetch group members error:', err);
+        }
+      } else {
+        setSuggestions(prev => ({ ...prev, projects: orgProjects }));
       }
+    } catch (err) {
+      console.error('Fetch suggestions error:', err);
     }
   };
 
@@ -682,7 +910,8 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
       setProjectName(projectDetailsCache[targetId].name);
       setSuggestions({
         users: projectDetailsCache[targetId].users || [],
-        tasks: projectDetailsCache[targetId].tasks || []
+        tasks: projectDetailsCache[targetId].tasks || [],
+        projects: projectDetailsCache[targetId].projects || []
       });
     }
 
@@ -690,9 +919,37 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
     fetchSuggestions();
   }, [projectId, groupId, groupName]);
 
+  const triggerDesktopNotification = (title: string, body: string) => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+
+    const fire = () => {
+      try {
+        const n = new Notification(title, {
+          body: body || 'New Message',
+          icon: '/favicon.ico',
+          tag: 'omniwork-chat'
+        });
+        n.onclick = () => {
+          window.focus();
+          n.close();
+        };
+      } catch (e) {
+        console.error('Notification error:', e);
+      }
+    };
+
+    if (Notification.permission === 'granted') {
+      fire();
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission().then(p => {
+        if (p === 'granted') fire();
+      });
+    }
+  };
+
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
+      Notification.requestPermission().catch(() => {});
     }
   }, []);
 
@@ -700,18 +957,10 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
     if (['message_sent', 'message_edited', 'message_deleted'].includes(lastEvent?.event || '')) {
       if (lastEvent?.event === 'message_sent' && lastEvent?.payload?.message) {
         const msg = lastEvent.payload.message;
-        if (msg.senderId !== currentUser.userId) {
-          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-            try {
-              new Notification(`Project Message from ${msg.sender?.name || 'User'}`, {
-                body: msg.content || 'Sent an attachment',
-                icon: '/favicon.ico',
-              });
-            } catch {
-              /* ignore */
-            }
-          }
-        }
+        triggerDesktopNotification(
+          `Message from ${msg.sender?.name || 'User'}`,
+          msg.content || 'Sent an attachment'
+        );
       }
       fetchMessages();
     }
@@ -752,105 +1001,6 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
 
     return () => observer.disconnect();
   }, [messages, currentUser.userId, projectId]);
-
-  const getFilteredSuggestions = () => {
-    const userMatches = suggestionType === 'task' ? [] : suggestions.users.filter(u => u.name.toLowerCase().includes(mentionQuery));
-    const taskMatches = suggestionType === 'both' ? [] : suggestions.tasks.filter(t => t.title.toLowerCase().includes(mentionQuery));
-    return [
-      ...userMatches.map(u => ({ ...u, itemType: 'user' as const })),
-      ...taskMatches.map(t => ({ ...t, itemType: 'task' as const }))
-    ];
-  };
-
-  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
-    setContent(value);
-
-    // Simple mention detection
-    const lastWord = value.split(/\s+/).pop() || '';
-    if (lastWord.startsWith('@')) {
-      setSuggestionType('both');
-      setMentionQuery(lastWord.substring(1).toLowerCase());
-      setShowSuggestions(true);
-      setHighlightedIndex(0);
-    } else if (lastWord.startsWith('#')) {
-      setSuggestionType('task');
-      setMentionQuery(lastWord.substring(1).toLowerCase());
-      setShowSuggestions(true);
-      setHighlightedIndex(0);
-    } else {
-      setShowSuggestions(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (showSuggestions) {
-      const items = getFilteredSuggestions();
-      if (items.length > 0) {
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          setHighlightedIndex(prev => (prev + 1) % items.length);
-          return;
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          setHighlightedIndex(prev => (prev - 1 + items.length) % items.length);
-          return;
-        } else if (e.key === 'Enter' || e.key === 'Tab') {
-          e.preventDefault();
-          const item = items[highlightedIndex] || items[0];
-          if (item) {
-            insertMention(item.id, item.name || item.title, item.itemType);
-          }
-          return;
-        } else if (e.key === 'Escape') {
-          e.preventDefault();
-          setShowSuggestions(false);
-          return;
-        }
-      }
-    }
-
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
-
-  const insertMention = (id: string, name: string, type: 'user' | 'task') => {
-    if (editingMessageId) {
-      const words = editContent.trimEnd().split(/\s+/);
-      const lastWord = words[words.length - 1] || '';
-      if (lastWord.startsWith('@') || lastWord.startsWith('#')) {
-        words.pop();
-      }
-      if (type === 'user') {
-        words.push(`@${name} `);
-      } else {
-        words.push(`#${name} `);
-      }
-      setEditContent(words.join(' '));
-      setShowSuggestions(false);
-      return;
-    }
-
-    const words = content.trimEnd().split(/\s+/);
-    const lastWord = words[words.length - 1] || '';
-    if (lastWord.startsWith('@') || lastWord.startsWith('#')) {
-      words.pop();
-    }
-    
-    if (type === 'user') {
-      words.push(`@${name} `);
-      if (!mentions.includes(id)) setMentions([...mentions, id]);
-    } else {
-      words.push(`#${name} `);
-      if (!taskMentions.includes(id)) setTaskMentions([...taskMentions, id]);
-    }
-
-    setContent(words.join(' '));
-    setShowSuggestions(false);
-    textareaRef.current?.focus();
-  };
 
   const sendMessage = async () => {
     if ((!content.trim() && attachedFiles.length === 0) || isSending) return;
@@ -1023,16 +1173,6 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
     }
   };
 
-  const filteredUsers = suggestions.users.filter(u => u.name.toLowerCase().includes(mentionQuery));
-  const filteredTasks = suggestions.tasks.filter(t => t.title.toLowerCase().includes(mentionQuery));
-
-  // Flat, ordered list matching the render order below, so keyboard nav (Arrow
-  // Up/Down + Enter) can move through and select the same items a mouse click would.
-  const combinedSuggestions: { type: 'user' | 'task'; id: string; name: string }[] = [
-    ...((suggestionType === 'both' || suggestionType === 'user') ? filteredUsers.map(u => ({ type: 'user' as const, id: u.id, name: u.name })) : []),
-    ...((suggestionType === 'both' || suggestionType === 'task') ? filteredTasks.map(t => ({ type: 'task' as const, id: t.id, name: t.title })) : []),
-  ];
-
   // Reset the highlighted suggestion whenever the list/query changes so it
   // doesn't point at a stale/out-of-range item.
   useEffect(() => {
@@ -1135,30 +1275,32 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
 
   return (
     <div className="flex flex-col h-full w-full bg-[#f8fafc] dark:bg-[#111115] rounded-none border-none overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-3.5 bg-white dark:bg-[#18181b] border-b border-slate-100 dark:border-slate-800 shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="relative shrink-0">
-            <Avatar className="h-9 w-9 border border-slate-200 dark:border-slate-700">
-              <AvatarFallback className="font-bold bg-primary/10 text-primary text-xs">
-                {projectName ? projectName.substring(0, 2).toUpperCase() : 'PR'}
-              </AvatarFallback>
-            </Avatar>
-            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
+      {!hideHeader && (
+        <div className="flex items-center justify-between px-5 py-3.5 bg-white dark:bg-[#18181b] border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="relative shrink-0">
+              <Avatar className="h-9 w-9 border border-slate-200 dark:border-slate-700">
+                <AvatarFallback className="font-bold bg-primary/10 text-primary text-xs">
+                  {projectName ? projectName.substring(0, 2).toUpperCase() : 'PR'}
+                </AvatarFallback>
+              </Avatar>
+              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white truncate">
+                {projectName}
+              </h3>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate font-medium">
+                Active Project Conversation
+              </p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <h3 className="font-extrabold text-sm text-slate-900 dark:text-white truncate">
-              {projectName}
-            </h3>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate font-medium">
-              Active Project Conversation
-            </p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-1 text-slate-400">
-          
+          <div className="flex items-center gap-1 text-slate-400">
+            
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
         <div className="flex justify-center my-2">
@@ -1187,33 +1329,41 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
               return new Date(dateStr).toLocaleDateString([], { month: 'short', day: 'numeric' });
             };
 
-            const renderMessageBubble = (msg: any) => {
-              const isMe = msg.senderId === currentUser.userId;
+              const renderMessageBubble = (msg: any) => {
+                const isMe = msg.senderId === currentUser.userId;
+                const cardStyle = isMe
+                  ? 'bg-blue-50/50 dark:bg-indigo-950/25 border-blue-200/90 dark:border-indigo-800/40 hover:border-blue-300 dark:hover:border-indigo-700/50'
+                  : 'bg-white dark:bg-[#1a1a1e] border-slate-200/80 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20';
 
-              return (
-                <div key={msg.id} data-msg-id={msg.id} className="w-full my-2.5">
-                  {/* Outer Message Box Card */}
-                  <div className="group relative w-full rounded-[8px] border border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#1a1a1e] p-4 shadow-2xs space-y-2.5 transition-all hover:border-slate-300 dark:hover:border-white/20">
-                    {/* Top Header Row */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <Avatar className="h-7 w-7 border border-slate-200 dark:border-slate-700">
-                          <AvatarFallback className="font-bold bg-slate-600 text-white text-[10px]">
-                            {msg.sender?.name?.substring(0, 2).toUpperCase() || 'U'}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="font-bold text-xs text-slate-900 dark:text-white">
-                          {msg.sender?.name || 'User'}
-                        </span>
-                        <span className="text-[11px] text-slate-400 font-medium group-hover:hidden">
-                          {formatRelativeTime(msg.createdAt)}
-                        </span>
-                        {msg.visibility === 'INTERNAL' && (
-                          <Badge variant="secondary" className="text-[9px] h-4 py-0 flex items-center border-orange-200 bg-orange-50 text-orange-700 font-bold">
-                            <EyeOff size={9} className="mr-1" /> Internal
-                          </Badge>
-                        )}
-                      </div>
+                return (
+                  <div key={msg.id} data-msg-id={msg.id} className="w-full my-2.5">
+                    {/* Outer Message Box Card */}
+                    <div className={`group relative w-full rounded-[8px] border p-4 shadow-2xs space-y-2.5 transition-all ${cardStyle}`}>
+                      {/* Top Header Row */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <Avatar className="h-7 w-7 border border-slate-200 dark:border-slate-700">
+                            <AvatarFallback className={`font-bold text-[10px] text-white ${isMe ? 'bg-blue-600' : 'bg-slate-700'}`}>
+                              {msg.sender?.name?.substring(0, 2).toUpperCase() || 'U'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="font-bold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
+                            {msg.sender?.name || 'User'}
+                            {isMe && (
+                              <span className="text-[9px] font-extrabold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-[4px] border border-blue-200/60 dark:border-blue-800/40">
+                                You
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-[11px] text-slate-400 font-medium group-hover:hidden">
+                            {formatRelativeTime(msg.createdAt)}
+                          </span>
+                          {msg.visibility === 'INTERNAL' && (
+                            <Badge variant="secondary" className="text-[9px] h-4 py-0 flex items-center border-orange-200 bg-orange-50 text-orange-700 font-bold">
+                              <EyeOff size={9} className="mr-1" /> Internal
+                            </Badge>
+                          )}
+                        </div>
 
                       {/* Hover Action Bar (Top Right on Hover) */}
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
@@ -1477,8 +1627,8 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                             {editAttachedFiles.map((file, idx) => (
                               <div key={idx} className="relative group w-fit">
                                 {file.name.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) || file.url.match(/\.(png|jpg|jpeg|gif|webp|svg)($|\?)/i) ? (
-                                  <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10">
-                                    <img src={file.url} alt={file.name} className="max-h-64 object-cover rounded-2xl" />
+                                  <div className="relative rounded-[8px] overflow-hidden border border-slate-200 dark:border-white/10">
+                                    <img src={file.url} alt={file.name} className="max-h-64 object-cover rounded-[8px]" />
                                     <button
                                       type="button"
                                       onClick={() => setEditAttachedFiles(prev => prev.filter((_, i) => i !== idx))}
@@ -1488,7 +1638,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                                     </button>
                                   </div>
                                 ) : (
-                                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border text-xs font-semibold">
+                                  <div className="flex items-center gap-2 p-2.5 rounded-[8px] bg-slate-50 dark:bg-white/5 border text-xs font-semibold">
                                     <Paperclip size={14} className="text-slate-500" />
                                     <span className="truncate">{file.name}</span>
                                     <button
@@ -1509,10 +1659,10 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                                   <img
                                     src={msg.fileUrl}
                                     alt={msg.fileName || 'Attached file'}
-                                    className="max-h-64 rounded-2xl border border-slate-200/80 dark:border-white/10 object-cover shadow-2xs"
+                                    className="max-h-64 rounded-[8px] border border-slate-200/80 dark:border-white/10 object-cover shadow-2xs"
                                   />
                                 ) : (
-                                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border text-xs font-semibold">
+                                  <div className="flex items-center gap-2 p-2.5 rounded-[8px] bg-slate-50 dark:bg-white/5 border text-xs font-semibold">
                                     <Paperclip size={14} className="text-slate-500" />
                                     <span className="truncate">{msg.fileName || 'Attached file'}</span>
                                   </div>
@@ -1589,14 +1739,14 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                                 <img
                                   src={msg.fileUrl}
                                   alt={msg.fileName || 'Attached file'}
-                                  className="max-h-64 rounded-2xl border border-slate-200/80 dark:border-white/10 object-cover shadow-2xs"
+                                  className="max-h-64 rounded-[8px] border border-slate-200/80 dark:border-white/10 object-cover shadow-2xs"
                                 />
                                 <span className="text-[10px] text-slate-400 mt-1 block font-medium">
                                   {msg.fileName || 'ChatGPT Image Jun 7, 2026, 02_05_08 AM (1).png'}
                                 </span>
                               </div>
                             ) : (
-                              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border text-xs font-semibold">
+                              <div className="flex items-center gap-2 p-2.5 rounded-[8px] bg-slate-50 dark:bg-white/5 border text-xs font-semibold">
                                 <Paperclip size={14} className="text-slate-500" />
                                 <span className="truncate">{msg.fileName || 'Attached file'}</span>
                               </div>
@@ -1673,37 +1823,42 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
       </div>
 
       <div className="p-4 bg-white dark:bg-[#18181b] border-t border-slate-100 dark:border-slate-800 relative z-30">
-        {/* Attachment preview */}
-        {attachedFiles.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3 bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/40 rounded-2xl p-2.5 text-xs text-indigo-800 dark:text-indigo-400">
-            {attachedFiles.map((file, idx) => (
-              <div key={idx} className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-indigo-200/60 dark:border-indigo-800/40 rounded-xl px-3 py-1.5 shadow-2xs">
-                {file.name.match(/\.(png|jpg|jpeg|gif|webp)$/i) ? (
-                  <img src={file.url} alt={file.name} className="w-6 h-6 object-cover rounded-md" />
-                ) : (
-                  <Paperclip size={14} className="text-indigo-500" />
-                )}
-                <div className="min-w-0 max-w-[160px]">
-                  <span className="font-bold truncate text-[11px] block">{file.name}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setAttachedFiles(prev => prev.filter((_, i) => i !== idx))}
-                  className="text-slate-400 hover:text-red-500 p-0.5 rounded-full"
-                >
-                  <X size={13} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
         {showSuggestions && (
           <div className="absolute bottom-full mb-2 left-4 w-72 bg-white dark:bg-[#1f1f23] border border-slate-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden z-[100]">
             <div className="max-h-64 overflow-y-auto py-2 custom-scrollbar">
+              {/* @@ Projects */}
+              {suggestionType === 'project' && (
+                <div>
+                  <div className="px-3 py-1 text-[10px] font-bold text-blue-500 uppercase tracking-wider">Projects (@@)</div>
+                  {filteredProjects.length === 0 ? (
+                    <div className="px-3 py-1.5 text-xs text-slate-400 italic">No projects found</div>
+                  ) : (
+                    filteredProjects.map((p, idx) => {
+                      const isHighlighted = idx === highlightedIndex;
+                      return (
+                        <div
+                          key={p.id}
+                          className={`px-4 py-2 cursor-pointer flex items-center justify-between transition-colors ${
+                            isHighlighted ? 'bg-slate-100 dark:bg-white/10 font-bold' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                          }`}
+                          onClick={() => insertMention(p.id, p.name, 'project')}
+                        >
+                          <div>
+                            <p className="text-xs font-bold text-blue-600 dark:text-blue-400">@@{p.name}</p>
+                            {p.description && <p className="text-[10px] text-slate-400 truncate max-w-[180px]">{p.description}</p>}
+                          </div>
+                          <span className="text-[9px] font-bold uppercase text-slate-400">Project</span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {/* @ Members */}
               {(suggestionType === 'both' || suggestionType === 'user') && (
                 <div>
-                  <div className="px-3 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Project Members & Task Assignees</div>
+                  <div className="px-3 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Project Members & Team (@)</div>
                   {filteredUsers.length === 0 ? (
                     <div className="px-3 py-1.5 text-xs text-slate-400 italic">No members found</div>
                   ) : (
@@ -1729,9 +1884,10 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                 </div>
               )}
 
+              {/* # Tasks */}
               {(suggestionType === 'both' || suggestionType === 'task') && (
                 <div className={suggestionType === 'both' ? "border-t border-slate-100 dark:border-slate-800 mt-2 pt-2" : ""}>
-                  <div className="px-3 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Project Tasks</div>
+                  <div className="px-3 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Project Tasks (#)</div>
                   {filteredTasks.length === 0 ? (
                     <div className="px-3 py-1.5 text-xs text-slate-400 italic">No tasks found</div>
                   ) : (
@@ -1744,9 +1900,9 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                           className={`px-4 py-2 cursor-pointer flex items-center justify-between transition-colors ${
                             isHighlighted ? 'bg-slate-100 dark:bg-white/10 font-bold' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
                           }`}
-                          onClick={() => insertMention(t.id, t.title, 'task')}
+                          onClick={() => insertMention(t.id, t.title || t.name, 'task')}
                         >
-                          <p className="text-xs font-semibold text-slate-900 dark:text-white truncate max-w-[180px]">#{t.title}</p>
+                          <p className="text-xs font-semibold text-slate-900 dark:text-white truncate max-w-[180px]">#{t.title || t.name}</p>
                           {t.status?.name && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">{t.status.name}</span>}
                         </div>
                       );
@@ -1770,7 +1926,47 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
         />
 
         {/* Single Card Box */}
-        <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1a1a1e] p-3 shadow-2xs space-y-2.5 focus-within:border-slate-300 dark:focus-within:border-white/20 transition-all">
+        <div className="rounded-[8px] border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1a1a1e] p-3 shadow-2xs space-y-2.5 focus-within:border-slate-300 dark:focus-within:border-white/20 transition-all">
+          {/* Top: Attached files & Screenshots Preview Card */}
+          {attachedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-2.5 mb-2">
+              {attachedFiles.map((file, idx) => (
+                <div key={idx} className="relative group rounded-[8px] overflow-hidden border border-slate-200/90 dark:border-white/10 bg-slate-50 dark:bg-slate-900 shadow-2xs transition-all max-w-full">
+                  {file.name.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) || file.url.match(/\.(png|jpg|jpeg|gif|webp|svg)($|\?)/i) ? (
+                    <div className="relative">
+                      <img
+                        src={file.url}
+                        alt={file.name}
+                        className="max-h-56 w-auto max-w-full object-contain rounded-[8px]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setAttachedFiles(prev => prev.filter((_, i) => i !== idx))}
+                        className="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-900/80 hover:bg-slate-900 text-white flex items-center justify-center transition-transform hover:scale-105 shadow-md cursor-pointer z-10"
+                        title="Remove screenshot"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-3 px-3.5 py-2 text-xs font-semibold">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Paperclip size={14} className="text-indigo-500 shrink-0" />
+                        <span className="truncate max-w-[200px] text-slate-800 dark:text-slate-200">{file.name}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAttachedFiles(prev => prev.filter((_, i) => i !== idx))}
+                        className="text-slate-400 hover:text-red-500 p-1 rounded-full cursor-pointer"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           {/* Top: Textarea or Recording indicator */}
           {isRecording ? (
             <div className="flex items-center justify-between gap-3 bg-red-500/10 border border-red-500/30 rounded-xl px-3.5 py-2 animate-pulse">
@@ -1806,8 +2002,9 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               placeholder="Write a comment..."
-              rows={2}
-              className="w-full bg-transparent text-sm text-slate-900 dark:text-white placeholder:text-slate-400/80 outline-none resize-none leading-relaxed custom-scrollbar border-0 focus:ring-0 p-0"
+              rows={1}
+              className="w-full bg-transparent text-sm text-slate-900 dark:text-white placeholder:text-slate-400/80 outline-none resize-none leading-relaxed overflow-hidden scrollbar-none border-0 focus:ring-0 p-0"
+              style={{ minHeight: '38px' }}
             />
           )}
 
@@ -1864,18 +2061,36 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
                 <Sparkles size={16} className="text-amber-500" />
               </button>
 
-              {/* Colorful @ Mention Member icon */}
+              {/* Member Mention @ Button */}
               <button
                 type="button"
                 onClick={() => {
-                  setContent(prev => prev + '@');
+                  setContent(prev => (prev ? prev + ' @' : '@'));
                   setShowSuggestions(true);
                   setSuggestionType('user');
+                  setMentionQuery('');
+                  setTimeout(() => textareaRef.current?.focus(), 10);
                 }}
                 className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors cursor-pointer shrink-0"
                 title="Mention member (@)"
               >
                 <span className="font-extrabold text-transparent bg-clip-text bg-gradient-to-tr from-purple-500 via-pink-500 to-rose-500 text-sm">@</span>
+              </button>
+
+              {/* Project Mention @@ Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setContent(prev => (prev ? prev + ' @@' : '@@'));
+                  setShowSuggestions(true);
+                  setSuggestionType('project');
+                  setMentionQuery('');
+                  setTimeout(() => textareaRef.current?.focus(), 10);
+                }}
+                className="p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer shrink-0"
+                title="Mention project (@@)"
+              >
+                <span className="font-extrabold text-blue-600 dark:text-blue-400 text-xs">@@</span>
               </button>
 
               {/* Paperclip */}
@@ -1892,9 +2107,11 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
               <button
                 type="button"
                 onClick={() => {
-                  setContent(prev => prev + '#');
+                  setContent(prev => (prev ? prev + ' #' : '#'));
                   setShowSuggestions(true);
                   setSuggestionType('task');
+                  setMentionQuery('');
+                  setTimeout(() => textareaRef.current?.focus(), 10);
                 }}
                 className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors cursor-pointer shrink-0"
                 title="Reference task (#)"
@@ -1970,7 +2187,7 @@ const ProjectConversation = forwardRef<ProjectConversationRef, ProjectConversati
         <TaskFormModal
           isOpen={isTaskModalOpen}
           onOpenChange={setIsTaskModalOpen}
-          projects={[{ id: projectId, name: projectName, title: projectName }]}
+          projects={projectId ? [{ id: projectId, name: projectName, title: projectName }] : (suggestions.projects || [])}
           taskStatuses={[]}
           users={suggestions.users || []}
           currentUser={currentUser}

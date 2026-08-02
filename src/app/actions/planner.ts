@@ -667,17 +667,24 @@ export async function getPlannerCalendarAction(fromIso: string, toIso: string, m
     const canReschedule = role === 'OWNER' || role === 'MEMBER';
     const showAll = mode === 'all';
 
+    const taskWhere: any = {
+      organizationId,
+      dueDate: { gte: from, lte: to },
+    };
+
+    if (!showAll || (role !== 'OWNER' && role !== 'MASTER_ADMIN')) {
+      taskWhere.OR = [
+        { assignees: { some: { userId } } },
+        { project: { projectManagerId: userId } },
+        { project: { assignees: { some: { userId } } } },
+      ];
+    }
+
     const [tasks, meetings, projects, plannerEvents] = await Promise.all([
-      showAll
-        ? prisma.task.findMany({
-            where: {
-              organizationId,
-              dueDate: { gte: from, lte: to },
-              assignees: { some: { userId } },
-            },
-            include: { project: { select: { id: true, name: true } }, status: true },
-          })
-        : Promise.resolve([]),
+      prisma.task.findMany({
+        where: taskWhere,
+        include: { project: { select: { id: true, name: true } }, status: true },
+      }),
       prisma.meeting.findMany({
         where: {
           organizationId,

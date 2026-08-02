@@ -2,6 +2,44 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ groupId: string }> }
+) {
+  try {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { groupId } = await context.params;
+
+    const group = await prisma.chatGroup.findUnique({
+      where: { id: groupId },
+      include: {
+        owner: { select: { id: true, name: true, email: true, role: true } },
+        members: {
+          include: {
+            user: { select: { id: true, name: true, email: true, role: true } }
+          }
+        }
+      }
+    });
+
+    if (!group) {
+      return NextResponse.json({ error: 'Group not found' }, { status: 404 });
+    }
+
+    const memberUsers = group.members.map(m => m.user).filter(Boolean);
+    if (group.owner && !memberUsers.some(u => u.id === group.owner.id)) {
+      memberUsers.unshift(group.owner);
+    }
+
+    return NextResponse.json({ members: memberUsers });
+  } catch (error: any) {
+    console.error('Fetch group members error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ groupId: string }> }

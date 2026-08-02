@@ -17,9 +17,19 @@ import {
   X,
   Check,
   Pin,
+  MoreVertical,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
 
 interface ConversationsSidebarPanelProps {
   currentUserId: string;
@@ -93,8 +103,33 @@ export function ConversationsSidebarPanel({
       } catch {}
     };
     loadPins();
-    window.addEventListener('omniwork_pins_changed', loadPins);
-    return () => window.removeEventListener('omniwork_pins_changed', loadPins);
+
+    const handlePinsChanged = (e: Event) => {
+      const customEv = e as CustomEvent;
+      if (customEv?.detail) {
+        const { type, item, pinned } = customEv.detail;
+        if (type === 'chat' && item) {
+          if (item.projectId) {
+            setPinnedProjectIds((prev) =>
+              pinned
+                ? (prev.includes(item.projectId) ? prev : [...prev, item.projectId])
+                : prev.filter((id) => id !== item.projectId)
+            );
+          } else if (item.chatGroupId) {
+            setPinnedGroupIds((prev) =>
+              pinned
+                ? (prev.includes(item.chatGroupId) ? prev : [...prev, item.chatGroupId])
+                : prev.filter((id) => id !== item.chatGroupId)
+            );
+          }
+          return;
+        }
+      }
+      loadPins();
+    };
+
+    window.addEventListener('omniwork_pins_changed', handlePinsChanged);
+    return () => window.removeEventListener('omniwork_pins_changed', handlePinsChanged);
   }, []);
 
   const handleTogglePinProject = (e: React.MouseEvent, project: any) => {
@@ -236,6 +271,75 @@ export function ConversationsSidebarPanel({
       console.error('Failed to create group:', err);
     } finally {
       setIsCreatingGroup(false);
+    }
+  };
+
+  // Edit Group Modal State
+  const [editingGroup, setEditingGroup] = useState<any>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editGroupName, setEditGroupName] = useState('');
+  const [editGroupDesc, setEditGroupDesc] = useState('');
+  const [editSelectedUserIds, setEditSelectedUserIds] = useState<string[]>([]);
+  const [isUpdatingGroup, setIsUpdatingGroup] = useState(false);
+  const [isDeletingGroup, setIsDeletingGroup] = useState<string | null>(null);
+
+  const handleOpenEditModal = (e: React.MouseEvent, group: any) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setEditingGroup(group);
+    setEditGroupName(group.name || '');
+    setEditGroupDesc(group.description || '');
+    setEditSelectedUserIds((group.members || []).map((m: any) => m.userId));
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEditGroup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingGroup || !editGroupName.trim() || isUpdatingGroup) return;
+    setIsUpdatingGroup(true);
+    try {
+      await fetch(`/api/conversations/groups/${editingGroup.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editGroupName.trim(), description: editGroupDesc.trim() }),
+      });
+      await fetch(`/api/conversations/groups/${editingGroup.id}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userIds: editSelectedUserIds }),
+      });
+      toast.success('Group updated successfully');
+      setIsEditModalOpen(false);
+      setEditingGroup(null);
+      fetchGroups();
+    } catch {
+      toast.error('Failed to update group');
+    } finally {
+      setIsUpdatingGroup(false);
+    }
+  };
+
+  const handleDeleteGroup = async (e: React.MouseEvent, group: any) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!confirm(`Are you sure you want to delete "${group.name}"? All messages will be permanently removed.`)) return;
+    setIsDeletingGroup(group.id);
+    try {
+      const res = await fetch(`/api/conversations/groups/${group.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('Group deleted');
+        fetchGroups();
+        if (selectedGroupId === group.id) {
+          setSelectedGroupId(null);
+        }
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Failed to delete group');
+      }
+    } catch {
+      toast.error('Failed to delete group');
+    } finally {
+      setIsDeletingGroup(null);
     }
   };
 
@@ -661,25 +765,57 @@ export function ConversationsSidebarPanel({
                     <span className="text-[12px] font-semibold truncate leading-tight">
                       {displayName}
                     </span>
-                    <button
-                      type="button"
-                      onClick={(e) => handleTogglePinGroup(e, group)}
-                      className={`shrink-0 p-1 rounded-md transition-all cursor-pointer ${
-                        pinnedGroupIds.includes(group.id)
-                          ? 'bg-amber-500/15 text-amber-500 dark:bg-amber-500/20'
-                          : 'text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-white/10'
-                      }`}
-                      title={pinnedGroupIds.includes(group.id) ? 'Unpin chat' : 'Pin chat'}
-                    >
-                      <Pin
-                        size={12}
-                        className={
+                    <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={(e) => handleTogglePinGroup(e, group)}
+                        className={`p-1 rounded-md transition-all cursor-pointer ${
                           pinnedGroupIds.includes(group.id)
-                            ? 'fill-amber-500 stroke-amber-500'
-                            : ''
-                        }
-                      />
-                    </button>
+                            ? 'bg-amber-500/15 text-amber-500 dark:bg-amber-500/20'
+                            : 'text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-white/10'
+                        }`}
+                        title={pinnedGroupIds.includes(group.id) ? 'Unpin chat' : 'Pin chat'}
+                      >
+                        <Pin
+                          size={12}
+                          className={
+                            pinnedGroupIds.includes(group.id)
+                              ? 'fill-amber-500 stroke-amber-500'
+                              : ''
+                          }
+                        />
+                      </button>
+
+                      {!group.isDirect && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+                              title="Group Options"
+                            >
+                              <MoreVertical size={12} />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-36 bg-white dark:bg-[#1f1f23] border border-slate-200 dark:border-white/10 p-1 rounded-[8px] z-50">
+                            <DropdownMenuItem
+                              onClick={(e) => handleOpenEditModal(e, group)}
+                              className="text-xs flex items-center gap-2 cursor-pointer rounded-[6px] px-2 py-1.5 hover:bg-slate-100 dark:hover:bg-white/10"
+                            >
+                              <Pencil size={13} className="text-slate-500" />
+                              <span>Edit Group</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => handleDeleteGroup(e, group)}
+                              className="text-xs flex items-center gap-2 cursor-pointer rounded-[6px] px-2 py-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                            >
+                              <Trash2 size={13} />
+                              <span>Delete Group</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between gap-1 text-[10px]">
@@ -895,6 +1031,80 @@ export function ConversationsSidebarPanel({
               >
                 {isCreatingGroup ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
                 <span>Create Group</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT TEAM GROUP MODAL */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in text-left">
+          <div className="bg-white dark:bg-[#18181c] rounded-[8px] shadow-2xl border border-slate-200 dark:border-white/10 w-full max-w-md flex flex-col max-h-[85vh] relative">
+            {/* FIXED MODAL HEADER */}
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-white/5 flex items-center justify-between shrink-0 bg-white dark:bg-[#18181c] rounded-t-[8px]">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
+                  Edit Team Group
+                </h3>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+                  Update group name, description, and member access.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-[8px] p-1 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* SCROLLABLE MODAL BODY */}
+            <form id="edit-group-form" onSubmit={handleSaveEditGroup} className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Group Name <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  required
+                  placeholder="e.g. Design Team"
+                  value={editGroupName}
+                  onChange={(e) => setEditGroupName(e.target.value)}
+                  className="h-9 text-xs rounded-[8px] bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Description <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <Input
+                  placeholder="What is this group about?"
+                  value={editGroupDesc}
+                  onChange={(e) => setEditGroupDesc(e.target.value)}
+                  className="h-9 text-xs rounded-[8px] bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10"
+                />
+              </div>
+            </form>
+
+            {/* FIXED MODAL FOOTER */}
+            <div className="p-4 border-t border-slate-100 dark:border-white/5 flex items-center justify-end gap-2 shrink-0 bg-white dark:bg-[#18181c] rounded-b-[8px]">
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="px-3.5 py-1.5 rounded-[8px] text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="edit-group-form"
+                disabled={!editGroupName.trim() || isUpdatingGroup}
+                className="px-4 py-1.5 rounded-[8px] text-xs font-bold bg-primary text-white hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center gap-1.5 shadow-2xs"
+              >
+                {isUpdatingGroup ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                <span>Save Changes</span>
               </button>
             </div>
           </div>

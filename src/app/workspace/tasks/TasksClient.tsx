@@ -8,6 +8,13 @@ import { Input } from '@/components/ui/input';
 import { NumberStepper } from '@/components/ui/NumberStepper';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  FormDialog,
+  FormDialogCancelButton,
+  FormDialogSubmitButton,
+  formFieldLabel,
+  formInputClass,
+} from '@/components/ui/FormDialog';
 import { formatHours } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +28,7 @@ import { List as ListIcon2 } from 'lucide-react';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Edit, Trash2, Repeat, TrendingUp, Hourglass, ChevronRight, Star, Filter, Layers, Pin } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, Repeat, TrendingUp, Hourglass, ChevronRight, Star, Filter, Layers, Pin, Paperclip, MessageSquare } from 'lucide-react';
 import { deleteTaskAction, updateTaskAction, getTaskTemplatesAction, deleteTaskTemplateAction, createTaskStatusAction, updateTaskStatusAction, deleteTaskStatusAction } from '@/app/actions/tasks';
 import { getActiveTimerAction, clearTrackedTimeAction } from '@/app/actions/tracking';
 import { getTaskHiddenColumnsAction, setTaskHiddenColumnsAction } from '@/app/actions/settings';
@@ -631,6 +638,21 @@ function TableTaskAssigneeCell({ task, users, setTasks, currentUser }: any) {
 
 // ─── Kanban helpers ───────────────────────────────────────────────────────────
 
+function formatDueDate(dateInput: any) {
+  if (!dateInput) return null;
+  try {
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return `Due: ${String(dateInput)}`;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = months[d.getUTCMonth()];
+    const day = d.getUTCDate();
+    const year = d.getUTCFullYear();
+    return `Due: ${month} ${day}, ${year}`;
+  } catch (e) {
+    return `Due: ${dateInput}`;
+  }
+}
+
 function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isDraggingOverlay = false, pinnedTaskIds = [], handleTogglePinTask }: any) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
@@ -641,7 +663,22 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
     transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
   } : undefined;
 
-  const priorityHex = task.priority === 'CRITICAL' ? '#ef4444' : task.priority === 'HIGH' ? '#f97316' : task.priority === 'MEDIUM' ? '#3b82f6' : '#cbd5e1';
+  const isUrgentOrHigh = task.priority === 'CRITICAL' || task.priority === 'HIGH';
+
+  // Calculate progress %
+  let progressPct: number | null = null;
+  if (task.subtasks && task.subtasks.length > 0) {
+    const completed = task.subtasks.filter((s: any) => s.isCompleted || s.completed).length;
+    progressPct = Math.round((completed / task.subtasks.length) * 100);
+  } else if (task.allocatedHours && task.allocatedHours > 0) {
+    progressPct = Math.min(100, Math.round(((task.trackedHours || 0) / task.allocatedHours) * 100));
+  } else if (task.progress !== undefined && task.progress !== null) {
+    progressPct = Math.min(100, Math.max(0, Number(task.progress)));
+  }
+
+  const dueDateText = task.dueDate ? formatDueDate(task.dueDate) : null;
+  const attachmentCount = task.attachments?.length || task.attachmentsCount || task._count?.attachments || 0;
+  const commentCount = task.comments?.length || task.commentsCount || task._count?.comments || 0;
 
   return (
     <div
@@ -653,29 +690,31 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
         e.stopPropagation();
         if (openEdit) openEdit(task);
       }}
-      className={`bg-background border border-border/40 rounded-xl p-4 shadow-sm hover:shadow-lg hover:border-primary/30 transition-all duration-300 group flex flex-col gap-3 cursor-grab active:cursor-grabbing relative overflow-hidden ${isDragging ? 'opacity-40' : ''} ${isDraggingOverlay ? 'cursor-grabbing shadow-2xl scale-105' : ''}`}
+      className={`bg-white dark:bg-[#18181b] border border-slate-200/70 dark:border-white/10 rounded-2xl p-4 shadow-xs hover:shadow-md hover:border-slate-300 dark:hover:border-white/20 transition-all duration-200 group flex flex-col justify-between cursor-grab active:cursor-grabbing relative ${isDragging ? 'opacity-40' : ''} ${isDraggingOverlay ? 'cursor-grabbing shadow-2xl scale-105' : ''}`}
     >
-      <div className="absolute top-0 left-0 w-[4px] h-full transition-all duration-300 group-hover:w-[6px]" style={{ backgroundColor: priorityHex }} />
+      {/* Top Row: Due Date Pill & Options Menu */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        {dueDateText ? (
+          <div className="inline-flex items-center gap-1.5 bg-slate-100/90 dark:bg-white/5 text-[11px] font-semibold text-slate-600 dark:text-slate-400 px-2.5 py-1 rounded-md border border-slate-200/40 dark:border-white/5">
+            <Clock size={12} className="text-slate-400 shrink-0" />
+            <span>{dueDateText}</span>
+          </div>
+        ) : <div />}
 
-      <div className="flex justify-between items-start gap-3 pl-2">
-        <span className="font-semibold text-[14px] leading-snug text-foreground/90 transition-colors line-clamp-2 flex items-center gap-1.5 flex-wrap">
-          {task.title}
-          {task.isRepeated && (
-            <Badge variant="outline" className="text-[9px] bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/50 py-0 px-1 font-semibold flex items-center gap-0.5 shrink-0 align-middle">
-              <Repeat size={8} /> Recurring
-            </Badge>
-          )}
-        </span>
-        {currentUser.role !== 'CLIENT' && !isDraggingOverlay && (
+        {currentUser?.role !== 'CLIENT' && !isDraggingOverlay && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-muted rounded-md cursor-pointer shrink-0" onPointerDown={(e) => e.stopPropagation()}>
-                <MoreHorizontal size={14} className="text-muted-foreground hover:text-foreground" />
-              </div>
+              <button 
+                type="button"
+                className="opacity-60 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-100 dark:hover:bg-white/10 rounded-md cursor-pointer shrink-0" 
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontal size={16} className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100" />
+              </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent align="end" className="w-44">
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEdit(task); }} className="cursor-pointer">
-                <Edit className="w-4 h-4 mr-2" /> Edit Task
+                <Edit className="w-3.5 h-3.5 mr-2" /> Edit Task
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="cursor-pointer"
@@ -684,12 +723,12 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
                   handleTogglePinTask(task.id);
                 }}
               >
-                <Pin className="w-4 h-4 mr-2" />
+                <Pin className="w-3.5 h-3.5 mr-2" />
                 {pinnedTaskIds.includes(task.id) ? 'Unpin Task' : 'Pin Task'}
               </DropdownMenuItem>
-              {(currentUser.role === 'OWNER' || task.project?.projectManagerId === currentUser.userId) && (
+              {(currentUser?.role === 'OWNER' || task.project?.projectManagerId === currentUser?.userId) && (
                 <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={(e) => { e.stopPropagation(); handleDelete(task.id); }}>
-                  <Trash2 className="w-4 h-4 mr-2" /> Delete Task
+                  <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete Task
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -697,38 +736,72 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
         )}
       </div>
 
-      <div className="pl-2 flex items-center justify-between">
-        <span className="text-[12px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded flex items-center hover:bg-primary/20 transition-colors cursor-pointer" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); router.push(`/workspace/projects/${task.projectId}`); }}>
-          {task.project?.name}
-        </span>
-
-        {task.dueDate && (
-          <div className="text-[11px] font-semibold flex items-center gap-1.5 text-muted-foreground">
-            <Calendar size={12} className="opacity-70" /> {formatDate(task.dueDate)}
-          </div>
-        )}
+      {/* Title & Project Subtitle */}
+      <div className="mb-2">
+        <h4 className="font-bold text-[15px] leading-snug text-slate-900 dark:text-white group-hover:text-primary transition-colors flex items-start gap-1.5">
+          {isUrgentOrHigh && (
+            <Flag size={14} className="text-red-500 fill-red-500 shrink-0 mt-0.5" />
+          )}
+          <span className="line-clamp-2">{task.title}</span>
+          {task.isRepeated && (
+            <Badge variant="outline" className="text-[9px] bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 py-0 px-1 font-semibold flex items-center gap-0.5 shrink-0 align-middle">
+              <Repeat size={8} />
+            </Badge>
+          )}
+        </h4>
+        <p className="text-[12px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">
+          {task.project?.name || task.projectName || "General Task"}
+        </p>
       </div>
 
-      <div className="flex justify-between items-center mt-2 pl-2">
-        <div className="flex -space-x-2 overflow-hidden py-1">
+      {/* Progress Bar (If Progress exists) */}
+      {progressPct !== null && (
+        <div className="mb-3 mt-1">
+          <div className="flex justify-between items-center text-[11px] mb-1">
+            <span className="font-medium text-slate-400 dark:text-slate-500">Progress</span>
+            <span className="font-bold text-slate-700 dark:text-slate-300">{progressPct}%</span>
+          </div>
+          <div className="w-full h-2 bg-slate-100 dark:bg-white/10 rounded-full overflow-hidden">
+            <div 
+              className="bg-slate-900 dark:bg-white h-full rounded-full transition-all duration-300"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Card Footer: Assignees on left, Stats on right */}
+      <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 dark:border-white/5 mt-auto">
+        <div className="flex -space-x-1.5 overflow-hidden py-0.5">
           {task.assignees?.map((a: any) => (
-            <div key={a.userId} className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-background shadow-sm transition-transform group-hover:scale-110 duration-200 flex items-center justify-center font-bold text-slate-600 dark:text-slate-300 text-[9px]" title={a.user?.name}>
-              {a.user?.name?.charAt(0).toUpperCase()}
+            <div key={a.userId || a.id} className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-[#18181b] flex items-center justify-center font-bold text-slate-700 dark:text-slate-200 text-[9px] shrink-0" title={a.user?.name || a.name}>
+              {(a.user?.name || a.name || 'U').substring(0, 1).toUpperCase()}
             </div>
           ))}
           {(!task.assignees || task.assignees.length === 0) && (
-            <div className="w-6 h-6 rounded-full bg-slate-50 dark:bg-slate-900 border-2 border-background border-dashed flex items-center justify-center">
-              <Plus size={10} className="text-muted-foreground" />
+            <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-white dark:border-[#18181b] flex items-center justify-center">
+              <Plus size={10} className="text-slate-400" />
             </div>
           )}
         </div>
 
-        {task.allocatedHours > 0 && (
-          <div className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
-            <Clock size={12} className="opacity-70" />
-            <span>{formatHours(task.trackedHours || 0)} / {task.allocatedHours}h</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2 text-[12px] font-semibold text-slate-500 dark:text-slate-400">
+          {attachmentCount > 0 && (
+            <span className="flex items-center gap-1">
+              <Paperclip size={13} className="text-slate-400" />
+              <span>{attachmentCount}</span>
+            </span>
+          )}
+          {attachmentCount > 0 && commentCount > 0 && (
+            <span className="text-slate-300 dark:text-slate-600">|</span>
+          )}
+          {commentCount > 0 && (
+            <span className="flex items-center gap-1">
+              <MessageSquare size={13} className="text-slate-400" />
+              <span>{commentCount}</span>
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -750,18 +823,9 @@ function KanbanColumn({ status, title, count, taskStatuses, children, onAddTask,
 
   const statusColor = getStatusColor(status);
 
-  const getStatusIcon = (name: string) => {
-    const t = name.toLowerCase();
-    if (t.includes('todo') || t.includes('to do') || t.includes('pending')) return <CircleDashed size={14} />;
-    if (t.includes('progress') || t.includes('doing') || t.includes('active')) return <CircleDot size={14} />;
-    if (t.includes('done') || t.includes('complete') || t.includes('finish')) return <CheckCircle2 size={14} />;
-    return <Circle size={14} />;
-  };
-
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    backgroundColor: `${statusColor}15`
   };
 
   const submitRename = () => {
@@ -777,13 +841,14 @@ function KanbanColumn({ status, title, count, taskStatuses, children, onAddTask,
     <div 
       ref={setNodeRef} 
       style={style}
-      className={`flex flex-col min-w-[320px] max-w-[320px] rounded-2xl p-3.5 transition-all duration-300 ${isOver ? 'shadow-md scale-[1.01] opacity-90' : ''} ${isDragging ? 'opacity-50 z-50 shadow-2xl scale-105 rotate-1 cursor-grabbing' : ''}`}
+      className={`flex flex-col min-w-[310px] max-w-[310px] bg-slate-50/70 dark:bg-white/[0.02] border border-slate-200/50 dark:border-white/5 rounded-2xl p-3 transition-all duration-300 ${isOver ? 'shadow-md scale-[1.01] opacity-90' : ''} ${isDragging ? 'opacity-50 z-50 shadow-2xl scale-105 rotate-1 cursor-grabbing' : ''}`}
     >
-      <div className="flex items-center justify-between mb-4 px-1" {...attributes} {...listeners}>
+      {/* Column Header */}
+      <div className="flex items-center justify-between bg-white dark:bg-[#18181b] border border-slate-200/70 dark:border-white/10 rounded-xl px-3 py-2 mb-3 shadow-xs" {...attributes} {...listeners}>
         <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded-[3px] shrink-0" style={{ backgroundColor: statusColor }} />
           {isEditing ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-slate-300 shadow-sm" onPointerDown={(e) => e.stopPropagation()}>
-              {getStatusIcon(title)}
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white border border-slate-300 shadow-xs" onPointerDown={(e) => e.stopPropagation()}>
               <input 
                 autoFocus
                 type="text" 
@@ -793,7 +858,7 @@ function KanbanColumn({ status, title, count, taskStatuses, children, onAddTask,
                   if (e.key === 'Enter') submitRename();
                   if (e.key === 'Escape') { setEditName(title); setIsEditing(false); }
                 }}
-                className="font-bold text-[12px] tracking-wide uppercase bg-transparent outline-none w-28 text-slate-800"
+                className="font-bold text-[13px] bg-transparent outline-none w-24 text-slate-800 dark:text-white"
               />
               <button onClick={submitRename} className="text-emerald-600 hover:text-emerald-700 ml-1">
                 <Check size={14} />
@@ -801,8 +866,7 @@ function KanbanColumn({ status, title, count, taskStatuses, children, onAddTask,
             </div>
           ) : (
             <div 
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-white shadow-sm cursor-pointer hover:opacity-90" 
-              style={{ backgroundColor: statusColor }}
+              className="flex items-center gap-2 cursor-pointer hover:opacity-80" 
               onPointerDown={(e) => {
                 if (currentUser?.role === 'OWNER') {
                   e.stopPropagation();
@@ -810,41 +874,42 @@ function KanbanColumn({ status, title, count, taskStatuses, children, onAddTask,
                 }
               }}
             >
-              {getStatusIcon(title)}
-              <h3 className="font-bold text-[12px] tracking-wide uppercase">{title}</h3>
+              <span className="bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300 text-[11px] font-bold px-1.5 py-0.5 rounded-[4px] min-w-[20px] text-center">
+                {count}
+              </span>
+              <h3 className="font-bold text-[14px] text-slate-900 dark:text-white capitalize">{title}</h3>
             </div>
           )}
-          <span className="text-[13px] font-medium text-slate-500 dark:text-slate-400 ml-1">
-            {count}
-          </span>
         </div>
         
-        {currentUser?.role === 'OWNER' && (
-          <div className="flex items-center gap-1 text-slate-400" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1 text-slate-400" onPointerDown={(e) => e.stopPropagation()}>
+          {canAddTask && (
             <button 
-              onClick={() => handleDeleteStage(status)}
-              className="hover:text-red-500 p-1 rounded-md transition-colors"
+              onClick={onAddTask}
+              className="p-1 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white rounded-md transition-colors cursor-pointer"
+              title="Add Task"
             >
-              <Trash2 size={14} />
+              <Plus size={16} />
             </button>
-            <button className="hover:text-slate-700 dark:hover:text-slate-200 p-1 rounded-md transition-colors">
-              <MoreHorizontal size={14} />
-            </button>
-          </div>
-        )}
+          )}
+          {currentUser?.role === 'OWNER' && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="p-1 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-md transition-colors cursor-pointer">
+                  <MoreHorizontal size={14} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={() => handleDeleteStage(status)}>
+                  <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete Column
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </div>
-      
-      {canAddTask && (
-        <button
-          onClick={onAddTask}
-          className="flex items-center gap-2 px-2 py-1.5 mb-3 text-sm font-medium transition-colors hover:opacity-80 rounded-md hover:bg-black/5 dark:hover:bg-white/5"
-          style={{ color: statusColor }}
-        >
-          <Plus size={16} /> Add Task
-        </button>
-      )}
 
-      <div className="flex flex-col gap-2.5 overflow-y-auto custom-scrollbar pr-1 flex-1 pb-2">
+      <div className="flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-0.5 flex-1 pb-2 min-h-[150px]">
         {children}
       </div>
     </div>
@@ -1021,8 +1086,25 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
       } catch {}
     };
     loadPinnedIds();
-    window.addEventListener('omniwork_pins_changed', loadPinnedIds);
-    return () => window.removeEventListener('omniwork_pins_changed', loadPinnedIds);
+
+    const handlePinsChanged = (e: Event) => {
+      const customEv = e as CustomEvent;
+      if (customEv?.detail) {
+        const { type, item, pinned } = customEv.detail;
+        if (type === 'task' && item?.id) {
+          setPinnedTaskIds((prev) =>
+            pinned
+              ? (prev.includes(item.id) ? prev : [...prev, item.id])
+              : prev.filter((id) => id !== item.id)
+          );
+          return;
+        }
+      }
+      loadPinnedIds();
+    };
+
+    window.addEventListener('omniwork_pins_changed', handlePinsChanged);
+    return () => window.removeEventListener('omniwork_pins_changed', handlePinsChanged);
   }, []);
 
   const handleTogglePinTask = (taskId: string) => {
@@ -2502,49 +2584,56 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
       </DialogPrimitive.Root>
 
       {/* CREATE STATUS DIALOG */}
-      <Dialog open={isCreateStatusOpen} onOpenChange={setIsCreateStatusOpen}>
-        <DialogContent className="sm:max-w-sm bg-background border-border">
-          <DialogHeader>
-            <DialogTitle>Add New Group</DialogTitle>
-            <DialogDescription>
-              Create a new status column for your workflow.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleCreateStatus} className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Status Name</label>
-              <Input 
-                value={newStatusName} 
-                onChange={(e) => setNewStatusName(e.target.value)} 
-                placeholder="e.g. In Review" 
-                required 
-              />
+      <FormDialog
+        open={isCreateStatusOpen}
+        onOpenChange={setIsCreateStatusOpen}
+        title="Add New Group"
+        description="Create a new status column for your workflow."
+        footer={
+          <>
+            <FormDialogCancelButton
+              onClick={() => setIsCreateStatusOpen(false)}
+              disabled={isCreatingStatus}
+            >
+              Cancel
+            </FormDialogCancelButton>
+            <FormDialogSubmitButton
+              type="submit"
+              form="create-status-form-tasks"
+              disabled={isCreatingStatus || !newStatusName.trim()}
+            >
+              {isCreatingStatus ? "Creating..." : "Create"}
+            </FormDialogSubmitButton>
+          </>
+        }
+      >
+        <form id="create-status-form-tasks" onSubmit={handleCreateStatus} className="px-6 pt-6 pb-6 space-y-5">
+          <div className="space-y-1.5">
+            <label className={formFieldLabel}>Status Name</label>
+            <Input 
+              value={newStatusName} 
+              onChange={(e) => setNewStatusName(e.target.value)} 
+              placeholder="e.g. In Review" 
+              required 
+              className={formInputClass}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className={formFieldLabel}>Color</label>
+            <div className="flex gap-2.5 pt-1">
+              {["#94a3b8", "#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7"].map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => setNewStatusColor(color)}
+                  className={`w-7 h-7 rounded-full transition-transform cursor-pointer ${newStatusColor === color ? 'scale-110 ring-2 ring-offset-2 ring-slate-400 dark:ring-offset-zinc-900' : 'hover:scale-105'}`}
+                  style={{ backgroundColor: color }}
+                />
+              ))}
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Color</label>
-              <div className="flex gap-2">
-                {["#94a3b8", "#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7"].map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={() => setNewStatusColor(color)}
-                    className={`w-8 h-8 rounded-full transition-transform ${newStatusColor === color ? 'scale-110 ring-2 ring-offset-2 ring-slate-400' : 'hover:scale-105'}`}
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
-              </div>
-            </div>
-            <DialogFooter className="mt-6">
-              <Button type="button" variant="outline" onClick={() => setIsCreateStatusOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isCreatingStatus || !newStatusName.trim()}>
-                {isCreatingStatus ? "Creating..." : "Create"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </form>
+      </FormDialog>
 
       {/* Delete Stage Confirmation Modal */}
       <Dialog open={isDeleteStageDialogOpen} onOpenChange={setIsDeleteStageDialogOpen}>

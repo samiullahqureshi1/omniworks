@@ -1280,7 +1280,7 @@ export default function ConversationsClient({
 
     setIsDeletingGroup(true);
     try {
-      const res = await fetch(`/api/conversations/groups/${selectedGroupId}/members`, {
+      const res = await fetch(`/api/conversations/groups/${selectedGroupId}`, {
         method: 'DELETE'
       });
 
@@ -1380,19 +1380,141 @@ export default function ConversationsClient({
           )
         ) : (
           selectedGroupId && activeGroup ? (
-            <div className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50/10 dark:bg-transparent">
-              <ProjectConversation
-                groupId={selectedGroupId}
-                groupName={activeChatName}
-                groupDesc={activeGroup?.description}
-                isDirect={activeGroup?.isDirect}
-                currentUser={{
-                  ...currentUser,
-                  userId: currentUser.id
-                }}
-                organizationId={currentUser.organizationId}
-                isClient={currentUser.role === 'CLIENT'}
-              />
+            <div className="flex-1 flex h-full overflow-hidden bg-slate-50/10 dark:bg-transparent">
+              <div className="flex-1 flex flex-col h-full overflow-hidden">
+                <ProjectConversation
+                  groupId={selectedGroupId}
+                  groupName={activeChatName}
+                  groupDesc={activeGroup?.description}
+                  isDirect={activeGroup?.isDirect}
+                  currentUser={{
+                    ...currentUser,
+                    userId: currentUser.id
+                  }}
+                  organizationId={currentUser.organizationId}
+                  isClient={currentUser.role === 'CLIENT'}
+                />
+              </div>
+
+              {/* Group Members Right Sidebar */}
+              {!activeGroup?.isDirect && (
+                <div className="w-[280px] shrink-0 h-full border-l border-slate-200/60 dark:border-white/10 bg-[#fafafa] dark:bg-[#131316] flex flex-col overflow-hidden animate-in slide-in-from-right duration-200">
+                  {/* Header */}
+                  <div className="px-4 py-3.5 border-b border-slate-200/60 dark:border-white/10 flex items-center justify-between shrink-0 min-h-[48px] bg-white/60 dark:bg-white/5">
+                    <div className="flex items-center gap-2">
+                      <UsersIcon size={16} className="text-slate-500" />
+                      <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                        Group Members
+                      </h3>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-200">
+                        {activeGroup.members?.length || 0}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Group Info Box */}
+                  <div className="p-4 border-b border-slate-200/60 dark:border-white/10 bg-white dark:bg-[#18181c]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-200 flex items-center justify-center font-extrabold text-sm shrink-0">
+                        {activeGroup.name?.substring(0, 2).toUpperCase() || 'GR'}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                          {activeGroup.name}
+                        </h4>
+                        <p className="text-[11px] text-slate-400 font-medium">
+                          Team Group Chat
+                        </p>
+                      </div>
+                    </div>
+                    {activeGroup.description && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mt-2.5 pt-2 border-t border-slate-100 dark:border-white/5 line-clamp-3">
+                        {activeGroup.description}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Members List */}
+                  <div className="flex-1 overflow-y-auto p-3 space-y-1 custom-scrollbar">
+                    <div className="px-2 pb-2 text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                      Members List
+                    </div>
+
+                    {activeGroup.members?.map((m: any) => {
+                      const isGroupOwner = m.userId === activeGroup.ownerId;
+                      const isMe = m.userId === currentUser.id;
+                      return (
+                        <div
+                          key={m.id || m.userId}
+                          className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-200/60 dark:hover:bg-white/5 transition-colors"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="relative shrink-0">
+                              <Avatar className="w-7 h-7 rounded-lg border border-slate-200/60 dark:border-white/10">
+                                <AvatarFallback className="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-[10px] font-bold rounded-lg">
+                                  {m.user?.name ? m.user.name.substring(0, 2).toUpperCase() : 'U'}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 ring-1 ring-white dark:ring-[#131316]" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1">
+                                <span className="text-[12px] font-semibold text-slate-900 dark:text-white truncate">
+                                  {m.user?.name || 'User'}
+                                </span>
+                                {isMe && (
+                                  <span className="text-[9px] font-bold text-slate-400">
+                                    (You)
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-slate-400 block truncate">
+                                {m.user?.email}
+                              </span>
+                            </div>
+                          </div>
+
+                          {isGroupOwner ? (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 shrink-0">
+                              Owner
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-medium shrink-0">
+                              Member
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Actions Footer */}
+                  {isOwner && (
+                    <div className="p-3 border-t border-slate-200/60 dark:border-white/10 bg-white/50 dark:bg-white/5 flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSettingsMembers(activeGroup.members?.map((m: any) => m.userId) || []);
+                          setIsSettingsModalOpen(true);
+                        }}
+                        className="flex-1 px-3 py-2 rounded-[8px] text-xs font-bold bg-slate-200/80 dark:bg-white/10 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-white/20 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Pencil size={13} />
+                        <span>Edit Group</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDeleteGroup}
+                        className="px-3 py-2 rounded-[8px] text-xs font-bold bg-red-500/10 text-red-600 hover:bg-red-500/20 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                        title="Delete Group"
+                      >
+                        <Trash2 size={13} />
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8 bg-slate-50/20 dark:bg-[#131313]">

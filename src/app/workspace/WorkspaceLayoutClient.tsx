@@ -363,7 +363,7 @@ export default function WorkspaceLayoutClient({
               className="hidden md:flex flex-col h-full shrink-0 overflow-hidden border-r border-slate-100 dark:border-white/5 bg-[#fafafa] dark:bg-[#131316]"
             >
               <div className="w-[245px] h-full flex flex-col">
-                {activeMainTab === 'conversations' ? (
+                {pathname.startsWith('/workspace/conversations') ? (
                   <ConversationsSidebarPanel
                     currentUserId={user.userId}
                   />
@@ -386,7 +386,7 @@ export default function WorkspaceLayoutClient({
             {/* Main Content Layout Viewport (joined inside the card) */}
             <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-white dark:bg-[#151518]">
               <main className={`flex-1 relative z-10 ${
-                  activeMainTab === 'conversations' || plannerGate || (pathname.startsWith('/workspace/projects/') && pathname !== '/workspace/projects')
+                  pathname.startsWith('/workspace/conversations') || plannerGate || (pathname.startsWith('/workspace/projects/') && pathname !== '/workspace/projects')
                     ? 'p-0 overflow-hidden flex flex-col h-full'
                     : 'px-4 md:px-8 py-6 overflow-y-auto custom-scrollbar'
                 }`}>

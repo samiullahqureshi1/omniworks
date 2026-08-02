@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useTransition, useMemo } from "react";
+import React, { useState, useEffect, useTransition, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -90,7 +90,9 @@ export default function TaskFormModal({
             ? new Date(task.dueDate).toISOString().split("T")[0]
             : "",
           allocatedHours: task.allocatedHours?.toString() || "",
-          assignees: task.assignees.map((a: any) => a.userId),
+          assignees: Array.isArray(task.assignees)
+            ? task.assignees.map((a: any) => (typeof a === 'string' ? a : a.userId || a.user?.id || a.id)).filter(Boolean)
+            : [],
           milestoneId: task.milestoneId || "",
           customFields: (task.customFields as any) || [],
         },
@@ -379,17 +381,42 @@ export default function TaskFormModal({
     });
   };
 
-  // RBAC checks for the modal
-  const isOwner = currentUser.role === "OWNER";
-  const isClient = currentUser.role === "CLIENT";
-  const selectedProject = projects.find((p) => p.id === projectId);
-  const isPM = selectedProject?.projectManagerId === currentUser.userId;
-  const isAssignedToTask = task?.assignees?.some(
-    (a: any) => a.userId === currentUser.userId,
-  );
+  useEffect(() => {
+    if (task && isEditing) {
+      if (task.projectId || task.project?.id) {
+        setProjectId(task.projectId || task.project?.id || "");
+      }
+      setTrackedHours(task.trackedHours?.toString() || "");
+      setTasksInput([
+        {
+          id: task.id || "edit",
+          title: task.title || "",
+          description: task.description || "",
+          statusId: task.statusId || task.status?.id || "",
+          priority: task.priority || "MEDIUM",
+          dueDate: task.dueDate
+            ? new Date(task.dueDate).toISOString().split("T")[0]
+            : "",
+          allocatedHours: task.allocatedHours?.toString() || "",
+          assignees: Array.isArray(task.assignees)
+            ? task.assignees.map((a: any) => (typeof a === 'string' ? a : a.userId || a.user?.id || a.id)).filter(Boolean)
+            : [],
+          milestoneId: task.milestoneId || "",
+          customFields: (task.customFields as any) || [],
+        }
+      ]);
+    }
+  }, [task, isEditing]);
 
-  // If Member but not PM, they can only edit status and tracked hours (only applies when editing)
-  const isLimitedEdit = isEditing && !isOwner && !isPM && isAssignedToTask;
+  // RBAC checks for the modal
+  const isOwner = currentUser?.role === "OWNER";
+  const isClient = currentUser?.role === "CLIENT";
+  const isMember = currentUser?.role === "MEMBER";
+  const selectedProject = projects.find((p) => p.id === (projectId || task?.projectId || task?.project?.id));
+  const isPM = selectedProject?.projectManagerId === currentUser?.userId;
+
+  // If Member (not Owner/PM), limited edit mode applies when editing
+  const isLimitedEdit = isEditing && (isMember || (!isOwner && !isPM));
 
   // Hoisted hours variables
   const projectTotalHours = selectedProject?.totalAllocatedHours || 0;
@@ -637,8 +664,8 @@ export default function TaskFormModal({
   const assignableProjects = isOwner
     ? projects
     : isClient
-      ? projects.filter((p) => p.clientId === currentUser.userId)
-      : projects.filter((p) => p.projectManagerId === currentUser.userId);
+      ? projects.filter((p) => p.clientId === currentUser?.userId)
+      : projects.filter((p) => p.projectManagerId === currentUser?.userId);
 
   return (
     <>
@@ -658,7 +685,7 @@ export default function TaskFormModal({
             onClose={() => onOpenChange(false)}
             onMinimize={() => setMinimized((m) => !m)}
             rightSlot={
-              !isLimitedEdit && selectedProject && projectTotalHours > 0 && (
+              (isOwner || isPM) && selectedProject && projectTotalHours > 0 && (
                 <div className="hidden sm:flex items-center gap-4 text-right text-[11px] leading-tight text-slate-500 dark:text-slate-400 font-semibold mr-3 bg-slate-50 dark:bg-white/5 px-3.5 py-1.5 rounded-lg border border-slate-100 dark:border-white/5">
                   <div>Project Total Hours: <span className="text-slate-900 dark:text-white font-bold">{projectTotalHours}h</span></div>
                   <div className="h-3 w-px bg-slate-250 dark:bg-white/10" />
@@ -858,7 +885,11 @@ export default function TaskFormModal({
                           <div className="space-y-2 opacity-60">
                             <label className="text-sm font-medium">Tracked Hours</label>
                             <div className="flex h-[36px] w-full rounded-[8px] bg-slate-50 dark:bg-white/5 px-3 items-center text-[13px] text-slate-700 dark:text-slate-350">
-                              {trackedHours || "0"}
+                              {(() => {
+                                const parsed = parseFloat(trackedHours || (task?.trackedHours?.toString() || "0"));
+                                if (isNaN(parsed) || parsed === 0) return "0h";
+                                return `${Number(parsed.toFixed(2))}h`;
+                              })()}
                             </div>
                           </div>
                         </div>
@@ -871,7 +902,10 @@ export default function TaskFormModal({
                         </label>
                         <div className="text-[13.5px] text-slate-700 dark:text-slate-300 leading-relaxed w-full">
                           {tasksInput[0].description ? (
-                            <div dangerouslySetInnerHTML={{ __html: tasksInput[0].description }} className="w-full prose prose-sm max-w-none dark:prose-invert" />
+                            <div
+                              dangerouslySetInnerHTML={{ __html: tasksInput[0].description }}
+                              className="w-full prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap [&_p]:my-1.5 [&_h1]:text-xl [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:mt-3.5 [&_h2]:mb-1.5 [&_h3]:text-base [&_h3]:font-bold [&_h3]:mt-3 [&_h3]:mb-1 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_li>p]:my-0 text-slate-800 dark:text-slate-200"
+                            />
                           ) : (
                             <span className="text-slate-450 dark:text-slate-400 italic">No description.</span>
                           )}
@@ -931,7 +965,6 @@ export default function TaskFormModal({
                                   </div>
                                 </div>
                               )}
-
                               {/* Task Title */}
                               <div className="space-y-2">
                                 <label className="text-sm font-medium">
@@ -1179,17 +1212,15 @@ export default function TaskFormModal({
                               )}
 
                               {/* Tracked Hours (Right - opposite Allocated Hours) */}
-                              <div className="space-y-2">
+                              <div className="space-y-2 opacity-70">
                                 <label className="text-sm font-medium">Tracked Hours</label>
-                                <input
-                                  type="number"
-                                  step="0.1"
-                                  min="0"
-                                  value={trackedHours}
-                                  onChange={(e) => setTrackedHours(e.target.value)}
-                                  placeholder="e.g. 5.5"
-                                  className="w-full h-[36px] bg-slate-50 dark:bg-white/5 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-3 text-[13px] text-slate-700 dark:text-slate-300 rounded-[8px] outline-none placeholder:text-slate-400/80"
-                                />
+                                <div className="flex h-[36px] w-full rounded-[8px] bg-slate-100 dark:bg-white/5 border border-slate-200/50 dark:border-white/5 px-3 items-center text-[13px] text-slate-700 dark:text-slate-300 font-semibold cursor-not-allowed select-none">
+                                  {(() => {
+                                    const parsed = parseFloat(trackedHours || (task?.trackedHours?.toString() || "0"));
+                                    if (isNaN(parsed) || parsed === 0) return "0h";
+                                    return `${Number(parsed.toFixed(2))}h`;
+                                  })()}
+                                </div>
                               </div>
 
                               {/* Milestone + Make Task Repeat row */}

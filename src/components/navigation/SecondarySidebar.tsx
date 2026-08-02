@@ -4,7 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { secondaryNavigation, SecondarySection, SecondaryNavItem } from './NavigationConfig';
 import { usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronDown, Plus, Trash2, ArrowRight, FileText, Pin, CheckSquare, MessageSquare, FolderKanban, Users } from 'lucide-react';
+import { ChevronDown, Plus, Trash2, ArrowRight, FileText, Pin, CheckSquare, MessageSquare, FolderKanban, Users, X } from 'lucide-react';
+import ProjectConversation from '@/app/workspace/projects/[id]/ProjectConversation';
+import DashboardTaskModal from '../dashboard/DashboardTaskModal';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,10 +46,13 @@ export function SecondarySidebar({
   const [pinnedTemplates, setPinnedTemplates] = useState<any[]>([]);
   const [pinnedTasks, setPinnedTasks] = useState<any[]>([]);
   const [pinnedChats, setPinnedChats] = useState<any[]>([]);
+  const [activePinnedChatModal, setActivePinnedChatModal] = useState<any | null>(null);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [selectedPinnedTask, setSelectedPinnedTask] = useState<any | null>(null);
+  const [isPinnedTaskModalOpen, setIsPinnedTaskModalOpen] = useState(false);
 
   useEffect(() => {
-    if (activeTab !== 'home') return;
+    if (activeTab !== 'home' || isSettingsPage) return;
 
     const fetchAll = async () => {
       setLoadingTemplates(true);
@@ -331,72 +336,10 @@ export function SecondarySidebar({
           );
         })}
 
-        {/* Pinned Templates section — OWNER only */}
-        {activeTab === 'home' && user?.role === 'OWNER' && (
-          <div className="animate-in fade-in duration-300">
-            <hr className="my-4 border-slate-200 dark:border-white/5" />
-            <div className="px-2.5 mb-2.5 flex items-center justify-between">
-              <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                Pinned Templates
-              </span>
-            </div>
-            {pinnedTemplates.length > 0 ? (
-              <div className="flex flex-col gap-1">
-                {pinnedTemplates.map((template) => (
-                  <div
-                    key={template.id}
-                    className="group relative w-full flex items-center rounded-[8px] transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
-                  >
-                    <button
-                      onClick={() => {
-                        window.dispatchEvent(new CustomEvent('omniwork_open_create_project', { detail: template }));
-                      }}
-                      className="w-full flex items-center px-2.5 py-2 min-w-0 text-left outline-none"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0 w-full pr-6">
-                        <FileText size={16} className="shrink-0 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-350" />
-                        <span className="text-[13px] font-semibold truncate">{template.name}</span>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        const savedPinned = localStorage.getItem("omniwork_pinned_templates");
-                        const pinnedIds: string[] = savedPinned ? JSON.parse(savedPinned) : [];
-                        const next = pinnedIds.filter((id) => id !== template.id);
-                        localStorage.setItem("omniwork_pinned_templates", JSON.stringify(next));
-                        window.dispatchEvent(new Event('omniwork_templates_pinned_changed'));
-                      }}
-                      className="absolute right-2 opacity-0 group-hover:opacity-100 p-1 rounded-md hover:bg-slate-300 dark:hover:bg-white/10 text-amber-500 hover:text-red-500 transition-all cursor-pointer z-10"
-                      title="Unpin Template"
-                    >
-                      <Pin size={13} className="fill-amber-500 stroke-amber-500" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-3.5 rounded-xl border border-dashed border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/5 text-center">
-                <FileText size={20} className="mx-auto mb-2 text-slate-400 dark:text-slate-500" />
-                <h4 className="text-[11px] font-bold text-slate-700 dark:text-slate-300">No pinned templates</h4>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 leading-normal">
-                  Create a project, save it as template, then pin it to access quickly here.
-                </p>
-                <button
-                  onClick={() => window.dispatchEvent(new Event('omniwork_browse_templates'))}
-                  className="inline-block mt-2.5 text-[10px] font-bold text-violet-600 dark:text-violet-400 hover:underline outline-none cursor-pointer"
-                >
-                  Browse / Create templates
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+
 
         {/* Pinned Chats section — all users, DB-backed */}
-        {activeTab === 'home' && (
+        {!isSettingsPage && activeTab === 'home' && (
           <div className="animate-in fade-in duration-300">
             <hr className="my-4 border-slate-200 dark:border-white/5" />
             <div className="px-2.5 mb-2.5 flex items-center justify-between">
@@ -414,9 +357,10 @@ export function SecondarySidebar({
                       key={chat.id}
                       className="group relative w-full flex items-center rounded-[8px] transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
                     >
-                      <Link
-                        href={href}
-                        className="w-full flex items-center px-2.5 py-2 min-w-0 text-left outline-none"
+                      <button
+                        type="button"
+                        onClick={() => setActivePinnedChatModal(chat)}
+                        className="w-full flex items-center px-2.5 py-2 min-w-0 text-left outline-none cursor-pointer"
                       >
                         <div className="flex items-center gap-2.5 min-w-0 w-full pr-6">
                           <ChatIcon size={16} className="shrink-0 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-350" />
@@ -427,7 +371,7 @@ export function SecondarySidebar({
                             </span>
                           </div>
                         </div>
-                      </Link>
+                      </button>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -457,7 +401,7 @@ export function SecondarySidebar({
         )}
 
         {/* Pinned Tasks section — all users, DB-backed */}
-        {activeTab === 'home' && (
+        {!isSettingsPage && activeTab === 'home' && (
           <div className="animate-in fade-in duration-300">
             <hr className="my-4 border-slate-200 dark:border-white/5" />
             <div className="px-2.5 mb-2.5 flex items-center justify-between">
@@ -470,22 +414,23 @@ export function SecondarySidebar({
                 {pinnedTasks.map((task) => (
                   <div
                     key={task.id}
-                    className="group relative w-full flex items-center rounded-[8px] transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
+                    onClick={() => {
+                      setSelectedPinnedTask(task);
+                      setIsPinnedTaskModalOpen(true);
+                    }}
+                    className="group relative w-full flex items-center rounded-[8px] transition-all text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white cursor-pointer"
                   >
-                    <Link
-                      href={`/workspace/tasks?taskId=${task.id}`}
-                      className="w-full flex items-center px-2.5 py-2 min-w-0 text-left outline-none"
-                    >
+                    <div className="w-full flex items-center px-2.5 py-2 min-w-0 text-left outline-none">
                       <div className="flex items-center gap-2.5 min-w-0 w-full pr-6">
-                        <CheckSquare size={16} className="shrink-0 text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-350" />
+                        <CheckSquare size={16} className="shrink-0 text-slate-400 dark:text-slate-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors" />
                         <div className="min-w-0">
-                          <span className="text-[13px] font-semibold truncate block">{task.title}</span>
+                          <span className="text-[13px] font-semibold truncate block group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{task.title}</span>
                           {task.project?.name && (
                             <span className="text-[10px] text-slate-400 truncate block">{task.project.name}</span>
                           )}
                         </div>
                       </div>
-                    </Link>
+                    </div>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -513,6 +458,76 @@ export function SecondarySidebar({
           </div>
         )}
       </div>
+
+      {/* PINNED CHAT CONVERSATION MODAL */}
+      {activePinnedChatModal && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200 text-left cursor-default"
+          onClick={() => setActivePinnedChatModal(null)}
+        >
+          <div
+            className="bg-white dark:bg-[#131316] rounded-[8px] shadow-2xl border border-slate-200 dark:border-white/10 w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="px-4 py-3 border-b border-slate-200/60 dark:border-white/10 flex items-center justify-between shrink-0 bg-slate-50/80 dark:bg-white/5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-[8px] bg-slate-200/80 dark:bg-white/10 flex items-center justify-center text-slate-700 dark:text-slate-200 shrink-0 font-bold">
+                  {React.createElement(getChatIcon(activePinnedChatModal.chatType), { size: 16 })}
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                    {activePinnedChatModal.displayName}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-medium capitalize">
+                    {activePinnedChatModal.chatType === 'direct'
+                      ? 'Direct Message'
+                      : activePinnedChatModal.chatType === 'project'
+                      ? 'Project Conversation'
+                      : 'Group Chat'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActivePinnedChatModal(null)}
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-[8px] p-1.5 transition-colors cursor-pointer hover:bg-slate-200/60 dark:hover:bg-white/10"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body: Complete Conversation View */}
+            <div className="flex-1 min-h-0 overflow-hidden relative p-2">
+              <ProjectConversation
+                projectId={activePinnedChatModal.projectId || undefined}
+                groupId={activePinnedChatModal.chatGroupId || undefined}
+                groupName={activePinnedChatModal.displayName}
+                isDirect={activePinnedChatModal.chatType === 'direct'}
+                currentUser={{
+                  ...user,
+                  userId: user?.userId || user?.id,
+                  id: user?.userId || user?.id,
+                  name: user?.name || 'User',
+                  role: user?.role || 'MEMBER',
+                }}
+                organizationId={user?.organizationId}
+                isClient={user?.role === 'CLIENT'}
+                hideHeader={true}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <DashboardTaskModal
+        task={selectedPinnedTask}
+        isOpen={isPinnedTaskModalOpen}
+        onClose={() => {
+          setIsPinnedTaskModalOpen(false);
+          setSelectedPinnedTask(null);
+        }}
+      />
     </div>
   );
 }

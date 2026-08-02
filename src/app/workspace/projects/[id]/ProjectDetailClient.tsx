@@ -887,7 +887,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
                   </h4>
                   <div className="relative">
                     <div
-                      className={`text-sm text-slate-800 dark:text-slate-200 leading-relaxed prose prose-sm max-w-none dark:prose-invert [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_p]:my-2 transition-all duration-300 ${
+                      className={`text-sm text-slate-800 dark:text-slate-200 leading-relaxed prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_p]:my-2 transition-all duration-300 ${
                         !isDescriptionExpanded ? 'max-h-[180px] overflow-hidden' : ''
                       }`}
                       dangerouslySetInnerHTML={{ __html: project.description }}

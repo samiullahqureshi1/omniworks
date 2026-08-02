@@ -40,10 +40,11 @@ export async function getPinnedTasksAction() {
       take: 8,
       include: {
         task: {
-          select: {
-            id: true, title: true, priority: true,
-            project: { select: { id: true, name: true } },
-            status: { select: { id: true, name: true, color: true } },
+          include: {
+            project: { select: { id: true, name: true, projectManagerId: true, clientId: true, totalAllocatedHours: true } },
+            status: true,
+            assignees: { include: { user: { select: { id: true, name: true, email: true, role: true } } } },
+            milestone: true,
           },
         },
       },

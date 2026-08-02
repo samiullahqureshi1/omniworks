@@ -120,11 +120,9 @@ export function MainSidebar({
               );
             }
 
-            const buttonEl = (
-              <button
-                key={item.id}
-                onClick={() => handleItemClick(item)}
-                className="group relative flex flex-col items-center justify-center w-full py-0.5 outline-none"
+            const itemContent = (
+              <div
+                className="group relative flex flex-col items-center justify-center w-full py-0.5 outline-none cursor-pointer"
               >
                 {/* Glowing Rounded Icon Container */}
                 <div 
@@ -142,18 +140,27 @@ export function MainSidebar({
                 }`}>
                   {item.name}
                 </span>
-              </button>
+              </div>
             );
 
             if (itemRoutes[item.id]) {
               return (
-                <Link key={item.id} href={itemRoutes[item.id]} prefetch={true} tabIndex={-1} className="w-full">
-                  {buttonEl}
+                <Link key={item.id} href={itemRoutes[item.id]} prefetch={true} className="w-full">
+                  {itemContent}
                 </Link>
               );
             }
 
-            return buttonEl;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleItemClick(item)}
+                className="w-full text-left outline-none"
+              >
+                {itemContent}
+              </button>
+            );
           })}
         </nav>
       </div>
