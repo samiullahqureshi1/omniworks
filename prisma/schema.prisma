@@ -76,6 +76,7 @@ model User {
   twoFactorEnabled Boolean      @default(false)
   resetToken       String?
   resetTokenExpiry DateTime?
+  permissions      Json?        // { project:{view,edit,create,delete}, task:{...}, planner:{...}, user:{...}, client:{...} }
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 

@@ -24,6 +24,7 @@ export async function getUsersAction() {
         email: true,
         role: true,
         status: true,
+        permissions: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -46,6 +47,7 @@ export async function addUserAction(formData: FormData) {
     const name = formData.get('name') as string;
     const email = formData.get('email') as string;
     const roleString = formData.get('role') as string;
+    const permissionsString = formData.get('permissions') as string | null;
 
     if (!name || !email || !roleString) {
       return { error: 'All fields are required.' };
@@ -57,6 +59,10 @@ export async function addUserAction(formData: FormData) {
     }
 
     const role = roleString as 'OWNER' | 'MEMBER' | 'CLIENT';
+    let parsedPermissions: any = undefined;
+    if (permissionsString) {
+      try { parsedPermissions = JSON.parse(permissionsString); } catch {}
+    }
 
     // Check if email already exists in this org
     const existingUser = await prisma.user.findFirst({
@@ -126,6 +132,7 @@ export async function addUserAction(formData: FormData) {
           role: role,
           status: 'ACTIVE',
           organizationId: session.organizationId,
+          ...(parsedPermissions ? { permissions: parsedPermissions } : {}),
         },
       });
     } else {
@@ -138,6 +145,7 @@ export async function addUserAction(formData: FormData) {
           role,
           status: 'ACTIVE',
           organizationId: session.organizationId,
+          ...(parsedPermissions ? { permissions: parsedPermissions } : {}),
         },
       });
     }
@@ -214,6 +222,7 @@ export async function editUserAction(id: string, formData: FormData) {
     const email = formData.get('email') as string;
     const roleString = formData.get('role') as string;
     const statusString = formData.get('status') as string;
+    const permissionsString = formData.get('permissions') as string | null;
 
     if (!name || !email || !roleString || !statusString) {
       return { error: 'All fields are required.' };
@@ -238,6 +247,10 @@ export async function editUserAction(id: string, formData: FormData) {
 
     const role = roleString as 'OWNER' | 'MEMBER' | 'CLIENT';
     const status = statusString as 'ACTIVE' | 'INACTIVE';
+    let parsedPermissions: any = undefined;
+    if (permissionsString) {
+      try { parsedPermissions = JSON.parse(permissionsString); } catch {}
+    }
 
     await prisma.user.update({
       where: { id },
@@ -246,6 +259,7 @@ export async function editUserAction(id: string, formData: FormData) {
         email,
         role,
         status,
+        ...(parsedPermissions !== undefined ? { permissions: parsedPermissions } : {}),
       },
     });
 

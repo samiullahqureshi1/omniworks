@@ -7,6 +7,12 @@ import { prisma } from './db';
 const JWT_SECRET = process.env.JWT_SECRET || 'omnitrack-super-secret-jwt-key-2026';
 const COOKIE_NAME = 'omnitrack_session';
 
+export type PermissionAction = 'view' | 'edit' | 'create' | 'delete';
+export type PermissionResource = 'project' | 'task' | 'planner' | 'user' | 'client';
+export type Permissions = {
+  [R in PermissionResource]?: { [A in PermissionAction]?: boolean };
+};
+
 export interface UserSession {
   userId: string;
   email: string;
@@ -14,6 +20,17 @@ export interface UserSession {
   role: 'OWNER' | 'MEMBER' | 'CLIENT' | 'MASTER_ADMIN';
   organizationId: string;
   organizationName: string;
+  permissions?: Permissions;
+}
+
+export function hasPermission(
+  session: UserSession | null | undefined,
+  resource: PermissionResource,
+  action: PermissionAction
+): boolean {
+  if (!session) return false;
+  if (session.role === 'OWNER' || session.role === 'MASTER_ADMIN') return true;
+  return session.permissions?.[resource]?.[action] === true;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -32,10 +49,16 @@ export async function createSession(user: {
   role: 'OWNER' | 'MEMBER' | 'CLIENT' | 'MASTER_ADMIN';
   organizationId: string;
 }) {
-  const org = await prisma.organization.findUnique({
-    where: { id: user.organizationId },
-    select: { name: true },
-  });
+  const [org, dbUser] = await Promise.all([
+    prisma.organization.findUnique({
+      where: { id: user.organizationId },
+      select: { name: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: { permissions: true },
+    }),
+  ]);
 
   const sessionData: UserSession = {
     userId: user.id,
@@ -44,6 +67,7 @@ export async function createSession(user: {
     role: user.role,
     organizationId: user.organizationId,
     organizationName: org?.name || 'Workspace',
+    permissions: (dbUser?.permissions as Permissions) ?? undefined,
   };
 
   const token = jwt.sign(sessionData, JWT_SECRET, { expiresIn: '7d' });

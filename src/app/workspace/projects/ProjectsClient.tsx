@@ -209,7 +209,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
     const [isPending, startTransition] = React.useTransition();
     const router = useRouter();
 
-    const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
+    const isEditable = currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN' || currentUser?.permissions?.project?.edit === true || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
 
     const handleDateSelect = (date: Date | undefined) => {
       if (!date) return;
@@ -315,7 +315,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
     const [isPending, startTransition] = React.useTransition();
     const router = useRouter();
 
-    const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
+    const isEditable = currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN' || currentUser?.permissions?.project?.edit === true || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
 
     const priorities = [
       { value: "CRITICAL", label: "Urgent", color: "text-red-500", bg: "bg-red-50 dark:bg-red-950/20" },
@@ -397,7 +397,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
     const field = fieldIndex >= 0 ? customFields[fieldIndex] : null;
     const value = field ? field.value : undefined;
 
-    const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
+    const isEditable = currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN' || currentUser?.permissions?.project?.edit === true || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
 
     let options = field?.options;
     if (!options && Array.isArray(projects)) {
@@ -501,7 +501,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
     const [isPending, startTransition] = React.useTransition();
     const router = useRouter();
 
-    const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
+    const isEditable = currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN' || currentUser?.permissions?.project?.edit === true || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
 
     const handleSave = () => {
       if (!name.trim() || name === project.name) {
@@ -580,7 +580,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
     const [isPending, startTransition] = React.useTransition();
     const router = useRouter();
 
-    const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
+    const isEditable = currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN' || currentUser?.permissions?.project?.edit === true || (currentUser?.role === 'MEMBER' && project.projectManagerId === currentUser?.userId);
 
     const filteredStatuses = projectStatuses.filter((s: any) => 
       s.name.toLowerCase().includes(search.toLowerCase())
@@ -745,7 +745,8 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
               <div 
                 className="flex items-center gap-2 cursor-pointer hover:opacity-80" 
                 onPointerDown={(e) => {
-                  if (currentUser?.role === 'OWNER') {
+                  const _canEdit = currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN' || currentUser?.permissions?.project?.edit === true;
+                  if (_canEdit) {
                     e.stopPropagation();
                     setIsEditing(true);
                   }
@@ -767,7 +768,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
             >
               <Plus size={16} />
             </button>
-            {currentUser?.role === 'OWNER' && (
+{(currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN' || currentUser?.permissions?.project?.delete === true) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="p-1 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-md transition-colors cursor-pointer">
@@ -834,27 +835,36 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
             </div>
           ) : <div />}
 
-          {currentUser?.role === 'OWNER' && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button 
-                  type="button"
-                  className="opacity-60 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-100 dark:hover:bg-white/10 rounded-md cursor-pointer shrink-0" 
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal size={16} className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEdit(project); }} className="cursor-pointer">
-                  <Edit2 className="w-3.5 h-3.5 mr-2" /> Edit Project
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={(e) => { e.stopPropagation(); handleDelete(project.id); }}>
-                  <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete Project
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+{(() => {
+            const _canEdit = currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN' || currentUser?.permissions?.project?.edit === true;
+            const _canDelete = currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN' || currentUser?.permissions?.project?.delete === true;
+            if (!_canEdit && !_canDelete) return null;
+            return (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button 
+                    type="button"
+                    className="opacity-60 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-100 dark:hover:bg-white/10 rounded-md cursor-pointer shrink-0" 
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <MoreHorizontal size={16} className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  {_canEdit && (
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleEdit(project); }} className="cursor-pointer">
+                      <Edit2 className="w-3.5 h-3.5 mr-2" /> Edit Project
+                    </DropdownMenuItem>
+                  )}
+                  {_canDelete && (
+                    <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={(e) => { e.stopPropagation(); handleDelete(project.id); }}>
+                      <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete Project
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          })()}
         </div>
 
         {/* Project Name & Category/Client Subtitle */}
@@ -1233,6 +1243,18 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
       setProjects(initialProjects);
     }, [initialProjects]);
     const [isPending, startTransition] = useTransition();
+
+    // ─── Permission helper ───────────────────────────────────────────────────
+    // OWNER / MASTER_ADMIN → always full access
+    // CLIENT               → view-only (enforced elsewhere too)
+    // MEMBER               → respect granular permissions stored in currentUser.permissions
+    const can = (resource: string, action: string): boolean => {
+      if (currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN') return true;
+      if (currentUser?.role === 'CLIENT') return action === 'view';
+      // MEMBER: check permissions object
+      return currentUser?.permissions?.[resource]?.[action] === true;
+    };
+    // ────────────────────────────────────────────────────────────────────────
 
     // Search & Filters
     const [searchQuery, setSearchQuery] = useState("");
@@ -2560,7 +2582,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
             </DropdownMenu>
 
             {/* Add Project Split Button */}
-            {currentUser.role === "OWNER" && (
+            {can('project', 'create') && (
               <div className="flex items-center rounded-xl overflow-hidden bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 text-white dark:text-slate-900 h-8 shadow-sm">
                 <button
                   type="button"
@@ -2726,7 +2748,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                       </TableCell>
                     ))}
                     <TableCell className="border-l border-slate-100 dark:border-white/5 text-center">
-                      {currentUser.role === "OWNER" && (
+                      {(can('project', 'edit') || can('project', 'delete')) && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -2743,15 +2765,19 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                                 View Project
                               </Link>
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEditModal(p)} className="cursor-pointer">
-                              Edit Project
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive cursor-pointer"
-                              onClick={() => handleDelete(p.id)}
-                            >
-                              Delete Project
-                            </DropdownMenuItem>
+                            {can('project', 'edit') && (
+                              <DropdownMenuItem onClick={() => openEditModal(p)} className="cursor-pointer">
+                                Edit Project
+                              </DropdownMenuItem>
+                            )}
+                            {can('project', 'delete') && (
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive cursor-pointer"
+                                onClick={() => handleDelete(p.id)}
+                              >
+                                Delete Project
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}
@@ -2790,7 +2816,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                 })}
               </SortableContext>
               
-              {currentUser.role === 'OWNER' && (
+              {can('project', 'create') && (
                 <div className="shrink-0 flex items-start">
                   <button 
                     onClick={() => setIsCreateStatusOpen(true)}
@@ -2841,7 +2867,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                     <div className="flex items-center justify-between px-4 py-2 bg-slate-100/50 dark:bg-zinc-900/40 border-b border-slate-100 dark:border-zinc-800/50 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                       <div className="flex-1 min-w-0 pl-3">Project Name</div>
                       <div className="w-32 shrink-0 hidden sm:block">Status</div>
-                      {currentUser.role !== "MEMBER" && <div className="w-28 shrink-0 hidden md:block">Client</div>}
+                      {can('project', 'view') && <div className="w-28 shrink-0 hidden md:block">Client</div>}
                       <div className="w-48 shrink-0 hidden lg:block">Timeline</div>
                       <div className="w-32 shrink-0 hidden sm:block">Team</div>
                       <div className="w-24 shrink-0 text-right">Actions</div>
@@ -2886,7 +2912,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                           </div>
 
                           {/* Client Column */}
-                          {currentUser.role !== "MEMBER" && (
+                          {can('project', 'view') && (
                             <div className="w-28 shrink-0 hidden md:flex items-center text-xs font-medium text-slate-600 dark:text-slate-400 truncate">
                               {p.client?.name ? p.client.name : "—"}
                             </div>
@@ -2929,7 +2955,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                             <Button variant="outline" size="sm" asChild className="h-8 px-3 text-xs font-medium rounded-[6px] border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800">
                               <Link href={`/workspace/projects/${p.id}`}>View</Link>
                             </Button>
-                            {currentUser.role === "OWNER" && (
+                            {(can('project', 'edit') || can('project', 'delete')) && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button variant="ghost" size="icon" className="h-8 w-8 rounded-[6px] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
@@ -2937,10 +2963,14 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-40">
-                                  <DropdownMenuItem onClick={() => openEditModal(p)} className="cursor-pointer text-xs">Edit Project</DropdownMenuItem>
-                                  <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer text-xs" onClick={() => handleDelete(p.id)}>
-                                    <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete Project
-                                  </DropdownMenuItem>
+                                  {can('project', 'edit') && (
+                                    <DropdownMenuItem onClick={() => openEditModal(p)} className="cursor-pointer text-xs">Edit Project</DropdownMenuItem>
+                                  )}
+                                  {can('project', 'delete') && (
+                                    <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer text-xs" onClick={() => handleDelete(p.id)}>
+                                      <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete Project
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             )}
@@ -2957,7 +2987,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                 <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/90 dark:bg-zinc-900/80 border-b border-slate-200 dark:border-zinc-800 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                   <div className="flex-1 min-w-0 pl-3">Project Name</div>
                   <div className="w-32 shrink-0 hidden sm:block">Status</div>
-                  {currentUser.role !== "MEMBER" && <div className="w-28 shrink-0 hidden md:block">Client</div>}
+                  {can('project', 'view') && <div className="w-28 shrink-0 hidden md:block">Client</div>}
                   <div className="w-48 shrink-0 hidden lg:block">Timeline</div>
                   <div className="w-32 shrink-0 hidden sm:block">Team</div>
                   <div className="w-24 shrink-0 text-right">Actions</div>
@@ -3002,7 +3032,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                       </div>
 
                       {/* Client Column */}
-                      {currentUser.role !== "MEMBER" && (
+                      {can('project', 'view') && (
                         <div className="w-28 shrink-0 hidden md:flex items-center text-xs font-medium text-slate-600 dark:text-slate-400 truncate">
                           {p.client?.name ? p.client.name : "—"}
                         </div>
@@ -3045,7 +3075,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                         <Button variant="outline" size="sm" asChild className="h-8 px-3 text-xs font-medium rounded-[6px] border-slate-200 dark:border-zinc-800 hover:bg-slate-100 dark:hover:bg-zinc-800">
                           <Link href={`/workspace/projects/${p.id}`}>View</Link>
                         </Button>
-                        {currentUser.role === "OWNER" && (
+                        {(can('project', 'edit') || can('project', 'delete')) && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-[6px] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
@@ -3053,10 +3083,14 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-40">
-                              <DropdownMenuItem onClick={() => openEditModal(p)} className="cursor-pointer text-xs">Edit Project</DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer text-xs" onClick={() => handleDelete(p.id)}>
-                                <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete Project
-                              </DropdownMenuItem>
+                              {can('project', 'edit') && (
+                                <DropdownMenuItem onClick={() => openEditModal(p)} className="cursor-pointer text-xs">Edit Project</DropdownMenuItem>
+                              )}
+                              {can('project', 'delete') && (
+                                <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer text-xs" onClick={() => handleDelete(p.id)}>
+                                  <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete Project
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         )}

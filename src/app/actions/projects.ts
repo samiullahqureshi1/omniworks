@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { getSession, hasPermission } from '@/lib/auth';
 import { createNotification } from './notifications';
 import {  Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
@@ -123,8 +123,8 @@ export async function quickCreateClientAction(name: string, email: string) {
 export async function quickCreateProjectAction(name: string) {
   try {
     const session = await getSession();
-    if (!session || session.role !== 'OWNER') {
-      return { error: 'Unauthorized: Only Owners can create projects.' };
+    if (!session || !hasPermission(session, 'project', 'create')) {
+      return { error: 'Unauthorized: You do not have permission to create projects.' };
     }
     if (!name) return { error: 'Project name is required.' };
 
@@ -193,8 +193,8 @@ export async function createProjectAction(data: {
 }) {
   try {
     const session = await getSession();
-    if (!session || session.role !== 'OWNER') {
-      return { error: 'Unauthorized: Only Owners can create projects.' };
+    if (!session || !hasPermission(session, 'project', 'create')) {
+      return { error: 'Unauthorized: You do not have permission to create projects.' };
     }
 
     const {
@@ -472,15 +472,10 @@ export async function updateProjectAction(
 
     if (!project) return { error: 'Project not found.' };
 
-    // Check permissions: OWNER has full access, MEMBER can edit their managed projects, CLIENT cannot edit projects
-    if (session.role === 'CLIENT') {
-      return { error: 'Unauthorized: Clients cannot edit projects.' };
-    } else if (session.role === 'MEMBER') {
-      if (project.projectManagerId !== session.userId) {
-        return { error: 'Unauthorized: Access denied.' };
-      }
-    } else if (session.role !== 'OWNER') {
-      return { error: 'Unauthorized.' };
+    // Check permissions: OWNER/MASTER_ADMIN or project.edit permission or PM
+    const canEdit = hasPermission(session, 'project', 'edit') || (session.role === 'MEMBER' && project.projectManagerId === session.userId);
+    if (!canEdit) {
+      return { error: 'Unauthorized: You do not have permission to edit this project.' };
     }
 
     const {
@@ -575,11 +570,9 @@ export async function updateProjectStatusAction(projectId: string, statusId: str
 
     if (!project) return { error: 'Project not found.' };
 
-    if (session.role === 'CLIENT') {
-      return { error: 'Unauthorized: Clients cannot update project status.' };
-    }
-    if (session.role === 'MEMBER' && project.projectManagerId !== session.userId) {
-      return { error: 'Unauthorized: Access denied.' };
+    const canEdit = hasPermission(session, 'project', 'edit') || (session.role === 'MEMBER' && project.projectManagerId === session.userId);
+    if (!canEdit) {
+      return { error: 'Unauthorized: You do not have permission to update project status.' };
     }
 
     // Update status
@@ -599,8 +592,8 @@ export async function updateProjectStatusAction(projectId: string, statusId: str
 export async function deleteProjectAction(projectId: string) {
   try {
     const session = await getSession();
-    if (!session || session.role !== 'OWNER') {
-      return { error: 'Unauthorized' };
+    if (!session || !hasPermission(session, 'project', 'delete')) {
+      return { error: 'Unauthorized: You do not have permission to delete projects.' };
     }
 
     const deleted = await prisma.project.deleteMany({
@@ -629,11 +622,14 @@ export async function getProjectsAction() {
       // Client can only access their own assigned projects
       whereClause.clientId = userId;
     } else if (role === 'MEMBER') {
-      // Member can see projects where they are assigned to at least one task OR projects where they are PM
-      whereClause.OR = [
-        { tasks: { some: { assignees: { some: { userId } } } } },
-        { projectManagerId: userId },
-      ];
+      // Member can see all projects if project.view permission granted, else assigned/PM projects
+      if (!hasPermission(session, 'project', 'view')) {
+        whereClause.OR = [
+          { tasks: { some: { assignees: { some: { userId } } } } },
+          { projectManagerId: userId },
+          { assignees: { some: { userId } } },
+        ];
+      }
     }
 
     const projects = await prisma.project.findMany({
@@ -780,11 +776,9 @@ export async function updateProjectDueDateAction(projectId: string, endDate: str
     });
     if (!project) return { error: "Project not found or access denied." };
 
-    if (session.role === 'CLIENT') {
-      return { error: 'Unauthorized: Clients cannot update project due date.' };
-    }
-    if (session.role === 'MEMBER' && project.projectManagerId !== session.userId) {
-      return { error: 'Unauthorized: Access denied.' };
+    const canEdit = hasPermission(session, 'project', 'edit') || (session.role === 'MEMBER' && project.projectManagerId === session.userId);
+    if (!canEdit) {
+      return { error: 'Unauthorized: You do not have permission to update project due date.' };
     }
 
     const data: any = { endDate: endDate ? new Date(endDate) : null };
@@ -817,11 +811,9 @@ export async function updateProjectCustomFieldsAction(projectId: string, customF
     });
     if (!project) return { error: "Project not found or access denied." };
 
-    if (session.role === 'CLIENT') {
-      return { error: 'Unauthorized: Clients cannot update project custom fields.' };
-    }
-    if (session.role === 'MEMBER' && project.projectManagerId !== session.userId) {
-      return { error: 'Unauthorized: Access denied.' };
+    const canEdit = hasPermission(session, 'project', 'edit') || (session.role === 'MEMBER' && project.projectManagerId === session.userId);
+    if (!canEdit) {
+      return { error: 'Unauthorized: You do not have permission to update project custom fields.' };
     }
 
     const updated = await prisma.project.update({
@@ -849,11 +841,9 @@ export async function updateProjectPriorityAction(projectId: string, priority: s
     });
     if (!project) return { error: "Project not found or access denied." };
 
-    if (session.role === 'CLIENT') {
-      return { error: 'Unauthorized: Clients cannot update project priority.' };
-    }
-    if (session.role === 'MEMBER' && project.projectManagerId !== session.userId) {
-      return { error: 'Unauthorized: Access denied.' };
+    const canEdit = hasPermission(session, 'project', 'edit') || (session.role === 'MEMBER' && project.projectManagerId === session.userId);
+    if (!canEdit) {
+      return { error: 'Unauthorized: You do not have permission to update project priority.' };
     }
 
     const updated = await prisma.project.update({

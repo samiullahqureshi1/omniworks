@@ -15,10 +15,13 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   if (session.role === 'CLIENT') {
     whereClause.clientId = session.userId;
   } else if (session.role === 'MEMBER') {
-    whereClause.OR = [
-      { tasks: { some: { assignees: { some: { userId: session.userId } } } } },
-      { projectManagerId: session.userId },
-    ];
+    if (!session.permissions?.project?.view) {
+      whereClause.OR = [
+        { tasks: { some: { assignees: { some: { userId: session.userId } } } } },
+        { projectManagerId: session.userId },
+        { assignees: { some: { userId: session.userId } } },
+      ];
+    }
   }
 
   const project = await prisma.project.findFirst({

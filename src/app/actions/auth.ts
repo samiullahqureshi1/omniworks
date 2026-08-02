@@ -292,7 +292,21 @@ export async function logoutAction() {
 }
 
 export async function getCurrentUser() {
-  return await getSession();
+  const session = await getSession();
+  if (!session) return null;
+
+  // Always pull fresh permissions from DB (JWT may be stale after an edit)
+  try {
+    const dbUser = await prisma.user.findFirst({
+      where: { email: session.email, organizationId: session.organizationId },
+      select: { permissions: true },
+    });
+    if (dbUser?.permissions) {
+      return { ...session, permissions: dbUser.permissions as any };
+    }
+  } catch {}
+
+  return session;
 }
 
 export async function deleteOrganizationAction(id: string) {

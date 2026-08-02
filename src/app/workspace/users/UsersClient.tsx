@@ -93,7 +93,19 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
   const openEditUser = (u: any) => {
     setEditUser(u);
     setEditTab('details');
-    setPermissions(defaultPerms());
+    const merged = defaultPerms();
+    if (u.permissions && typeof u.permissions === 'object') {
+      for (const res of PERM_RESOURCES) {
+        if (u.permissions[res.key]) {
+          for (const act of PERM_ACTIONS) {
+            if (typeof u.permissions[res.key][act] === 'boolean') {
+              merged[res.key][act] = u.permissions[res.key][act];
+            }
+          }
+        }
+      }
+    }
+    setPermissions(merged);
   };
 
   const searchParams = useSearchParams();
@@ -203,6 +215,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
   const handleAddSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    formData.append('permissions', JSON.stringify(addPermissions));
 
     startTransition(async () => {
       const res = await addUserAction(formData);
@@ -212,6 +225,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
         toast.success(res.message);
         setIsAddFormValid(false);
         setIsAddModalOpen(false);
+        setAddPermissions(defaultPerms());
         // Soft refresh the page data
         router.refresh(); 
       }
@@ -223,6 +237,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
     e.preventDefault();
     if (!editUser) return;
     const formData = new FormData(e.currentTarget);
+    formData.append('permissions', JSON.stringify(permissions));
 
     startTransition(async () => {
       const res = await editUserAction(editUser.id, formData);
