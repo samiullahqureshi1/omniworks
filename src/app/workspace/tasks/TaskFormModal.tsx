@@ -1544,6 +1544,70 @@ export default function TaskFormModal({
                     </div>
                   )}
 
+                  {/* ── Attachment Preview — below Fields section ── */}
+                  {(attachments.length > 0 || uploadingAttachment) && (
+                    <div className="mt-5 pt-5 border-t border-slate-100 dark:border-white/5">
+                      <div className="flex items-center gap-1.5 mb-3">
+                        <Paperclip size={12} className="text-slate-400" />
+                        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                          Attachments ({attachments.length})
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {attachments.map((item, idx) => {
+                          const isImg = item.fileUrl?.match(/\.(jpeg|jpg|gif|png|webp|svg|avif)($|\?)/i) ||
+                            item.fileType?.startsWith('image/') ||
+                            item.fileName?.match(/\.(jpeg|jpg|gif|png|webp|svg|avif)$/i);
+                          return (
+                            <div
+                              key={item.id || idx}
+                              className="relative flex items-center gap-2 pl-2 pr-7 py-1.5 rounded-[8px] bg-slate-100 dark:bg-white/8 border border-slate-200 dark:border-white/10 group hover:border-slate-300 dark:hover:border-white/20 transition-all"
+                            >
+                              {isImg ? (
+                                <img src={item.fileUrl} alt={item.fileName} className="w-8 h-8 rounded object-cover shrink-0" />
+                              ) : (
+                                <div className="w-8 h-8 rounded bg-slate-200 dark:bg-white/10 flex items-center justify-center shrink-0">
+                                  <Paperclip size={14} className="text-slate-500" />
+                                </div>
+                              )}
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{item.fileName}</span>
+                                {item.fileSize && (
+                                  <span className="text-[10px] text-slate-400">
+                                    {item.fileSize < 1024 * 1024
+                                      ? `${(item.fileSize / 1024).toFixed(1)} KB`
+                                      : `${(item.fileSize / (1024 * 1024)).toFixed(1)} MB`}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const removed = attachments[idx];
+                                  setAttachments(prev => prev.filter((_, pi) => pi !== idx));
+                                  if (removed?.id) {
+                                    setDraftDocs(prev => prev.filter(d => d.tempId !== removed.id));
+                                  }
+                                }}
+                                className="absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-slate-300 dark:bg-white/20 flex items-center justify-center text-slate-500 dark:text-slate-300 hover:bg-red-400 hover:text-white transition-all opacity-0 group-hover:opacity-100"
+                              >
+                                <X size={9} />
+                              </button>
+                            </div>
+                          );
+                        })}
+                        {uploadingAttachment && (
+                          <div className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-[8px] bg-slate-100 dark:bg-white/8 border border-dashed border-slate-300 dark:border-white/20">
+                            <div className="w-8 h-8 rounded bg-slate-200 dark:bg-white/10 flex items-center justify-center shrink-0 animate-pulse">
+                              <Paperclip size={14} className="text-slate-400" />
+                            </div>
+                            <span className="text-[11px] text-slate-400 dark:text-slate-500">Uploading...</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Hidden File Input */}
                   <input
                     type="file"
@@ -1557,70 +1621,6 @@ export default function TaskFormModal({
             })()}
             </div>
             </div>
-
-          {/* ── Attachment Preview Strip — always visible above footer ── */}
-          {(attachments.length > 0 || uploadingAttachment) && (
-            <div className="px-6 py-3 border-t border-slate-100 dark:border-white/5 bg-white dark:bg-[#151518] shrink-0">
-              <div className="flex items-center gap-1.5 mb-2">
-                <Paperclip size={12} className="text-slate-400" />
-                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Attachments ({attachments.length})
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {attachments.map((item, idx) => {
-                  const isImg = item.fileUrl?.match(/\.(jpeg|jpg|gif|png|webp|svg|avif)($|\?)/i) ||
-                    item.fileType?.startsWith('image/') ||
-                    item.fileName?.match(/\.(jpeg|jpg|gif|png|webp|svg|avif)$/i);
-                  return (
-                    <div
-                      key={item.id || idx}
-                      className="relative flex items-center gap-2 pl-2 pr-7 py-1.5 rounded-[8px] bg-slate-100 dark:bg-white/8 border border-slate-200 dark:border-white/10 group hover:border-slate-300 dark:hover:border-white/20 transition-all"
-                    >
-                      {isImg ? (
-                        <img src={item.fileUrl} alt={item.fileName} className="w-8 h-8 rounded object-cover shrink-0" />
-                      ) : (
-                        <div className="w-8 h-8 rounded bg-slate-200 dark:bg-white/10 flex items-center justify-center shrink-0">
-                          <Paperclip size={14} className="text-slate-500" />
-                        </div>
-                      )}
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{item.fileName}</span>
-                        {item.fileSize && (
-                          <span className="text-[10px] text-slate-400">
-                            {item.fileSize < 1024 * 1024
-                              ? `${(item.fileSize / 1024).toFixed(1)} KB`
-                              : `${(item.fileSize / (1024 * 1024)).toFixed(1)} MB`}
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const removed = attachments[idx];
-                          setAttachments(prev => prev.filter((_, pi) => pi !== idx));
-                          if (removed?.id) {
-                            setDraftDocs(prev => prev.filter(d => d.tempId !== removed.id));
-                          }
-                        }}
-                        className="absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-slate-300 dark:bg-white/20 flex items-center justify-center text-slate-500 dark:text-slate-300 hover:bg-red-400 hover:text-white transition-all opacity-0 group-hover:opacity-100"
-                      >
-                        <X size={9} />
-                      </button>
-                    </div>
-                  );
-                })}
-                {uploadingAttachment && (
-                  <div className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-[8px] bg-slate-100 dark:bg-white/8 border border-dashed border-slate-300 dark:border-white/20">
-                    <div className="w-8 h-8 rounded bg-slate-200 dark:bg-white/10 flex items-center justify-center shrink-0 animate-pulse">
-                      <Paperclip size={14} className="text-slate-400" />
-                    </div>
-                    <span className="text-[11px] text-slate-400 dark:text-slate-500">Uploading...</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* ── Fixed footer — direct child of DialogContent (flex-col), always pinned ── */}
           <div className="px-6 py-4 border-t shrink-0 bg-white dark:bg-[#151518] border-slate-100 dark:border-white/5 flex items-center justify-between">
