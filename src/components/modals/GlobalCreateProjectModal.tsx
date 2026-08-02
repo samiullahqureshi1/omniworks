@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 import { ModalTabsHeader } from "@/components/ui/ModalTabsHeader";
-import { DraftDocument, ProjectDocumentComposer } from "@/components/documents/DocumentsPanel";
+import { DraftDocument } from "@/components/documents/DocumentsPanel";
+import { AttachmentsField, AttachmentsFieldHandle } from "@/components/common/AttachmentsField";
+import { AttachmentItem } from "@/components/common/CloudinaryAttachmentCard";
 import { createDocumentAction } from "@/app/actions/documents";
-import { Plus, Users, Trash2, X, Loader2, ChevronDown, Check, Repeat, FolderKanban, Pin, Star, LayoutGrid, Search, Edit2, Calendar as CalendarIcon, Clock, ShieldAlert, Crown, Shield, MoreHorizontal, ArrowRight, Hash, Globe, Mail, Phone, Tags, CheckSquare, CircleDashed, Type, EyeOff, Settings } from "lucide-react";
+import { Plus, Users, Trash2, X, Loader2, ChevronDown, Check, Repeat, FolderKanban, Pin, Star, LayoutGrid, Search, Edit2, Calendar as CalendarIcon, Clock, ShieldAlert, Crown, Shield, MoreHorizontal, ArrowRight, Hash, Globe, Mail, Phone, Tags, CheckSquare, CircleDashed, Type, EyeOff, Settings, Paperclip } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
@@ -61,9 +63,13 @@ export default function GlobalCreateProjectModal({
   // Modal States
   const [isQuickClientOpen, setIsQuickClientOpen] = useState(false);
 
-  // Tabbed header (Project | Doc) + attached documents (draft until created)
+  // Header (Project) + draft docs kept for template compatibility
   const [activeTab, setActiveTab] = useState<"project" | "doc">("project");
   const [draftDocs, setDraftDocs] = useState<DraftDocument[]>([]);
+
+  // Cloudinary attachments (uploaded immediately, persisted as FILE docs on create)
+  const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const attachRef = React.useRef<AttachmentsFieldHandle>(null);
 
   const persistDraftDocs = async (projectId: string) => {
     if (draftDocs.length === 0 || !projectId) return;
@@ -75,6 +81,20 @@ export default function GlobalCreateProjectModal({
         fileUrl: d.fileUrl ?? null,
         fileName: d.fileName ?? null,
         fileSize: d.fileSize ?? null,
+        projectId,
+      });
+    }
+  };
+
+  const persistAttachments = async (projectId: string) => {
+    if (attachments.length === 0 || !projectId) return;
+    for (const a of attachments) {
+      await createDocumentAction({
+        type: "FILE",
+        title: a.fileName,
+        fileUrl: a.fileUrl,
+        fileName: a.fileName,
+        fileSize: a.fileSize ?? null,
         projectId,
       });
     }
@@ -506,10 +526,12 @@ export default function GlobalCreateProjectModal({
       } else {
         if (res.success && (res as any).project) {
           await persistDraftDocs((res as any).project.id);
+          await persistAttachments((res as any).project.id);
         }
         toast.success("Project created successfully");
         setIsOpen(false);
         setDraftDocs([]);
+        setAttachments([]);
         setActiveTab("project");
         setProjectTasks([]);
         setCustomFields([]);
@@ -567,13 +589,10 @@ export default function GlobalCreateProjectModal({
             if (isQuickClientOpen) e.preventDefault();
           }}
         >
-          <DialogTitle className="sr-only">
-            {activeTab === "doc" ? "Create Document" : "Create Project"}
-          </DialogTitle>
+          <DialogTitle className="sr-only">Create Project</DialogTitle>
           <ModalTabsHeader
             tabs={[
               { id: "project", label: "Project" },
-              { id: "doc", label: "Doc" },
             ]}
             activeTab={activeTab}
             onTabChange={(tab) => setActiveTab(tab as "project" | "doc")}
@@ -581,17 +600,16 @@ export default function GlobalCreateProjectModal({
               setActiveTab("project");
               setIsOpen(false);
             }}
-            rightSlot={activeTab === "project" ? (
+            rightSlot={
               <ProjectRulesHeaderControl
                 rules={rules}
                 attachedRuleIds={attachedRuleIds}
                 onAttachedRuleIdsChange={setAttachedRuleIds}
                 onCreateRule={() => setIsCreateRuleOpen(true)}
               />
-            ) : undefined}
-            className={activeTab === "doc" ? "border-b-0 dark:border-b-0" : undefined}
+            }
           />
-          {activeTab === "project" ? (
+          {(
             <>
           <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
             <form onSubmit={handleCreateProject} className="space-y-6 pb-6">
@@ -1125,6 +1143,13 @@ export default function GlobalCreateProjectModal({
 
 
 
+              {/* Attachments (upload to Cloudinary, saved as files on create) */}
+              <AttachmentsField
+                ref={attachRef}
+                attachments={attachments}
+                setAttachments={setAttachments}
+              />
+
               <DialogFooter className="pt-4 border-t mt-6 sticky bottom-0 bg-background pb-2 flex items-center justify-between">
                 <Button
                   type="button"
@@ -1134,7 +1159,15 @@ export default function GlobalCreateProjectModal({
                 >
                   Save as Template
                 </Button>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
+                  <button
+                    type="button"
+                    onClick={() => attachRef.current?.openFilePicker()}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer mr-1"
+                    title="Attach files"
+                  >
+                    <Paperclip size={18} />
+                  </button>
                   <Button
                     type="button"
                     variant="outline"
@@ -1150,8 +1183,6 @@ export default function GlobalCreateProjectModal({
             </form>
           </div>
             </>
-          ) : (
-            <ProjectDocumentComposer drafts={draftDocs} onDraftsChange={setDraftDocs} />
           )}
         </DialogContent>
       </Dialog>

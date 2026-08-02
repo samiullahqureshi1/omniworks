@@ -131,7 +131,9 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
   import { ProjectDescriptionEditor } from "@/components/ui/RichTextEditor";
   import { ProjectRulesHeaderControl } from "@/components/modals/ProjectRulesHeaderControl";
   import { ModalTabsHeader } from "@/components/ui/ModalTabsHeader";
-  import { DraftDocument, ProjectDocumentComposer } from "@/components/documents/DocumentsPanel";
+  import { DraftDocument } from "@/components/documents/DocumentsPanel";
+  import { AttachmentsField, AttachmentsFieldHandle } from "@/components/common/AttachmentsField";
+  import { AttachmentItem } from "@/components/common/CloudinaryAttachmentCard";
   import { createDocumentAction } from "@/app/actions/documents";
   import { getRulesAction, createRuleAction } from "@/app/actions/rules";
   import { getHiddenColumnsAction, setHiddenColumnsAction } from "@/app/actions/settings";
@@ -1259,6 +1261,19 @@ const [isPMOpen, setIsPMOpen] = useState(false);
         });
       }
     };
+
+    const persistAttachments = async (projectId: string) => {
+      for (const a of attachments) {
+        await createDocumentAction({
+          type: "FILE",
+          title: a.fileName,
+          fileUrl: a.fileUrl,
+          fileName: a.fileName,
+          fileSize: a.fileSize ?? null,
+          projectId,
+        });
+      }
+    };
     
     const [isEditMode, setIsEditMode] = useState(false);
     const [editProjectId, setEditProjectId] = useState<string | null>(null);
@@ -1381,8 +1396,8 @@ const [isPMOpen, setIsPMOpen] = useState(false);
     const [editingFieldName, setEditingFieldName] = useState("");
     const [editingFieldType, setEditingFieldType] = useState("");
     const [pinnedFieldNames, setPinnedFieldNames] = useState<string[]>([]);
-    const [attachments, setAttachments] = useState<string[]>([]);
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+    const attachRef = React.useRef<AttachmentsFieldHandle>(null);
     const [showAttachmentsView, setShowAttachmentsView] = useState(false);
     const [submitMode, setSubmitMode] = useState<"STANDARD" | "OPEN_NEW" | "DUPLICATE">("STANDARD");
     const formRef = React.useRef<HTMLFormElement>(null);
@@ -2266,6 +2281,9 @@ const [isPMOpen, setIsPMOpen] = useState(false);
           if (targetProjectId && draftDocs.length > 0) {
             await persistDraftDocs(targetProjectId);
           }
+          if (targetProjectId && attachments.length > 0) {
+            await persistAttachments(targetProjectId);
+          }
           toast.success(isEditMode ? "Project updated successfully" : "Project created successfully");
           if (submitMode === "STANDARD") {
             setIsCreateOpen(false);
@@ -3080,12 +3098,11 @@ const [isPMOpen, setIsPMOpen] = useState(false);
     }}
   >
             <DialogTitle className="sr-only">
-              {activeCreateTab === "doc" ? "Create Document" : isEditMode ? "Edit Project" : "Create Project"}
+              {isEditMode ? "Edit Project" : "Create Project"}
             </DialogTitle>
             <ModalTabsHeader
               tabs={[
                 { id: "project", label: "Project" },
-                { id: "doc", label: "Doc" },
               ]}
               activeTab={activeCreateTab}
               onTabChange={(tab) => setActiveCreateTab(tab as "project" | "doc")}
@@ -3094,17 +3111,16 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                 setIsEditMode(false);
                 setEditProjectId(null);
               }}
-              rightSlot={activeCreateTab === "project" ? (
+              rightSlot={
                 <ProjectRulesHeaderControl
                   rules={rules}
                   attachedRuleIds={attachedRuleIds}
                   onAttachedRuleIdsChange={setAttachedRuleIds}
                   onCreateRule={() => setIsCreateRuleOpen(true)}
                 />
-              ) : undefined}
-              className={activeCreateTab === "doc" ? "border-b-0 dark:border-b-0" : undefined}
+              }
             />
-            {activeCreateTab === "project" ? (
+            {(
               <form ref={formRef} onSubmit={handleCreateProject} noValidate className="flex flex-col flex-1 overflow-hidden">
                 <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar space-y-6">
 
@@ -4803,50 +4819,11 @@ const [isPMOpen, setIsPMOpen] = useState(false);
                 })()}
               </div>
 
-              {/* Attachments Section */}
-              {attachments.length > 0 && (
-                <div className="space-y-2 pt-4">
-                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Attachments</h3>
-                  <div className="border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden bg-background">
-                    {attachments.map((file, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02]">
-                        <div className="flex items-center gap-2">
-                          <Check className="h-4 w-4 text-emerald-500 shrink-0" />
-                          <span className="text-[13px] text-slate-700 dark:text-slate-300 font-medium truncate max-w-[400px]">
-                            {file}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}
-                          className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-                    <div 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="p-4 flex items-center justify-center border-dashed border-2 border-slate-100 dark:border-white/5 hover:bg-slate-50/50 dark:hover:bg-white/[0.02] cursor-pointer transition-colors"
-                    >
-                      <span className="text-xs text-slate-500 dark:text-slate-400">
-                        Drag and drop files to attach or <span className="underline font-medium text-slate-700 dark:text-slate-300">browse</span>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files) {
-                    const newFiles = Array.from(e.target.files).map(f => f.name);
-                    setAttachments(prev => [...prev, ...newFiles]);
-                  }
-                }}
-                multiple
+              {/* Attachments (upload to Cloudinary, saved as files on create/update) */}
+              <AttachmentsField
+                ref={attachRef}
+                attachments={attachments}
+                setAttachments={setAttachments}
               />
 
               {/* Edit Field Modal */}
@@ -4978,10 +4955,11 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 
               <div className="flex items-center gap-4">
                 {/* Attachment Icon */}
-                <button 
-                  type="button" 
-                  onClick={() => fileInputRef.current?.click()}
+                <button
+                  type="button"
+                  onClick={() => attachRef.current?.openFilePicker()}
                   className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
+                  title="Attach files"
                 >
                   <Paperclip size={18} />
                 </button>
@@ -5034,8 +5012,6 @@ const [isPMOpen, setIsPMOpen] = useState(false);
               </div>
             </div>
           </form>
-          ) : (
-            <ProjectDocumentComposer drafts={draftDocs} onDraftsChange={setDraftDocs} />
           )}
 
             {/* Quick Create Client Modal */}

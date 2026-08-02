@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 import { ModalTabsHeader } from "@/components/ui/ModalTabsHeader";
-import { DocumentsPanel, DraftDocument } from "@/components/documents/DocumentsPanel";
+import { DraftDocument } from "@/components/documents/DocumentsPanel";
 import CloudinaryAttachmentCard, { AttachmentItem } from "@/components/common/CloudinaryAttachmentCard";
 import { createDocumentAction } from "@/app/actions/documents";
 import { Badge } from "@/components/ui/badge";
@@ -767,7 +767,6 @@ console.log("Upload response:", data);
           <ModalTabsHeader
             tabs={[
               { id: "task", label: "Task" },
-              { id: "doc", label: "Doc" },
             ]}
             activeTab={activeTab}
             onTabChange={(id) => setActiveTab(id as "task" | "doc")}
@@ -787,19 +786,6 @@ console.log("Upload response:", data);
           />
 
           <div className={`flex-1 overflow-y-auto px-6 py-4 custom-scrollbar ${minimized ? "hidden" : ""}`}>
-          <div className={activeTab === "doc" ? "" : "hidden"}>
-            <DocumentsPanel
-              taskId={isEditing ? task.id : undefined}
-              entityLabel="task"
-              drafts={isEditing ? undefined : draftDocs}
-              onDraftsChange={isEditing ? undefined : setDraftDocs}
-            />
-            {!isEditing && (
-              <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">
-        Documents will be saved and attached when you create the task.
-              </p>
-            )}
-          </div>
           <div className={activeTab === "task" ? "" : "hidden"}>
             {(() => {
               const projectTotalHours = selectedProject?.totalAllocatedHours || 0;
