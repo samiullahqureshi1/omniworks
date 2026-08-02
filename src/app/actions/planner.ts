@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 import { revalidatePath } from 'next/cache';
 import { createCalendarMeetEvent } from '@/lib/google/calendar';
 import { renewGoogleMeetWorkspaceSubscription } from '@/lib/google/workspaceEvents';
@@ -23,6 +24,7 @@ export async function getPlannerMeetingsAction() {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
+    if (!can(session, 'MEETING_VIEW')) return { error: 'You do not have permission to view meetings.' };
 
     const { userId, organizationId, role } = session;
 
@@ -95,8 +97,8 @@ export async function createScheduledMeetingAction(input: CreateScheduledMeeting
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
-    if (session.role === 'CLIENT' || session.role === 'MEMBER') {
-      return { error: 'Only owners and project managers can schedule meetings.' };
+    if (!can(session, 'MEETING_CREATE')) {
+      return { error: 'You do not have permission to schedule meetings.' };
     }
 
     if (!input.startTime || !input.endTime) {
@@ -269,6 +271,7 @@ export async function rescheduleMeetingAction(
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
+    if (!can(session, 'MEETING_EDIT')) return { error: 'You do not have permission to reschedule meetings.' };
 
     const start = new Date(startTimeIso);
     const end = new Date(endTimeIso);
@@ -307,6 +310,7 @@ export async function postponeMeetingAction(meetingId: string, reason?: string) 
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
+    if (!can(session, 'MEETING_EDIT')) return { error: 'You do not have permission to postpone meetings.' };
 
     const existing = await prisma.meeting.findFirst({
       where: { id: meetingId, organizationId: session.organizationId },
@@ -349,6 +353,7 @@ export async function completeMeetingAction(meetingId: string) {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
+    if (!can(session, 'MEETING_EDIT')) return { error: 'You do not have permission to update meetings.' };
 
     const existing = await prisma.meeting.findFirst({
       where: { id: meetingId, organizationId: session.organizationId },
@@ -393,6 +398,7 @@ export async function deleteMeetingAction(meetingId: string) {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
+    if (!can(session, 'MEETING_DELETE')) return { error: 'You do not have permission to delete meetings.' };
 
     const existing = await prisma.meeting.findFirst({
       where: { id: meetingId, organizationId: session.organizationId },
@@ -432,6 +438,7 @@ export async function getPlannerEventsAction() {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
+    if (!can(session, 'EVENT_VIEW')) return { error: 'You do not have permission to view events.' };
     const { userId, organizationId, role } = session;
 
     let where: any = { organizationId };
@@ -484,7 +491,7 @@ export async function createPlannerEventAction(input: PlannerEventInput) {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
-    if (session.role === 'CLIENT' || session.role === 'MEMBER') return { error: 'Only owners and project managers can create events.' };
+    if (!can(session, 'EVENT_CREATE')) return { error: 'You do not have permission to create events.' };
     if (!input.title?.trim()) return { error: 'A title is required.' };
     if (!input.startDate) return { error: 'A start date is required.' };
 
@@ -590,7 +597,7 @@ export async function updatePlannerEventAction(id: string, input: Partial<Planne
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
-    if (session.role === 'CLIENT' || session.role === 'MEMBER') return { error: 'Only owners and project managers can edit events.' };
+    if (!can(session, 'EVENT_EDIT')) return { error: 'You do not have permission to edit events.' };
 
     const existing = await prisma.plannerEvent.findFirst({
       where: { id, organizationId: session.organizationId },
@@ -623,7 +630,7 @@ export async function deletePlannerEventAction(id: string) {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
-    if (session.role === 'CLIENT' || session.role === 'MEMBER') return { error: 'Only owners and project managers can delete events.' };
+    if (!can(session, 'EVENT_DELETE')) return { error: 'You do not have permission to delete events.' };
 
     const existing = await prisma.plannerEvent.findFirst({
       where: { id, organizationId: session.organizationId },
@@ -660,6 +667,7 @@ export async function getPlannerCalendarAction(fromIso: string, toIso: string, m
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
     if (session.role === 'CLIENT') return { error: 'Not available for clients.' };
+    if (!can(session, 'CALENDAR_VIEW')) return { error: 'You do not have permission to view the calendar.' };
 
     const { userId, organizationId, role } = session;
     const from = new Date(fromIso);
@@ -680,12 +688,23 @@ export async function getPlannerCalendarAction(fromIso: string, toIso: string, m
       ];
     }
 
+    // The calendar is only a VIEW LAYER. Each item type is gated by its OWN module
+    // permission — CALENDAR_VIEW merely unlocks the screen, it is not a master key.
+    //
+    // Tasks and Projects follow the same rule as their own modules: holding VIEW shows
+    // everything in the organization, and without it you still see the records you are
+    // involved with (taskWhere and the project filter below already apply that
+    // involvement scoping). Meetings and Events are hard-gated by their module VIEW.
+    const showMeetings = can(session, 'MEETING_VIEW');
+    const showEvents = can(session, 'EVENT_VIEW');
+    const showProjects = can(session, 'PROJECT_VIEW') || role !== 'MEMBER';
+
     const [tasks, meetings, projects, plannerEvents] = await Promise.all([
       prisma.task.findMany({
         where: taskWhere,
         include: { project: { select: { id: true, name: true } }, status: true },
       }),
-      prisma.meeting.findMany({
+      !showMeetings ? Promise.resolve([]) : prisma.meeting.findMany({
         where: {
           organizationId,
           startTime: { gte: from, lte: to },
@@ -698,7 +717,7 @@ export async function getPlannerCalendarAction(fromIso: string, toIso: string, m
         },
         include: { project: { select: { id: true, name: true } } },
       }),
-      showAll
+      showAll && showProjects
         ? prisma.project.findMany({
             where: {
               organizationId,
@@ -715,7 +734,7 @@ export async function getPlannerCalendarAction(fromIso: string, toIso: string, m
             include: { status: true },
           })
         : Promise.resolve([]),
-      prisma.plannerEvent.findMany({
+      !showEvents ? Promise.resolve([]) : prisma.plannerEvent.findMany({
         where: {
           organizationId,
           startDate: { gte: from, lte: to },
@@ -797,6 +816,15 @@ export async function rescheduleTaskAction(taskId: string, newDueDateIso: string
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
     if (session.role === 'CLIENT') return { error: 'Not allowed.' };
+    // Dragging a task on the calendar mutates the TASK, so it needs TASK_EDIT —
+    // CALENDAR_EDIT alone must not allow editing another module's records.
+    if (!can(session, 'TASK_EDIT') && session.role === 'MEMBER') {
+      const isManager = await prisma.project.findFirst({
+        where: { organizationId: session.organizationId, projectManagerId: session.userId, tasks: { some: { id: taskId } } },
+        select: { id: true },
+      });
+      if (!isManager) return { error: 'You do not have permission to reschedule this task.' };
+    }
 
     const task = await prisma.task.findFirst({
       where: { id: taskId, organizationId: session.organizationId },
@@ -829,6 +857,7 @@ export async function getRemindersAction(days = 14) {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
+    if (!can(session, 'REMINDER_VIEW')) return { error: 'You do not have permission to view reminders.' };
     const { userId, organizationId, role } = session;
 
     const now = new Date();

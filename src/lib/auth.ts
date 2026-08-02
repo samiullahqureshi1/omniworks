@@ -8,7 +8,23 @@ const JWT_SECRET = process.env.JWT_SECRET || 'omnitrack-super-secret-jwt-key-202
 const COOKIE_NAME = 'omnitrack_session';
 
 export type PermissionAction = 'view' | 'edit' | 'create' | 'delete';
-export type PermissionResource = 'project' | 'task' | 'planner' | 'user' | 'client';
+/**
+ * `planner` is retained for backwards compatibility with permission matrices saved
+ * before the Planner module was split into its six sub-modules (calendar, meeting,
+ * event, reminder, contact, availability). It is no longer written by the UI.
+ */
+export type PermissionResource =
+  | 'project'
+  | 'task'
+  | 'planner'
+  | 'calendar'
+  | 'meeting'
+  | 'event'
+  | 'reminder'
+  | 'contact'
+  | 'availability'
+  | 'user'
+  | 'client';
 export type Permissions = {
   [R in PermissionResource]?: { [A in PermissionAction]?: boolean };
 };
@@ -60,17 +76,24 @@ export async function createSession(user: {
     }),
   ]);
 
-  const sessionData: UserSession = {
+  // Identity only — permissions are deliberately NOT signed into the token.
+  // The database is the source of truth (see getSession) so permission changes
+  // take effect immediately, without the user having to log out and back in.
+  const tokenPayload = {
     userId: user.id,
     email: user.email,
     name: user.name,
     role: user.role,
     organizationId: user.organizationId,
     organizationName: org?.name || 'Workspace',
+  };
+
+  const sessionData: UserSession = {
+    ...tokenPayload,
     permissions: (dbUser?.permissions as Permissions) ?? undefined,
   };
 
-  const token = jwt.sign(sessionData, JWT_SECRET, { expiresIn: '7d' });
+  const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
 
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, token, {
@@ -92,7 +115,7 @@ export const getSession = cache(async (): Promise<UserSession | null> => {
     const token = cookieStore.get(COOKIE_NAME)?.value;
     if (!token) return null;
 
-    // JWT.verify is cryptographic — no DB call needed for the happy path.
+    // The JWT carries identity only; it is cryptographically verified here.
     const decoded = jwt.verify(token, JWT_SECRET) as UserSession;
 
     // Check for active organization override cookie (set when user switches org)
@@ -116,6 +139,32 @@ export const getSession = cache(async (): Promise<UserSession | null> => {
         decoded.organizationName = activeOrg.name;
       }
     }
+
+    // Authorization data ALWAYS comes from the database, never from the token, so
+    // that permission (and role) changes apply on the very next request. This whole
+    // function is wrapped in React cache(), so it costs at most one query per request.
+    //
+    // Resolve the membership row for the ACTIVE organization (User is unique on
+    // [email, organizationId], so this is exactly one membership). Fall back to the
+    // token's identity row for the child-org override path, where the user may not
+    // hold a separate membership record in that organization.
+    let dbUser = await prisma.user.findFirst({
+      where: { email: decoded.email, organizationId: decoded.organizationId },
+      select: { role: true, permissions: true },
+    });
+
+    if (!dbUser) {
+      dbUser = await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: { role: true, permissions: true },
+      });
+    }
+
+    // Identity no longer exists — treat as signed out.
+    if (!dbUser) return null;
+
+    decoded.role = dbUser.role as UserSession['role'];
+    decoded.permissions = (dbUser.permissions as Permissions) ?? undefined;
 
     return decoded;
   } catch {

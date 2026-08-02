@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 import { revalidatePath } from 'next/cache';
 
 /**
@@ -26,6 +27,7 @@ export async function getAvailabilitySettingsAction() {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
+    if (!can(session, 'AVAILABILITY_VIEW')) return { error: 'You do not have permission to view booking availability.' };
 
     const settings = await getOrCreateOrgSettings(session.organizationId, session.userId);
 
@@ -46,7 +48,7 @@ export async function disconnectGoogleAction() {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
-    if (session.role !== 'OWNER') return { error: 'Only owners can disconnect Google.' };
+    if (!can(session, 'AVAILABILITY_EDIT')) return { error: 'You do not have permission to change calendar settings.' };
 
     await getOrCreateOrgSettings(session.organizationId, session.userId);
     await prisma.organizationSettings.update({
@@ -75,8 +77,10 @@ export async function updateAvailabilitySettingsAction(input: UpdateAvailability
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
-    if (session.role !== 'OWNER') {
-      return { error: 'Only owners can change availability settings.' };
+    // AVAILABILITY_EDIT covers working hours, schedules, timezone, calendar and
+    // advanced settings. Owners always pass via the role bypass in `can`.
+    if (!can(session, 'AVAILABILITY_EDIT')) {
+      return { error: 'You do not have permission to change availability settings.' };
     }
 
     // Validation

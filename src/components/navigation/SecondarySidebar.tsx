@@ -250,9 +250,17 @@ export function SecondarySidebar({
       {/* Navigation Sections */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
         {sections.map((section, idx) => {
-          const visibleItems = section.items.filter(
-            item => !item.roles || item.roles.includes(user.role === 'MEMBER' && user.isPM ? 'PM' : user.role)
-          );
+          const visibleItems = section.items.filter(item => {
+            const effectiveRole = user.role === 'MEMBER' && user.isPM ? 'PM' : user.role;
+            if (!item.roles || item.roles.includes(effectiveRole)) return true;
+            // Owners/admins always pass; otherwise a granular VIEW permission can
+            // also unlock the item (e.g. a MEMBER holding USER_VIEW).
+            if (user.role === 'OWNER' || user.role === 'MASTER_ADMIN') return true;
+            if (item.permission) {
+              return user?.permissions?.[item.permission.resource]?.[item.permission.action] === true;
+            }
+            return false;
+          });
 
           if (visibleItems.length === 0) return null;
 

@@ -14,11 +14,31 @@ import { FormDialog, FormDialogCancelButton, FormDialogSubmitButton, FormRoleSel
 import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addUserAction, editUserAction, deactivateUserAction, activateUserAction, resetUserPasswordAction, deleteUserAction } from '@/app/actions/users';
-import { HiBriefcase, HiClipboardList, HiCalendar, HiUser, HiUserGroup } from 'react-icons/hi';
+import {
+  PermissionMatrix,
+  defaultPerms,
+  fullAccessPerms,
+  mergeStoredPerms,
+  viewOnlyPerms,
+  type PermissionState,
+} from '@/components/settings/PermissionMatrix';
 
 export default function UsersClient({ initialUsers, currentUser }: { initialUsers: any[], currentUser: any }) {
   const [users, setUsers] = useState(initialUsers);
   const [isPending, startTransition] = useTransition();
+
+  // ─── User module permissions (UI gating only — the server re-checks every action) ───
+  // OWNER / MASTER_ADMIN always pass; everyone else uses the granular matrix.
+  const canUser = (action: 'view' | 'create' | 'edit' | 'delete'): boolean => {
+    if (currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN') return true;
+    return currentUser?.permissions?.user?.[action] === true;
+  };
+  const canCreateUser = canUser('create');
+  const canEditUser = canUser('edit');
+  const canDeleteUser = canUser('delete');
+  // Only an existing OWNER / MASTER_ADMIN may hand out privileged roles.
+  const canAssignPrivilegedRole =
+    currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN';
 
   // Filter States
   const [roleFilter, setRoleFilter] = useState('All Roles');
@@ -36,76 +56,16 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
   const [deactivateUser, setDeactivateUser] = useState<any>(null);
   const [deleteUser, setDeleteUser] = useState<any>(null);
 
-  // Permissions state for edit modal
-  type PermAction = 'view' | 'edit' | 'create' | 'delete';
-  type PermResource = 'project' | 'task' | 'planner' | 'user' | 'client';
-  const PERM_RESOURCES: { key: PermResource; label: string; Icon: React.ElementType; color: string }[] = [
-    { key: 'project', label: 'Project', Icon: HiBriefcase,   color: 'text-violet-500' },
-    { key: 'task',    label: 'Task',    Icon: HiClipboardList, color: 'text-blue-500'   },
-    { key: 'planner', label: 'Planner', Icon: HiCalendar,    color: 'text-emerald-500' },
-    { key: 'user',    label: 'User',    Icon: HiUser,         color: 'text-amber-500'  },
-    { key: 'client',  label: 'Client',  Icon: HiUserGroup,   color: 'text-rose-500'   },
-  ];
-  const PERM_ACTIONS: PermAction[] = ['view', 'edit', 'create', 'delete'];
-  const defaultPerms = (): Record<PermResource, Record<PermAction, boolean>> => ({
-    project: { view: false, edit: false, create: false, delete: false },
-    task:    { view: false, edit: false, create: false, delete: false },
-    planner: { view: false, edit: false, create: false, delete: false },
-    user:    { view: false, edit: false, create: false, delete: false },
-    client:  { view: false, edit: false, create: false, delete: false },
-  });
-  // Edit modal permissions
-  const [permissions, setPermissions] = useState<Record<PermResource, Record<PermAction, boolean>>>(defaultPerms());
-
-  const togglePerm = (resource: PermResource, action: PermAction) => {
-    setPermissions(prev => ({
-      ...prev,
-      [resource]: { ...prev[resource], [action]: !prev[resource][action] },
-    }));
-  };
-
-  const toggleAllForResource = (resource: PermResource) => {
-    const allOn = PERM_ACTIONS.every(a => permissions[resource][a]);
-    setPermissions(prev => ({
-      ...prev,
-      [resource]: Object.fromEntries(PERM_ACTIONS.map(a => [a, !allOn])) as Record<PermAction, boolean>,
-    }));
-  };
-
-  // Add modal permissions (separate state)
-  const [addPermissions, setAddPermissions] = useState<Record<PermResource, Record<PermAction, boolean>>>(defaultPerms());
-
-  const toggleAddPerm = (resource: PermResource, action: PermAction) => {
-    setAddPermissions(prev => ({
-      ...prev,
-      [resource]: { ...prev[resource], [action]: !prev[resource][action] },
-    }));
-  };
-
-  const toggleAllForAddResource = (resource: PermResource) => {
-    const allOn = PERM_ACTIONS.every(a => addPermissions[resource][a]);
-    setAddPermissions(prev => ({
-      ...prev,
-      [resource]: Object.fromEntries(PERM_ACTIONS.map(a => [a, !allOn])) as Record<PermAction, boolean>,
-    }));
-  };
+  // Permission matrix state. Shape, presets, dependency rules and the grid itself
+  // live in the shared PermissionMatrix component so the Add and Edit modals stay
+  // in sync as modules are added (Project, Task, Planner sub-modules, User, Client).
+  const [permissions, setPermissions] = useState<PermissionState>(defaultPerms());
+  const [addPermissions, setAddPermissions] = useState<PermissionState>(defaultPerms());
 
   const openEditUser = (u: any) => {
     setEditUser(u);
     setEditTab('details');
-    const merged = defaultPerms();
-    if (u.permissions && typeof u.permissions === 'object') {
-      for (const res of PERM_RESOURCES) {
-        if (u.permissions[res.key]) {
-          for (const act of PERM_ACTIONS) {
-            if (typeof u.permissions[res.key][act] === 'boolean') {
-              merged[res.key][act] = u.permissions[res.key][act];
-            }
-          }
-        }
-      }
-    }
-    setPermissions(merged);
+    setPermissions(mergeStoredPerms(u.permissions));
   };
 
   const searchParams = useSearchParams();
@@ -402,9 +362,11 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
                 className="hidden" 
                 accept=".csv" 
               />
-              <button 
+              <button
                 onClick={() => setIsAddModalOpen(true)}
-                className="flex items-center gap-2 h-9 px-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-l-[8px] text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors border-r border-white/20 dark:border-black/20"
+                disabled={!canCreateUser}
+                title={canCreateUser ? undefined : 'You do not have permission to perform this action'}
+                className="flex items-center gap-2 h-9 px-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-l-[8px] text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors border-r border-white/20 dark:border-black/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-900 dark:disabled:hover:bg-white"
               >
                 <UserPlus size={14} /> New User
               </button>
@@ -486,7 +448,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
                     {new Date(u.createdAt).toLocaleDateString()}
                   </TableCell>
                   <TableCell className="text-right">
-                    {u.id !== currentUser.id && (
+                    {u.id !== currentUser.id && (canEditUser || canDeleteUser) && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
@@ -494,27 +456,37 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onClick={() => openEditUser(u)} className="cursor-pointer">
-                            <Pencil className="mr-2 h-4 w-4 text-muted-foreground" /> Edit User
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setResetUser(u)} className="cursor-pointer">
-                            <Key className="mr-2 h-4 w-4 text-muted-foreground" /> Reset Password
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {u.status === 'ACTIVE' ? (
-                            <DropdownMenuItem onClick={() => setDeactivateUser(u)} className="text-destructive focus:text-destructive cursor-pointer">
-                              <UserX className="mr-2 h-4 w-4" /> Deactivate User
-                            </DropdownMenuItem>
-                          ) : (
-                            <DropdownMenuItem onClick={() => handleToggleStatus(u)} className="text-emerald-600 dark:text-emerald-400 focus:text-emerald-600 dark:focus:text-emerald-400 cursor-pointer">
-                              <UserCheck className="mr-2 h-4 w-4" /> Reactivate User
-                            </DropdownMenuItem>
+                          {canEditUser && (
+                            <>
+                              <DropdownMenuItem onClick={() => openEditUser(u)} className="cursor-pointer">
+                                <Pencil className="mr-2 h-4 w-4 text-muted-foreground" /> Edit User
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setResetUser(u)} className="cursor-pointer">
+                                <Key className="mr-2 h-4 w-4 text-muted-foreground" /> Reset Password
+                              </DropdownMenuItem>
+                            </>
                           )}
-                          {u.role !== 'OWNER' && (
+                          {canDeleteUser && u.status === 'ACTIVE' && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => setDeactivateUser(u)} className="text-destructive focus:text-destructive cursor-pointer">
+                                <UserX className="mr-2 h-4 w-4" /> Deactivate User
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          {canEditUser && u.status !== 'ACTIVE' && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => handleToggleStatus(u)} className="text-emerald-600 dark:text-emerald-400 focus:text-emerald-600 dark:focus:text-emerald-400 cursor-pointer">
+                                <UserCheck className="mr-2 h-4 w-4" /> Reactivate User
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          {canDeleteUser && u.role !== 'OWNER' && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => setDeleteUser(u)} className="text-destructive focus:text-destructive cursor-pointer">
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete User
+                                <Trash2 className="mr-2 h-4 w-4" /> Remove User
                               </DropdownMenuItem>
                             </>
                           )}
@@ -603,7 +575,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
               <label htmlFor="add-user-email" className={formFieldLabel}>Email Address</label>
               <Input id="add-user-email" name="email" type="email" required placeholder="e.g. john@example.com" className={formInputClass} />
             </div>
-            <FormRoleSelect id="add-user-role" />
+            <FormRoleSelect id="add-user-role" allowPrivilegedRoles={canAssignPrivilegedRole} />
           </div>
 
           {/* ── Permissions Tab ── */}
@@ -612,73 +584,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
               Control what this user can do across each module.
             </p>
 
-            {/* Column headers */}
-            <div className="grid grid-cols-[1fr_repeat(4,48px)] gap-x-1 mb-2 pr-1">
-              <div />
-              {PERM_ACTIONS.map(action => (
-                <div key={action} className="text-center text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  {action.charAt(0).toUpperCase() + action.slice(1)}
-                </div>
-              ))}
-            </div>
-
-            {/* Permission rows */}
-            <div className="space-y-1">
-              {PERM_RESOURCES.map(({ key, label, Icon, color }) => {
-                const allOn = PERM_ACTIONS.every(a => addPermissions[key][a]);
-                const someOn = PERM_ACTIONS.some(a => addPermissions[key][a]);
-                return (
-                  <div
-                    key={key}
-                    className={`grid grid-cols-[1fr_repeat(4,48px)] gap-x-1 items-center rounded-[8px] px-3 py-2.5 transition-colors ${
-                      someOn
-                        ? 'bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10'
-                        : 'border border-transparent hover:bg-slate-50/60 dark:hover:bg-white/[0.02]'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => toggleAllForAddResource(key)}
-                      className="flex items-center gap-2.5 text-left group"
-                    >
-                      <span
-                        className={`flex items-center justify-center w-5 h-5 rounded-[4px] border-2 transition-all flex-shrink-0 ${
-                          allOn
-                            ? 'bg-slate-900 dark:bg-white border-slate-900 dark:border-white'
-                            : someOn
-                            ? 'bg-slate-300 dark:bg-slate-600 border-slate-300 dark:border-slate-600'
-                            : 'border-slate-300 dark:border-white/20 group-hover:border-slate-400'
-                        }`}
-                      >
-                        {(allOn || someOn) && <CheckIcon size={11} className={allOn ? 'text-white dark:text-slate-900' : 'text-white'} strokeWidth={3} />}
-                      </span>
-                      <span className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-700 dark:text-slate-200">
-                        <Icon className={`text-[15px] ${color}`} />
-                        {label}
-                      </span>
-                    </button>
-
-                    {PERM_ACTIONS.map(action => (
-                      <div key={action} className="flex items-center justify-center">
-                        <button
-                          type="button"
-                          onClick={() => toggleAddPerm(key, action)}
-                          className={`w-5 h-5 rounded-[4px] border-2 flex items-center justify-center transition-all ${
-                            addPermissions[key][action]
-                              ? 'bg-slate-900 dark:bg-white border-slate-900 dark:border-white'
-                              : 'border-slate-300 dark:border-white/20 hover:border-slate-500 dark:hover:border-white/40'
-                          }`}
-                        >
-                          {addPermissions[key][action] && (
-                            <CheckIcon size={11} className="text-white dark:text-slate-900" strokeWidth={3} />
-                          )}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
+            <PermissionMatrix value={addPermissions} onChange={setAddPermissions} />
 
             {/* Quick preset buttons */}
             <div className="flex items-center gap-2 mt-5 pt-4 border-t border-slate-100 dark:border-white/5">
@@ -692,26 +598,14 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
               </button>
               <button
                 type="button"
-                onClick={() => setAddPermissions({
-                  project: { view: true, edit: false, create: false, delete: false },
-                  task:    { view: true, edit: false, create: false, delete: false },
-                  planner: { view: true, edit: false, create: false, delete: false },
-                  user:    { view: true, edit: false, create: false, delete: false },
-                  client:  { view: true, edit: false, create: false, delete: false },
-                })}
+                onClick={() => setAddPermissions(viewOnlyPerms())}
                 className="text-[11.5px] px-2.5 py-1 rounded-[6px] border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors font-medium"
               >
                 View Only
               </button>
               <button
                 type="button"
-                onClick={() => setAddPermissions({
-                  project: { view: true, edit: true, create: true, delete: true },
-                  task:    { view: true, edit: true, create: true, delete: true },
-                  planner: { view: true, edit: true, create: true, delete: true },
-                  user:    { view: true, edit: true, create: true, delete: true },
-                  client:  { view: true, edit: true, create: true, delete: true },
-                })}
+                onClick={() => setAddPermissions(fullAccessPerms())}
                 className="text-[11.5px] px-2.5 py-1 rounded-[6px] border border-slate-900 dark:border-white bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors font-bold"
               >
                 Full Access
@@ -810,7 +704,10 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
                     className="flex h-[42px] w-full rounded-[8px] border border-slate-200 dark:border-white/10 bg-transparent px-3 text-[15px] text-slate-900 dark:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-700 dark:focus-visible:ring-slate-300"
                   >
                     <option value="MEMBER">Member</option>
-                    <option value="OWNER">Owner</option>
+                    {/* Only an existing owner/admin may grant OWNER (server re-checks). */}
+                    {(canAssignPrivilegedRole || editUser.role === 'OWNER') && (
+                      <option value="OWNER">Owner</option>
+                    )}
                   </select>
                 </div>
                 <div className="space-y-1.5">
@@ -835,75 +732,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
                 Control what this user can do across each module.
               </p>
 
-              {/* Column headers */}
-              <div className="grid grid-cols-[1fr_repeat(4,48px)] gap-x-1 mb-2 pr-1">
-                <div />
-                {PERM_ACTIONS.map(action => (
-                  <div key={action} className="text-center text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                    {action.charAt(0).toUpperCase() + action.slice(1)}
-                  </div>
-                ))}
-              </div>
-
-              {/* Permission rows */}
-              <div className="space-y-1">
-                {PERM_RESOURCES.map(({ key, label, Icon, color }) => {
-                  const allOn = PERM_ACTIONS.every(a => permissions[key][a]);
-                  const someOn = PERM_ACTIONS.some(a => permissions[key][a]);
-                  return (
-                    <div
-                      key={key}
-                      className={`grid grid-cols-[1fr_repeat(4,48px)] gap-x-1 items-center rounded-[8px] px-3 py-2.5 transition-colors ${
-                        someOn
-                          ? 'bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10'
-                          : 'border border-transparent hover:bg-slate-50/60 dark:hover:bg-white/[0.02]'
-                      }`}
-                    >
-                      {/* Resource label with select-all toggle */}
-                      <button
-                        type="button"
-                        onClick={() => toggleAllForResource(key)}
-                        className="flex items-center gap-2.5 text-left group"
-                      >
-                        <span
-                          className={`flex items-center justify-center w-5 h-5 rounded-[4px] border-2 transition-all flex-shrink-0 ${
-                            allOn
-                              ? 'bg-slate-900 dark:bg-white border-slate-900 dark:border-white'
-                              : someOn
-                              ? 'bg-slate-300 dark:bg-slate-600 border-slate-300 dark:border-slate-600'
-                              : 'border-slate-300 dark:border-white/20 group-hover:border-slate-400'
-                          }`}
-                        >
-                          {(allOn || someOn) && <CheckIcon size={11} className={allOn ? 'text-white dark:text-slate-900' : 'text-white'} strokeWidth={3} />}
-                        </span>
-                        <span className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-700 dark:text-slate-200">
-                          <Icon className={`text-[15px] ${color}`} />
-                          {label}
-                        </span>
-                      </button>
-
-                      {/* Individual action checkboxes */}
-                      {PERM_ACTIONS.map(action => (
-                        <div key={action} className="flex items-center justify-center">
-                          <button
-                            type="button"
-                            onClick={() => togglePerm(key, action)}
-                            className={`w-5 h-5 rounded-[4px] border-2 flex items-center justify-center transition-all ${
-                              permissions[key][action]
-                                ? 'bg-slate-900 dark:bg-white border-slate-900 dark:border-white'
-                                : 'border-slate-300 dark:border-white/20 hover:border-slate-500 dark:hover:border-white/40'
-                            }`}
-                          >
-                            {permissions[key][action] && (
-                              <CheckIcon size={11} className="text-white dark:text-slate-900" strokeWidth={3} />
-                            )}
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
+                <PermissionMatrix value={permissions} onChange={setPermissions} />
 
               {/* Quick preset buttons */}
               <div className="flex items-center gap-2 mt-5 pt-4 border-t border-slate-100 dark:border-white/5">
@@ -917,26 +746,14 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPermissions({
-                    project: { view: true, edit: false, create: false, delete: false },
-                    task:    { view: true, edit: false, create: false, delete: false },
-                    planner: { view: true, edit: false, create: false, delete: false },
-                    user:    { view: true, edit: false, create: false, delete: false },
-                    client:  { view: true, edit: false, create: false, delete: false },
-                  })}
+                  onClick={() => setPermissions(viewOnlyPerms())}
                   className="text-[11.5px] px-2.5 py-1 rounded-[6px] border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors font-medium"
                 >
                   View Only
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPermissions({
-                    project: { view: true, edit: true, create: true, delete: true },
-                    task:    { view: true, edit: true, create: true, delete: true },
-                    planner: { view: true, edit: true, create: true, delete: true },
-                    user:    { view: true, edit: true, create: true, delete: true },
-                    client:  { view: true, edit: true, create: true, delete: true },
-                  })}
+                  onClick={() => setPermissions(fullAccessPerms())}
                   className="text-[11.5px] px-2.5 py-1 rounded-[6px] border border-slate-900 dark:border-white bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors font-bold"
                 >
                   Full Access

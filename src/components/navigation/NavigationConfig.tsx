@@ -47,6 +47,14 @@ export interface SecondaryNavItem {
   exact?: boolean;
   roles?: string[];
   comingSoon?: boolean;
+  /**
+   * Granular permission that also unlocks this item, in addition to `roles`.
+   * Lets a MEMBER with e.g. USER_VIEW reach the Users screen without being an OWNER.
+   */
+  permission?: {
+    resource: 'project' | 'task' | 'user' | 'client' | 'calendar' | 'meeting' | 'event' | 'reminder' | 'contact' | 'availability';
+    action: 'view';
+  };
 }
 
 export interface SecondarySection {
@@ -76,8 +84,8 @@ export const secondaryNavigation: Record<string, SecondarySection[]> = {
         { name: 'Projects', href: '/workspace/projects', icon: FolderKanban, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
         { name: 'Tasks', href: '/workspace/tasks', icon: CheckSquare, exact: false, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
         { name: 'Timesheet & Reports', href: '/workspace/time', icon: Timer, exact: false, roles: ['OWNER', 'PM', 'MEMBER'] },
-        { name: 'Users', href: '/workspace/users', icon: UsersIcon, exact: false, roles: ['OWNER'] },
-        { name: 'Clients', href: '/workspace/clients', icon: Briefcase, exact: false, roles: ['OWNER'] },
+        { name: 'Users', href: '/workspace/users', icon: UsersIcon, exact: false, roles: ['OWNER'], permission: { resource: 'user', action: 'view' } },
+        { name: 'Clients', href: '/workspace/clients', icon: Briefcase, exact: false, roles: ['OWNER'], permission: { resource: 'client', action: 'view' } },
       ],
     },
   ],
@@ -113,7 +121,7 @@ export const secondaryNavigation: Record<string, SecondarySection[]> = {
         { name: 'Team Overview', href: '/workspace/teamops?tab=dashboard', icon: LayoutDashboard, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
         { name: 'All Internal Projects', href: '/workspace/teamops?tab=projects', icon: FolderKanban, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
         { name: 'Templates', href: '/workspace/teamops?tab=templates', icon: FileText, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
-        { name: 'Members', href: '/workspace/users', icon: UsersIcon, exact: false, roles: ['OWNER'] },
+        { name: 'Members', href: '/workspace/users', icon: UsersIcon, exact: false, roles: ['OWNER'], permission: { resource: 'user', action: 'view' } },
       ],
     },
   ],
@@ -121,17 +129,17 @@ export const secondaryNavigation: Record<string, SecondarySection[]> = {
     {
       title: 'Planner',
       items: [
-        { name: 'My Calendar', href: '/workspace/planner/calendar', icon: Calendar, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
-        { name: 'Meetings', href: '/workspace/planner/meetings', icon: Video, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
-        { name: 'Events', href: '/workspace/planner/events', icon: Sparkles, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
-        { name: 'Reminders', href: '/workspace/planner/reminders', icon: Timer, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
-        { name: 'Contacts', href: '/workspace/planner/contacts', icon: UsersIcon, exact: true, roles: ['OWNER', 'PM'] },
+        { name: 'My Calendar', href: '/workspace/planner/calendar', icon: Calendar, exact: true, roles: ['OWNER', 'PM', 'MEMBER'], permission: { resource: 'calendar', action: 'view' } },
+        { name: 'Meetings', href: '/workspace/planner/meetings', icon: Video, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'], permission: { resource: 'meeting', action: 'view' } },
+        { name: 'Events', href: '/workspace/planner/events', icon: Sparkles, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'], permission: { resource: 'event', action: 'view' } },
+        { name: 'Reminders', href: '/workspace/planner/reminders', icon: Timer, exact: true, roles: ['OWNER', 'PM', 'MEMBER'], permission: { resource: 'reminder', action: 'view' } },
+        { name: 'Contacts', href: '/workspace/planner/contacts', icon: UsersIcon, exact: true, roles: ['OWNER', 'PM'], permission: { resource: 'contact', action: 'view' } },
       ],
     },
     {
       title: 'Configuration',
       items: [
-        { name: 'Booking Availability', href: '/workspace/planner/settings', icon: Settings, exact: true, roles: ['OWNER'] },
+        { name: 'Booking Availability', href: '/workspace/planner/settings', icon: Settings, exact: true, roles: ['OWNER'], permission: { resource: 'availability', action: 'view' } },
       ],
     },
   ],
@@ -139,17 +147,17 @@ export const secondaryNavigation: Record<string, SecondarySection[]> = {
     {
       title: 'Planner',
       items: [
-        { name: 'My Calendar', href: '/workspace/planner/calendar', icon: Calendar, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
-        { name: 'Meetings', href: '/workspace/planner/meetings', icon: Video, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
-        { name: 'Events', href: '/workspace/planner/events', icon: Sparkles, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'] },
-        { name: 'Reminders', href: '/workspace/planner/reminders', icon: Timer, exact: true, roles: ['OWNER', 'PM', 'MEMBER'] },
-        { name: 'Contacts', href: '/workspace/planner/contacts', icon: UsersIcon, exact: true, roles: ['OWNER', 'PM'] },
+        { name: 'My Calendar', href: '/workspace/planner/calendar', icon: Calendar, exact: true, roles: ['OWNER', 'PM', 'MEMBER'], permission: { resource: 'calendar', action: 'view' } },
+        { name: 'Meetings', href: '/workspace/planner/meetings', icon: Video, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'], permission: { resource: 'meeting', action: 'view' } },
+        { name: 'Events', href: '/workspace/planner/events', icon: Sparkles, exact: true, roles: ['OWNER', 'PM', 'MEMBER', 'CLIENT'], permission: { resource: 'event', action: 'view' } },
+        { name: 'Reminders', href: '/workspace/planner/reminders', icon: Timer, exact: true, roles: ['OWNER', 'PM', 'MEMBER'], permission: { resource: 'reminder', action: 'view' } },
+        { name: 'Contacts', href: '/workspace/planner/contacts', icon: UsersIcon, exact: true, roles: ['OWNER', 'PM'], permission: { resource: 'contact', action: 'view' } },
       ],
     },
     {
       title: 'Configuration',
       items: [
-        { name: 'Booking Availability', href: '/workspace/planner/settings', icon: Settings, exact: true, roles: ['OWNER'] },
+        { name: 'Booking Availability', href: '/workspace/planner/settings', icon: Settings, exact: true, roles: ['OWNER'], permission: { resource: 'availability', action: 'view' } },
       ],
     },
   ],

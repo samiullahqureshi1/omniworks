@@ -18,6 +18,16 @@ export default function ClientsClient({ initialUsers, currentUser }: { initialUs
   const [users, setUsers] = useState(initialUsers);
   const [isPending, startTransition] = useTransition();
 
+  // ─── Client module permissions (UI gating only — the server re-checks every action) ───
+  // OWNER / MASTER_ADMIN always pass; everyone else uses the granular matrix.
+  const can = (action: 'view' | 'create' | 'edit' | 'delete'): boolean => {
+    if (currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN') return true;
+    return currentUser?.permissions?.client?.[action] === true;
+  };
+  const canCreateClient = can('create');
+  const canEditClient = can('edit');
+  const canDeleteClient = can('delete');
+
   // Filters
   const [statusFilter, setStatusFilter] = useState('All Statuses');
   const [startDateFilter, setStartDateFilter] = useState('');
@@ -386,9 +396,11 @@ export default function ClientsClient({ initialUsers, currentUser }: { initialUs
                 className="hidden" 
                 accept=".csv" 
               />
-              <button 
+              <button
                 onClick={() => setIsAddModalOpen(true)}
-                className="flex items-center gap-2 h-9 px-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-l-[8px] text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors border-r border-white/20 dark:border-black/20"
+                disabled={!canCreateClient}
+                title={canCreateClient ? undefined : 'You do not have permission to perform this action'}
+                className="flex items-center gap-2 h-9 px-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-l-[8px] text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors border-r border-white/20 dark:border-black/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-900 dark:disabled:hover:bg-white"
               >
                 <UserPlus size={14} /> New Client
               </button>
@@ -469,7 +481,7 @@ export default function ClientsClient({ initialUsers, currentUser }: { initialUs
                     {new Date(u.createdAt).toLocaleDateString()}
                   </TableCell>
                   <TableCell className="text-right">
-                    {u.id !== currentUser.id && (
+                    {u.id !== currentUser.id && (canEditClient || canDeleteClient) && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
@@ -477,26 +489,34 @@ export default function ClientsClient({ initialUsers, currentUser }: { initialUs
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onClick={() => setEditUser(u)} className="cursor-pointer">
-                            <Pencil className="mr-2 h-4 w-4 text-muted-foreground" /> Edit Client
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setResetUser(u)} className="cursor-pointer">
-                            <Key className="mr-2 h-4 w-4 text-muted-foreground" /> Reset Password
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {u.status === 'ACTIVE' ? (
-                            <DropdownMenuItem onClick={() => setDeactivateUser(u)} className="text-destructive focus:text-destructive cursor-pointer">
-                              <UserX className="mr-2 h-4 w-4" /> Deactivate Client
-                            </DropdownMenuItem>
-                          ) : (
-                            <DropdownMenuItem onClick={() => handleToggleStatus(u)} className="text-emerald-600 dark:text-emerald-400 focus:text-emerald-600 dark:focus:text-emerald-400 cursor-pointer">
-                              <UserCheck className="mr-2 h-4 w-4" /> Reactivate Client
-                            </DropdownMenuItem>
+                          {canEditClient && (
+                            <>
+                              <DropdownMenuItem onClick={() => setEditUser(u)} className="cursor-pointer">
+                                <Pencil className="mr-2 h-4 w-4 text-muted-foreground" /> Edit Client
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setResetUser(u)} className="cursor-pointer">
+                                <Key className="mr-2 h-4 w-4 text-muted-foreground" /> Reset Password
+                              </DropdownMenuItem>
+                            </>
                           )}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => setDeleteUser(u)} className="text-destructive focus:text-destructive cursor-pointer">
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete Client
-                          </DropdownMenuItem>
+                          {canDeleteClient && (
+                            <>
+                              <DropdownMenuSeparator />
+                              {u.status === 'ACTIVE' ? (
+                                <DropdownMenuItem onClick={() => setDeactivateUser(u)} className="text-destructive focus:text-destructive cursor-pointer">
+                                  <UserX className="mr-2 h-4 w-4" /> Deactivate Client
+                                </DropdownMenuItem>
+                              ) : canEditClient ? (
+                                <DropdownMenuItem onClick={() => handleToggleStatus(u)} className="text-emerald-600 dark:text-emerald-400 focus:text-emerald-600 dark:focus:text-emerald-400 cursor-pointer">
+                                  <UserCheck className="mr-2 h-4 w-4" /> Reactivate Client
+                                </DropdownMenuItem>
+                              ) : null}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => setDeleteUser(u)} className="text-destructive focus:text-destructive cursor-pointer">
+                                <Trash2 className="mr-2 h-4 w-4" /> Remove Client
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}

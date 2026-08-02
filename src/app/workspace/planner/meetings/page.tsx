@@ -1,6 +1,7 @@
 import React from 'react';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 import { prisma } from '@/lib/db';
 import { getPlannerMeetingsAction } from '@/app/actions/planner';
 import MeetingsClient from './MeetingsClient';
@@ -8,6 +9,8 @@ import MeetingsClient from './MeetingsClient';
 export default async function MeetingsPage() {
   const session = await getSession();
   if (!session) redirect('/login');
+  // Direct URL access requires the module's VIEW permission.
+  if (!can(session, 'MEETING_VIEW')) redirect('/workspace');
 
   const res = await getPlannerMeetingsAction();
   if (!res.success) {

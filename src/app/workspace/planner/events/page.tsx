@@ -1,6 +1,7 @@
 import React from 'react';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 import { prisma } from '@/lib/db';
 import { getPlannerEventsAction } from '@/app/actions/planner';
 import EventsClient from './EventsClient';
@@ -8,6 +9,8 @@ import EventsClient from './EventsClient';
 export default async function EventsPage() {
   const session = await getSession();
   if (!session) redirect('/login');
+  // Direct URL access requires the module's VIEW permission.
+  if (!can(session, 'EVENT_VIEW')) redirect('/workspace');
 
   const res = await getPlannerEventsAction();
   if (!res.success) {

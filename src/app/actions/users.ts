@@ -4,6 +4,15 @@ import nodemailer from 'nodemailer';
 
 import { prisma } from '@/lib/db';
 import { getSession, hashPassword } from '@/lib/auth';
+import {
+  assertCanAssignRole,
+  assertNotLastOwner,
+  can,
+  membershipPermissionKey,
+  requireMembershipAccess,
+  requireMembershipCreate,
+  toErrorResponse,
+} from '@/lib/permissions';
 import { revalidatePath } from 'next/cache';
 
 // Fetch all users for the organization
@@ -14,9 +23,25 @@ export async function getUsersAction() {
       return { error: 'Unauthorized' };
     }
 
+    // This action backs BOTH the Users page and the Clients page, so it returns only
+    // the modules the caller may view: USER_VIEW covers non-client memberships,
+    // CLIENT_VIEW covers client memberships. No permission on either → empty list.
+    const canViewUsers = can(session, 'USER_VIEW');
+    const canViewClients = can(session, 'CLIENT_VIEW');
+
+    if (!canViewUsers && !canViewClients) {
+      return { success: true, users: [] };
+    }
+
+    const roleScope = canViewUsers && canViewClients
+      ? {}
+      : canViewClients
+        ? { role: 'CLIENT' as const }
+        : { NOT: { role: 'CLIENT' as const } };
+
     // Strictly scoped by current user's organizationId
     const users = await prisma.user.findMany({
-      where: { organizationId: session.organizationId },
+      where: { organizationId: session.organizationId, ...roleScope },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -39,11 +64,6 @@ export async function getUsersAction() {
 // Add a new user directly
 export async function addUserAction(formData: FormData) {
   try {
-    const session = await getSession();
-    if (!session || session.role !== 'OWNER') {
-      return { error: 'Unauthorized: Only owners can add users.' };
-    }
-
     const name = formData.get('name') as string;
     const email = formData.get('email') as string;
     const roleString = formData.get('role') as string;
@@ -59,6 +79,13 @@ export async function addUserAction(formData: FormData) {
     }
 
     const role = roleString as 'OWNER' | 'MEMBER' | 'CLIENT';
+
+    // The requested role selects the module: CLIENT_CREATE for clients, USER_CREATE
+    // for everyone else. Also blocks a non-owner from minting an OWNER/MASTER_ADMIN.
+    // The membership is always created in the caller's session organization — the
+    // organizationId is never taken from the request.
+    const session = await requireMembershipCreate(role);
+
     let parsedPermissions: any = undefined;
     if (permissionsString) {
       try { parsedPermissions = JSON.parse(permissionsString); } catch {}
@@ -203,20 +230,22 @@ export async function addUserAction(formData: FormData) {
     }
 
     revalidatePath('/workspace/users');
+    revalidatePath('/workspace/clients');
     return { success: true, message: 'User added successfully. An email with credentials has been sent.' };
   } catch (error: any) {
     console.error('Add user error:', error);
-    return { error: error.message || 'Failed to add user.' };
+    const mapped = toErrorResponse(error);
+    if (mapped.status !== 500) return { error: mapped.error };
+    return { error: 'Failed to add user.' };
   }
 }
 
 // Edit an existing user
 export async function editUserAction(id: string, formData: FormData) {
   try {
-    const session = await getSession();
-    if (!session || session.role !== 'OWNER') {
-      return { error: 'Unauthorized: Only owners can edit users.' };
-    }
+    // USER_EDIT for members, CLIENT_EDIT for clients — resolved from the TARGET's role.
+    // Also guarantees the membership belongs to the caller's organization (404 otherwise).
+    const { session, target: targetUser } = await requireMembershipAccess(id, 'EDIT');
 
     const name = formData.get('name') as string;
     const email = formData.get('email') as string;
@@ -226,15 +255,6 @@ export async function editUserAction(id: string, formData: FormData) {
 
     if (!name || !email || !roleString || !statusString) {
       return { error: 'All fields are required.' };
-    }
-
-    // Verify user belongs to same org
-    const targetUser = await prisma.user.findFirst({
-      where: { id, organizationId: session.organizationId }
-    });
-
-    if (!targetUser) {
-      return { error: 'User not found in your organization.' };
     }
 
     // Check if changing email and if new email is already taken
@@ -247,13 +267,32 @@ export async function editUserAction(id: string, formData: FormData) {
 
     const role = roleString as 'OWNER' | 'MEMBER' | 'CLIENT';
     const status = statusString as 'ACTIVE' | 'INACTIVE';
+
+    // Privilege escalation guard: only OWNER/MASTER_ADMIN may grant a privileged role.
+    assertCanAssignRole(session, role);
+
+    // Moving a record between the User and Client modules requires permission on the
+    // destination module too, otherwise CLIENT_EDIT could be used to mint a MEMBER.
+    if (role !== targetUser.role) {
+      const destinationKey = membershipPermissionKey(role, 'EDIT');
+      if (!can(session, destinationKey)) {
+        return { error: 'You do not have permission to change this user to that role.' };
+      }
+    }
+
+    // The final owner must not be demoted or deactivated.
+    if (targetUser.role === 'OWNER' && (role !== 'OWNER' || status === 'INACTIVE')) {
+      await assertNotLastOwner(session.organizationId, targetUser);
+    }
+
     let parsedPermissions: any = undefined;
     if (permissionsString) {
       try { parsedPermissions = JSON.parse(permissionsString); } catch {}
     }
 
     await prisma.user.update({
-      where: { id },
+      // Scoped by organization so a membership in another org can never be updated.
+      where: { id: targetUser.id },
       data: {
         name,
         email,
@@ -264,79 +303,67 @@ export async function editUserAction(id: string, formData: FormData) {
     });
 
     revalidatePath('/workspace/users');
+    revalidatePath('/workspace/clients');
     return { success: true, message: 'User updated successfully.' };
   } catch (error: any) {
-    return { error: error.message || 'Failed to edit user.' };
+    const mapped = toErrorResponse(error);
+    if (mapped.status !== 500) return { error: mapped.error };
+    return { error: 'Failed to edit user.' };
   }
 }
 
 // Deactivate User (Soft Delete)
 export async function deactivateUserAction(id: string) {
   try {
-    const session = await getSession();
-    if (!session || session.role !== 'OWNER') {
-      return { error: 'Unauthorized: Only owners can deactivate users.' };
-    }
+    // Deactivation removes access, so it is gated by the DELETE permission of the
+    // module the target belongs to (USER_DELETE / CLIENT_DELETE).
+    const { session, target: targetUser } = await requireMembershipAccess(id, 'DELETE');
 
-    if (id === session.userId) {
+    if (targetUser.id === session.userId) {
       return { error: 'You cannot deactivate your own account.' };
     }
 
-    const targetUser = await prisma.user.findFirst({
-      where: { id, organizationId: session.organizationId }
-    });
-
-    if (!targetUser) {
-      return { error: 'User not found.' };
-    }
+    await assertNotLastOwner(session.organizationId, targetUser);
 
     await prisma.user.update({
-      where: { id },
+      where: { id: targetUser.id },
       data: { status: 'INACTIVE' }
     });
 
     revalidatePath('/workspace/users');
+    revalidatePath('/workspace/clients');
     return { success: true, message: 'User deactivated successfully.' };
   } catch (error: any) {
-    return { error: error.message || 'Failed to deactivate user.' };
+    const mapped = toErrorResponse(error);
+    if (mapped.status !== 500) return { error: mapped.error };
+    return { error: 'Failed to deactivate user.' };
   }
 }
 
 // Activate User
 export async function activateUserAction(id: string) {
   try {
-    const session = await getSession();
-    if (!session || session.role !== 'OWNER') {
-      return { error: 'Unauthorized: Only owners can activate users.' };
-    }
-
-    const targetUser = await prisma.user.findFirst({
-      where: { id, organizationId: session.organizationId }
-    });
-
-    if (!targetUser) {
-      return { error: 'User not found.' };
-    }
+    const { target: targetUser } = await requireMembershipAccess(id, 'EDIT');
 
     await prisma.user.update({
-      where: { id },
+      where: { id: targetUser.id },
       data: { status: 'ACTIVE' }
     });
 
     revalidatePath('/workspace/users');
+    revalidatePath('/workspace/clients');
     return { success: true, message: 'User activated successfully.' };
   } catch (error: any) {
-    return { error: error.message || 'Failed to activate user.' };
+    const mapped = toErrorResponse(error);
+    if (mapped.status !== 500) return { error: mapped.error };
+    return { error: 'Failed to activate user.' };
   }
 }
 
 // Reset Password manually by Owner
 export async function resetUserPasswordAction(id: string, formData: FormData) {
   try {
-    const session = await getSession();
-    if (!session || session.role !== 'OWNER') {
-      return { error: 'Unauthorized' };
-    }
+    const { target: targetUser } = await requireMembershipAccess(id, 'EDIT');
 
     const password = formData.get('password') as string;
 
@@ -344,24 +371,18 @@ export async function resetUserPasswordAction(id: string, formData: FormData) {
       return { error: 'Password is required.' };
     }
 
-    const targetUser = await prisma.user.findFirst({
-      where: { id, organizationId: session.organizationId }
-    });
-
-    if (!targetUser) {
-      return { error: 'User not found.' };
-    }
-
     const passwordHash = await hashPassword(password);
 
     await prisma.user.update({
-      where: { id },
+      where: { id: targetUser.id },
       data: { passwordHash }
     });
 
     return { success: true, message: 'Password reset successfully.' };
   } catch (error: any) {
-    return { error: error.message || 'Failed to resend invitation.' };
+    const mapped = toErrorResponse(error);
+    if (mapped.status !== 500) return { error: mapped.error };
+    return { error: 'Failed to reset password.' };
   }
 }
 
@@ -369,37 +390,45 @@ export async function acceptInvitationAction(formData: FormData): Promise<{ succ
   return { success: true };
 }
 
-// Delete User
+/**
+ * Removes a membership from the CURRENT organization only.
+ *
+ * This archives the membership (status = INACTIVE) instead of deleting the row.
+ * That is deliberate: `User` is the membership record, and several relations cascade
+ * from it (TimeEntry.member, TaskAssignee, ActivityLog, IdlePeriod, screenshots…),
+ * so a hard delete would destroy time entries and history — which the Client module
+ * explicitly must never do. Archiving revokes access while preserving all history,
+ * and it never touches the person's memberships in other organizations, so the
+ * global account always survives.
+ */
 export async function deleteUserAction(id: string) {
   try {
-    const session = await getSession();
-    if (!session || session.role !== 'OWNER') {
-      return { error: 'Unauthorized: Only owners can delete users.' };
+    // USER_DELETE for members, CLIENT_DELETE for clients — based on the target's role.
+    const { session, target: targetUser } = await requireMembershipAccess(id, 'DELETE');
+
+    if (targetUser.id === session.userId) {
+      return { error: 'You cannot remove your own account.' };
     }
 
-    if (id === session.userId) {
-      return { error: 'You cannot delete your own account.' };
-    }
+    await assertNotLastOwner(session.organizationId, targetUser);
 
-    const targetUser = await prisma.user.findFirst({
-      where: { id, organizationId: session.organizationId }
-    });
-
-    if (!targetUser) {
-      return { error: 'User not found.' };
-    }
-
-    if (targetUser.role === 'OWNER') {
-      return { error: 'Owner cannot be deleted.' };
-    }
-
-    await prisma.user.delete({
-      where: { id }
+    await prisma.user.update({
+      where: { id: targetUser.id },
+      data: { status: 'INACTIVE' },
     });
 
     revalidatePath('/workspace/users');
-    return { success: true, message: 'User deleted successfully.' };
+    revalidatePath('/workspace/clients');
+    return {
+      success: true,
+      message:
+        targetUser.role === 'CLIENT'
+          ? 'Client archived and removed from this organization.'
+          : 'User removed from this organization.',
+    };
   } catch (error: any) {
-    return { error: error.message || 'Failed to delete user.' };
+    const mapped = toErrorResponse(error);
+    if (mapped.status !== 500) return { error: mapped.error };
+    return { error: 'Failed to remove user.' };
   }
 }

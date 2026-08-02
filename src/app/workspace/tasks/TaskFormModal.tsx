@@ -498,14 +498,14 @@ console.log("Upload response:", data);
   }, [task, isEditing]);
 
   // RBAC checks for the modal
-  const isOwner = currentUser?.role === "OWNER";
+  const isOwner = currentUser?.role === "OWNER" || currentUser?.role === "MASTER_ADMIN";
   const isClient = currentUser?.role === "CLIENT";
   const isMember = currentUser?.role === "MEMBER";
   const selectedProject = projects.find((p) => p.id === (projectId || task?.projectId || task?.project?.id));
   const isPM = selectedProject?.projectManagerId === currentUser?.userId;
 
-  // If Member (not Owner/PM), limited edit mode applies when editing
-  const isLimitedEdit = isEditing && (isMember || (!isOwner && !isPM));
+  const canEditTask = isOwner || isPM || currentUser?.permissions?.task?.edit === true;
+  const isLimitedEdit = isEditing && !canEditTask;
 
   // Hoisted hours variables
   const projectTotalHours = selectedProject?.totalAllocatedHours || 0;

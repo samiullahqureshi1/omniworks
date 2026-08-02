@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/db';
 import { getSession, hasPermission } from '@/lib/auth';
+import { requireMembershipCreate, toErrorResponse } from '@/lib/permissions';
 import { createNotification } from './notifications';
 import {  Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
@@ -16,10 +17,9 @@ import { generateUniqueProjectSlug } from '@/lib/slug';
 // Owner can quickly create a Client user directly during project creation/editing.
 export async function quickCreateClientAction(name: string, email: string) {
   try {
-    const session = await getSession();
-    if (!session || session.role !== 'OWNER') {
-      return { error: 'Unauthorized: Only Owners can create clients.' };
-    }
+    // Creating a client is governed by the Client module (CLIENT_CREATE), not by
+    // project permissions. The client is always created in the session organization.
+    const session = await requireMembershipCreate('CLIENT');
 
     if (!name || !email) {
       return { error: 'Name and email are required.' };
@@ -116,7 +116,9 @@ export async function quickCreateClientAction(name: string, email: string) {
 
     return { success: true, client: clientUser };
   } catch (error: any) {
-    return { error: error.message || 'Failed to create client.' };
+    const mapped = toErrorResponse(error);
+    if (mapped.status !== 500) return { error: mapped.error };
+    return { error: 'Failed to create client.' };
   }
 }
 

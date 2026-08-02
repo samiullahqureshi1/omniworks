@@ -1,5 +1,6 @@
 import React from 'react';
 import { getSession } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 import { redirect } from 'next/navigation';
 import ContactsClient from './ContactsClient';
 import { getContactsAction, getUserViewPreferenceAction } from '@/app/actions/contacts';
@@ -10,8 +11,8 @@ export default async function ContactsPage() {
     redirect('/login');
   }
 
-  // Members cannot view Contacts
-  if (session.role === 'MEMBER') {
+  // Direct URL access requires CONTACT_VIEW (owners/admins always pass).
+  if (!can(session, 'CONTACT_VIEW')) {
     redirect('/workspace/planner/calendar');
   }
 

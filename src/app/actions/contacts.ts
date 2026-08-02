@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 
 /**
  * Fetch all leads/contacts for the current user's organization.
@@ -10,6 +11,7 @@ export async function getContactsAction() {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
+    if (!can(session, 'CONTACT_VIEW')) return { error: 'You do not have permission to view contacts.' };
 
     const contacts = await prisma.lead.findMany({
       where: {
@@ -43,6 +45,7 @@ export async function createContactAction(data: {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
+    if (!can(session, 'CONTACT_CREATE')) return { error: 'You do not have permission to create contacts.' };
 
     if (!data.name || !data.email) {
       return { error: 'Name and Email are required.' };
@@ -132,6 +135,7 @@ export async function deleteContactsAction(contactIds: string[]) {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
+    if (!can(session, 'CONTACT_DELETE')) return { error: 'You do not have permission to delete contacts.' };
 
     if (!contactIds || contactIds.length === 0) {
       return { error: 'No contacts selected.' };

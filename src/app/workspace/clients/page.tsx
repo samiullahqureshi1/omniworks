@@ -1,13 +1,17 @@
 import React from 'react';
 import { getUsersAction } from '@/app/actions/users';
 import { getCurrentUser } from '@/app/actions/auth';
+import { can } from '@/lib/permissions';
 import { redirect } from 'next/navigation';
 import ClientsClient from './ClientsClient';
 
 export default async function ClientsPage() {
   const currentUser = await getCurrentUser();
-  
-  if (!currentUser || currentUser.role !== 'OWNER') {
+
+  if (!currentUser) redirect('/login');
+
+  // Direct URL access is blocked without CLIENT_VIEW (OWNER/MASTER_ADMIN always pass).
+  if (!can(currentUser, 'CLIENT_VIEW')) {
     redirect('/workspace');
   }
 

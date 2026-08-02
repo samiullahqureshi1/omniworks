@@ -106,16 +106,23 @@ export function FormRoleSelect({
   defaultValue = "MEMBER",
   value: controlledValue,
   onValueChange,
+  allowPrivilegedRoles = true,
 }: {
   id: string;
   name?: string;
   defaultValue?: WorkspaceRole;
   value?: WorkspaceRole;
   onValueChange?: (value: WorkspaceRole) => void;
+  /** When false, the OWNER option is hidden (privilege-escalation guard). */
+  allowPrivilegedRoles?: boolean;
 }) {
   const [internalValue, setInternalValue] = React.useState<WorkspaceRole>(defaultValue);
   const value = controlledValue ?? internalValue;
-  const selectedRole = workspaceRoles.find((role) => role.value === value) ?? workspaceRoles[0];
+  // The server re-checks this; hiding the option is only to keep the UI honest.
+  const availableRoles = allowPrivilegedRoles
+    ? workspaceRoles
+    : workspaceRoles.filter((role) => role.value !== "OWNER");
+  const selectedRole = availableRoles.find((role) => role.value === value) ?? availableRoles[0];
 
   const handleValueChange = (nextValue: string) => {
     const nextRole = nextValue as WorkspaceRole;
@@ -162,7 +169,7 @@ export function FormRoleSelect({
             className="z-[100] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-[14px] border border-slate-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.22)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 dark:border-white/10 dark:bg-[#202024]"
           >
             <SelectPrimitive.Viewport className="p-2">
-              {workspaceRoles.map((role) => (
+              {availableRoles.map((role) => (
                 <SelectPrimitive.Item
                   key={role.value}
                   value={role.value}

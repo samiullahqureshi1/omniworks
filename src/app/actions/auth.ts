@@ -292,21 +292,10 @@ export async function logoutAction() {
 }
 
 export async function getCurrentUser() {
-  const session = await getSession();
-  if (!session) return null;
-
-  // Always pull fresh permissions from DB (JWT may be stale after an edit)
-  try {
-    const dbUser = await prisma.user.findFirst({
-      where: { email: session.email, organizationId: session.organizationId },
-      select: { permissions: true },
-    });
-    if (dbUser?.permissions) {
-      return { ...session, permissions: dbUser.permissions as any };
-    }
-  } catch {}
-
-  return session;
+  // getSession() now resolves role + permissions from the database on every request
+  // (see src/lib/auth.ts), so the session is always authoritative and reflects
+  // permission edits immediately. No second lookup needed here.
+  return await getSession();
 }
 
 export async function deleteOrganizationAction(id: string) {

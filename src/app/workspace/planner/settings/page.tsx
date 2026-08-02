@@ -1,6 +1,7 @@
 import React from 'react';
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
+import { can } from '@/lib/permissions';
 import { getAvailabilitySettingsAction } from '@/app/actions/availability';
 import { googleConfigured } from '@/lib/google/calendar';
 import { prisma } from '@/lib/db';
@@ -14,7 +15,8 @@ export default async function PlannerSettingsPage({
   const { google: googleStatus } = await searchParams;
   const session = await getSession();
   if (!session) redirect('/login');
-  if (session.role !== 'OWNER') redirect('/workspace');
+  // Direct URL access requires the module's VIEW permission.
+  if (!can(session, 'AVAILABILITY_VIEW')) redirect('/workspace');
 
   const org = await prisma.organization.findUnique({
     where: { id: session.organizationId },
