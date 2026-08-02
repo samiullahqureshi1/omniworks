@@ -319,6 +319,42 @@ export default function ConversationsClient({
   const [mentionMode, setMentionMode] = useState<'members' | 'projects' | 'tasks'>('members');
   const [mentionQuery, setMentionQuery] = useState('');
   const [allTasks, setAllTasks] = useState<any[]>([]);
+  const [groupMembers, setGroupMembers] = useState<any[]>([]);
+
+  // Desktop Notification Helper
+  const triggerDesktopNotification = (title: string, body: string) => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+
+    const fire = () => {
+      try {
+        const n = new Notification(title, {
+          body: body || 'New Message',
+          icon: '/favicon.ico',
+          tag: 'omniwork-chat'
+        });
+        n.onclick = () => {
+          window.focus();
+          n.close();
+        };
+      } catch (e) {
+        console.error('Notification error:', e);
+      }
+    };
+
+    if (Notification.permission === 'granted') {
+      fire();
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission().then(p => {
+        if (p === 'granted') fire();
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     const loadTasks = async () => {
@@ -335,14 +371,30 @@ export default function ConversationsClient({
     loadTasks();
   }, []);
 
+  // Fetch group members when group changes
+  const fetchGroupMembers = async (groupId: string) => {
+    try {
+      const res = await fetch(`/api/conversations/groups/${groupId}/members`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.members && Array.isArray(data.members)) {
+          setGroupMembers(data.members);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch group members:', err);
+    }
+  };
+
   // Context-aware projects & tasks filter helpers for mentions
   const getContextualProjects = () => {
     const memberMatches = messageContent.match(/@([A-Za-z0-9_]+)/g);
     if (memberMatches && memberMatches.length > 0) {
       const lastMemberMention = memberMatches[memberMatches.length - 1].replace('@', '').toLowerCase();
-      const matchedUser = users.find(u => 
-        u.name.replace(/\s+/g, '').toLowerCase() === lastMemberMention || 
-        u.name.toLowerCase().includes(lastMemberMention)
+      const availableUsers = (activeTab === 'teams' && groupMembers.length > 0) ? groupMembers : users;
+      const matchedUser = availableUsers.find(u => 
+        (u.name && u.name.replace(/\s+/g, '').toLowerCase() === lastMemberMention) || 
+        (u.name && u.name.toLowerCase().includes(lastMemberMention))
       );
       if (matchedUser) {
         const userProjects = projects.filter(p => 
@@ -361,8 +413,8 @@ export default function ConversationsClient({
     if (projectMatches && projectMatches.length > 0) {
       const lastProjMention = projectMatches[projectMatches.length - 1].replace('@@', '').toLowerCase();
       const matchedProject = projects.find(p => 
-        p.name.replace(/\s+/g, '').toLowerCase() === lastProjMention || 
-        p.name.toLowerCase().includes(lastProjMention)
+        (p.name && p.name.replace(/\s+/g, '').toLowerCase() === lastProjMention) || 
+        (p.name && p.name.toLowerCase().includes(lastProjMention))
       );
       if (matchedProject) {
         const projTasks = allTasks.filter(t => t.projectId === matchedProject.id);
@@ -376,11 +428,15 @@ export default function ConversationsClient({
 
   const getFilteredMentionItems = () => {
     if (mentionMode === 'members') {
-      return users.filter(u => u.name.toLowerCase().includes(mentionQuery) || u.email.toLowerCase().includes(mentionQuery));
+      const targetUsers = (activeTab === 'teams' && selectedGroupId && groupMembers.length > 0) ? groupMembers : users;
+      return targetUsers.filter(u => 
+        (u.name && u.name.toLowerCase().includes(mentionQuery)) || 
+        (u.email && u.email.toLowerCase().includes(mentionQuery))
+      );
     } else if (mentionMode === 'projects') {
-      return getContextualProjects().filter(p => p.name.toLowerCase().includes(mentionQuery));
+      return getContextualProjects().filter(p => p.name && p.name.toLowerCase().includes(mentionQuery));
     } else {
-      return getContextualTasks().filter(t => t.title.toLowerCase().includes(mentionQuery));
+      return getContextualTasks().filter(t => t.title && t.title.toLowerCase().includes(mentionQuery));
     }
   };
 
@@ -756,8 +812,10 @@ export default function ConversationsClient({
         setMessagesLoading(true);
       }
       fetchGroupMessages(selectedGroupId);
+      fetchGroupMembers(selectedGroupId);
     } else {
       setMessages([]);
+      setGroupMembers([]);
     }
   }, [selectedGroupId]);
 

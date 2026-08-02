@@ -146,6 +146,7 @@ export async function getTasksAction(projectIdFilter?: string) {
           project: { select: { id: true, name: true, projectManagerId: true, clientId: true } },
           status: true,
           assignees: { include: { user: { select: { id: true, name: true, email: true, role: true } } } },
+          timeEntries: { select: { duration: true } },
         },
         orderBy: { createdAt: 'desc' },
       }),
@@ -166,9 +167,13 @@ export async function getTasksAction(projectIdFilter?: string) {
         );
         activeHours += elapsedSecs / 3600;
       });
+      const baseHours = (task.timeEntries && task.timeEntries.length > 0)
+        ? task.timeEntries.reduce((sum: number, entry: any) => sum + (entry.duration || 0), 0)
+        : (task.trackedHours || 0);
+
       return {
         ...task,
-        trackedHours: Math.round(((task.trackedHours || 0) + activeHours) * 100) / 100,
+        trackedHours: Math.round((baseHours + activeHours) * 100) / 100,
         hasActiveTimer: activeTimersForTask.length > 0,
       };
     });

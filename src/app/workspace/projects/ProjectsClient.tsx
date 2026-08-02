@@ -983,10 +983,10 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
     ]) : [];
 
     return (
-      <div className="flex flex-col lg:flex-row gap-5 min-h-[550px] animate-in fade-in zoom-in-95 duration-200">
+      <div className="flex flex-col lg:flex-row gap-5 h-[calc(100vh-200px)] min-h-[500px] max-h-[850px] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Left Panel: Project List */}
-        <div className="w-full lg:w-80 shrink-0 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl p-4 flex flex-col gap-3 shadow-2xs">
-          <div className="flex items-center justify-between">
+        <div className="w-full lg:w-80 shrink-0 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl p-4 flex flex-col gap-3 shadow-2xs h-full overflow-hidden">
+          <div className="flex items-center justify-between shrink-0">
             <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
               <MessageSquare size={16} className="text-blue-600 dark:text-blue-400" />
               Project Discussions
@@ -996,7 +996,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
             </span>
           </div>
 
-          <div className="relative">
+          <div className="relative shrink-0">
             <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
             <input
               type="text"
@@ -1007,7 +1007,7 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
             />
           </div>
 
-          <div className="flex-1 overflow-y-auto max-h-[440px] space-y-2 pr-1">
+          <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
             {filteredProjects.length === 0 ? (
               <p className="text-xs text-slate-400 text-center py-8">No project discussions found.</p>
             ) : (
@@ -1047,69 +1047,16 @@ import * as PopoverPrimitive from "@radix-ui/react-popover";
         </div>
 
         {/* Right Panel: Selected Project Thread */}
-        <div className="flex-1 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl p-5 flex flex-col shadow-2xs">
+        <div className="flex-1 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl overflow-hidden flex flex-col shadow-2xs h-full">
           {activeProject ? (
-            <>
-              {/* Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 dark:border-zinc-800 gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white">{activeProject.name}</h2>
-                    <span
-                      className="px-2 py-0.5 rounded-full text-[11px] font-semibold text-white"
-                      style={{ backgroundColor: activeProject.status?.color || "#3b82f6" }}
-                    >
-                      {activeProject.status?.name || "Active"}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
-                    {activeProject.description || "Project channel for team discussion, milestones, and status updates."}
-                  </p>
-                </div>
-                <Button size="sm" asChild className="rounded-[8px] bg-blue-600 text-white hover:bg-blue-700 text-xs font-semibold shrink-0">
-                  <Link href={`/workspace/projects/${activeProject.id}?tab=conversation`}>
-                    <MessageSquare size={13} className="mr-1.5" /> Full Conversation
-                  </Link>
-                </Button>
-              </div>
-
-              {/* Messages Stream */}
-              <div className="flex-1 overflow-y-auto my-4 space-y-3.5 max-h-[360px] pr-2">
-                {projectComments.map((msg) => (
-                  <div key={msg.id} className="p-3.5 bg-slate-50 dark:bg-zinc-900/60 rounded-[8px] border border-slate-100 dark:border-zinc-800/80">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold">
-                          {msg.author.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">{msg.author}</span>
-                        {msg.topic && (
-                          <span className="text-[10px] font-medium bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md">
-                            {msg.topic}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-slate-400">{msg.time}</span>
-                    </div>
-                    <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed pl-8">{msg.text}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Post Comment Input */}
-              <form onSubmit={handlePostComment} className="pt-3 border-t border-slate-200 dark:border-zinc-800 flex gap-2">
-                <input
-                  type="text"
-                  placeholder={`Post update or note for ${activeProject.name}...`}
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  className="flex-1 px-3 py-2 text-xs bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-[8px] focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-                <Button type="submit" size="sm" className="rounded-[8px] bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-slate-800 text-xs font-semibold px-4">
-                  Post
-                </Button>
-              </form>
-            </>
+            <ProjectConversation
+              key={activeProject.id}
+              projectId={activeProject.id}
+              currentUser={currentUser}
+              organizationId={currentUser?.organizationId || activeProject.organizationId || ''}
+              isClient={currentUser?.role === 'CLIENT'}
+              hideHeader={false}
+            />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
               <MessageSquare size={36} className="opacity-20 mb-2" />
@@ -2461,152 +2408,69 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 </div>
         </div>
 
-        {/* Tabs Bar: Kanban, Table, List, Discussion, Calendar */}
-        <div className="flex items-center gap-1 px-4 md:px-8 mt-0.5 overflow-x-auto">
-          <button
-            type="button"
-            onClick={() => handleSetViewMode("KANBAN")}
-            className={`flex items-center gap-1.5 pl-0 pr-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
-              viewMode === "KANBAN"
-                ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
-                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
-            }`}
-          >
-            <LayoutGrid size={14} /> Board
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSetViewMode("TABLE")}
-            className={`flex items-center gap-1.5 px-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
-              viewMode === "TABLE"
-                ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
-                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
-            }`}
-          >
-            <TableIcon size={14} /> Table
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSetViewMode("LIST")}
-            className={`flex items-center gap-1.5 px-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
-              viewMode === "LIST"
-                ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
-                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
-            }`}
-          >
-            <ListIcon size={14} /> List
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSetViewMode("DISCUSSION")}
-            className={`flex items-center gap-1.5 px-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
-              viewMode === "DISCUSSION"
-                ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
-                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
-            }`}
-          >
-            <MessageSquare size={14} /> Discussion
-          </button>
-          <button
-            type="button"
-            onClick={() => handleSetViewMode("CALENDAR")}
-            className={`flex items-center gap-1.5 px-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
-              viewMode === "CALENDAR"
-                ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
-                : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
-            }`}
-          >
-            <CalendarIcon size={14} /> Calendar
-          </button>
-        </div>
-      </div>
-
-        {/* Sub-toolbar / Filter bar */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 py-1">
-          {/* Left Sub-Toolbar actions */}
-          <div className="flex items-center gap-2">
-            <PopoverPrimitive.Root>
-              <PopoverPrimitive.Trigger asChild>
-                <button type="button" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400 text-xs font-semibold border border-blue-100 dark:border-blue-900/50 cursor-pointer transition-all hover:bg-blue-100/50">
-                  <Layers size={12} />
-                  <span>Group: {groupByField}</span>
-                </button>
-              </PopoverPrimitive.Trigger>
-              <PopoverPrimitive.Portal>
-                <PopoverPrimitive.Content align="start" sideOffset={6} className="z-50 w-auto bg-white dark:bg-[#1a1a1a] rounded-[8px] border border-slate-200 dark:border-white/10 shadow-lg p-3 outline-none animate-in fade-in-0 zoom-in-95 duration-100">
-                  <div className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 mb-1.5 uppercase tracking-wider">Group by</div>
-                  
-                  <div className="flex items-center gap-2">
-                    {/* Group By Field Selector Dropdown */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button type="button" className="flex items-center justify-between gap-1.5 px-3 py-1.5 border border-slate-200 dark:border-white/10 rounded-[8px] text-sm bg-transparent hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer min-w-[140px] text-slate-700 dark:text-slate-200 text-left outline-none font-medium">
-                          <span className="flex items-center gap-1.5">
-                            {getFieldIcon(groupByField, "text-slate-500")}
-                            {groupByField}
-                          </span>
-                          <ChevronDown size={14} className="text-slate-400" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-48 bg-white dark:bg-[#1a1a1a] rounded-[8px] border border-slate-200 dark:border-white/10 shadow-md p-1 z-[60]">
-                        {(["Status", "Assignee", "Priority", "Due date", "Task Type", "start date"] as const).map((field) => (
-                          <DropdownMenuItem
-                            key={field}
-                            onClick={() => setGroupByField(field)}
-                            className="flex items-center justify-between px-2 py-1.5 text-xs rounded-[4px] hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer text-slate-700 dark:text-slate-200"
-                          >
-                            <span className="flex items-center gap-2">
-                              {getFieldIcon(field, "text-slate-400")}
-                              {field}
-                            </span>
-                            {groupByField === field && <Check size={12} className="text-slate-500" />}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-
-                    {/* Sorting Order Selector Dropdown */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button type="button" className="flex items-center justify-between gap-1.5 px-3 py-1.5 border border-slate-200 dark:border-white/10 rounded-[8px] text-sm bg-transparent hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer min-w-[110px] text-slate-700 dark:text-slate-200 text-left outline-none font-medium">
-                          <span>{groupByOrder}</span>
-                          <ChevronDown size={14} className="text-slate-400" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-32 bg-white dark:bg-[#1a1a1a] rounded-[8px] border border-slate-200 dark:border-white/10 shadow-md p-1 z-[60]">
-                        {(["Ascending", "Descending"] as const).map((order) => (
-                          <DropdownMenuItem
-                            key={order}
-                            onClick={() => setGroupByOrder(order)}
-                            className="flex items-center justify-between px-2 py-1.5 text-xs rounded-[4px] hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer text-slate-700 dark:text-slate-200"
-                          >
-                            <span>{order}</span>
-                            {groupByOrder === order && <Check size={12} className="text-slate-500" />}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-
-                    {/* Reset Button (Trash Icon) */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGroupByField("Status");
-                        setGroupByOrder("Descending");
-                      }}
-                      title="Reset Grouping"
-                      className="p-2 rounded-[8px] text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer transition-colors border border-slate-200 dark:border-white/10 outline-none flex items-center justify-center h-[34px] w-[34px]"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </PopoverPrimitive.Content>
-              </PopoverPrimitive.Portal>
-            </PopoverPrimitive.Root>
+        {/* Tabs Bar & Header Actions (Filter + Add Project) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 md:px-8 mt-0.5 pb-2">
+          {/* Tabs Bar: Kanban, Table, List, Discussion, Calendar */}
+          <div className="flex items-center gap-1 overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => handleSetViewMode("KANBAN")}
+              className={`flex items-center gap-1.5 pl-0 pr-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                viewMode === "KANBAN"
+                  ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
+                  : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
+              }`}
+            >
+              <LayoutGrid size={14} /> Board
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSetViewMode("TABLE")}
+              className={`flex items-center gap-1.5 px-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                viewMode === "TABLE"
+                  ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
+                  : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
+              }`}
+            >
+              <TableIcon size={14} /> Table
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSetViewMode("LIST")}
+              className={`flex items-center gap-1.5 px-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                viewMode === "LIST"
+                  ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
+                  : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
+              }`}
+            >
+              <ListIcon size={14} /> List
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSetViewMode("DISCUSSION")}
+              className={`flex items-center gap-1.5 px-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                viewMode === "DISCUSSION"
+                  ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
+                  : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
+              }`}
+            >
+              <MessageSquare size={14} /> Discussion
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSetViewMode("CALENDAR")}
+              className={`flex items-center gap-1.5 px-4 py-1.5 pb-2 border-b-2 text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                viewMode === "CALENDAR"
+                  ? "border-slate-900 text-slate-900 dark:border-white dark:text-white"
+                  : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
+              }`}
+            >
+              <CalendarIcon size={14} /> Calendar
+            </button>
           </div>
 
-          {/* Right Sub-Toolbar Actions: Filter, Settings, Add Button */}
-          <div className="flex items-center gap-3 ml-auto sm:ml-0">
+          {/* Right Header Actions: Filter & Add Project Button */}
+          <div className="flex items-center gap-3 shrink-0 mb-1 sm:mb-0">
             {/* Filter Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -2760,6 +2624,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
             )}
           </div>
         </div>
+      </div>
 
         {/* Projects Views */}
         {viewMode === "TABLE" && (
