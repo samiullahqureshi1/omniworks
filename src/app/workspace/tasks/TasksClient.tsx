@@ -62,7 +62,7 @@ function TableCustomFieldCell({ task, col, setTasks, tasks, currentUser }: any) 
     }
   }
 
-  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && task.project?.projectManagerId === currentUser?.userId);
+  const isEditable = currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN' || currentUser?.permissions?.task?.edit === true || (currentUser?.role === 'MEMBER' && task.project?.projectManagerId === currentUser?.userId);
 
   const updateValue = (val: any) => {
     if (!isEditable) return;
@@ -154,7 +154,7 @@ function TableTaskNameCell({ task, setTasks, currentUser, openEdit }: any) {
   const [isPending, startTransition] = React.useTransition();
   const router = useRouter();
 
-  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && task.project?.projectManagerId === currentUser?.userId);
+  const isEditable = currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN' || currentUser?.permissions?.task?.edit === true || (currentUser?.role === 'MEMBER' && task.project?.projectManagerId === currentUser?.userId);
 
   const handleSave = () => {
     if (!title.trim() || title === task.title) {
@@ -231,7 +231,7 @@ function TableTaskStatusCell({ task, taskStatuses, setTasks, currentUser }: any)
   const router = useRouter();
 
   const isAssigned = task.assignees?.some((a: any) => a.userId === currentUser?.userId);
-  const isEditable = currentUser?.role === 'OWNER' || 
+  const isEditable = currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN' || currentUser?.permissions?.task?.edit === true || 
                      (currentUser?.role === 'MEMBER' && (task.project?.projectManagerId === currentUser?.userId || isAssigned));
 
   const handleUpdateStatus = (newStatusId: string) => {
@@ -313,7 +313,7 @@ function TableTaskPriorityCell({ task, setTasks, currentUser }: any) {
   const [isPending, startTransition] = React.useTransition();
   const router = useRouter();
 
-  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && task.project?.projectManagerId === currentUser?.userId);
+  const isEditable = currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN' || currentUser?.permissions?.task?.edit === true || (currentUser?.role === 'MEMBER' && task.project?.projectManagerId === currentUser?.userId);
 
   const priorities = [
     { value: "CRITICAL", label: "Urgent", color: "text-red-500", bg: "bg-red-50 dark:bg-red-950/20" },
@@ -397,7 +397,7 @@ function TableTaskDueDateCell({ task, setTasks, currentUser }: any) {
   const [isPending, startTransition] = React.useTransition();
   const router = useRouter();
 
-  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && task.project?.projectManagerId === currentUser?.userId);
+  const isEditable = currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN' || currentUser?.permissions?.task?.edit === true || (currentUser?.role === 'MEMBER' && task.project?.projectManagerId === currentUser?.userId);
 
   const handleDateSelect = (date: Date | undefined) => {
     if (!date) return;
@@ -525,7 +525,7 @@ function TableTaskAssigneeCell({ task, users, setTasks, currentUser }: any) {
   const [isPending, startTransition] = React.useTransition();
   const router = useRouter();
 
-  const isEditable = currentUser?.role === 'OWNER' || (currentUser?.role === 'MEMBER' && task.project?.projectManagerId === currentUser?.userId);
+  const isEditable = currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN' || currentUser?.permissions?.task?.edit === true || (currentUser?.role === 'MEMBER' && task.project?.projectManagerId === currentUser?.userId);
   const assignedUserIds = task.assignees?.map((a: any) => a.userId) || [];
 
   // Filter out users who have CLIENT role
@@ -727,7 +727,7 @@ function KanbanTaskCard({ task, currentUser, openEdit, handleDelete, router, isD
                 <Pin className="w-3.5 h-3.5 mr-2" />
                 {pinnedTaskIds.includes(task.id) ? 'Unpin Task' : 'Pin Task'}
               </DropdownMenuItem>
-              {(currentUser?.role === 'OWNER' || task.project?.projectManagerId === currentUser?.userId) && (
+              {(currentUser?.role === 'OWNER' || currentUser?.role === 'MASTER_ADMIN' || currentUser?.permissions?.task?.delete === true || task.project?.projectManagerId === currentUser?.userId) && (
                 <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer" onClick={(e) => { e.stopPropagation(); handleDelete(task.id); }}>
                   <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete Task
                 </DropdownMenuItem>
@@ -1396,7 +1396,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   };
 
   const isClient = currentUser.role === 'CLIENT';
-  const canCreateTask = currentUser.role === 'OWNER' ||
+  const canCreateTask = currentUser.role === 'OWNER' || currentUser.role === 'MASTER_ADMIN' || currentUser.permissions?.task?.create === true ||
     (currentUser.role === 'MEMBER' && projects.some((p: any) => p.projectManagerId === currentUser.userId));
   const canManageStatuses = currentUser.role === 'OWNER';
 
@@ -1989,7 +1989,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
                               <Pin className="w-4 h-4 mr-2" />
                               {pinnedTaskIds.includes(task.id) ? 'Unpin Task' : 'Pin Task'}
                             </DropdownMenuItem>
-                            {(currentUser.role === 'OWNER' || task.project.projectManagerId === currentUser.userId) && (
+                            {(currentUser.role === 'OWNER' || currentUser.role === 'MASTER_ADMIN' || currentUser.permissions?.task?.delete === true || task.project.projectManagerId === currentUser.userId) && (
                               <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(task.id)}>
                                 <Trash2 className="w-4 h-4 mr-2" /> Delete Task
                               </DropdownMenuItem>

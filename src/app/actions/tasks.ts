@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { getSession, hasPermission } from '@/lib/auth';
 import { Priority, Role } from '@prisma/client';
 import { createNotification } from './notifications';
 import { triggerEventRules } from './rules';
@@ -124,14 +124,16 @@ export async function getTasksAction(projectIdFilter?: string) {
       // Client sees tasks for projects they own
       whereClause.project = { clientId: userId };
     } else if (role === 'MEMBER') {
-      // Member sees assigned tasks OR tasks in projects they manage
-      whereClause = {
-        organizationId,
-        OR: [
-          { assignees: { some: { userId } } },
-          { project: { projectManagerId: userId } },
-        ],
-      };
+      // Member sees all tasks if task.view permission is granted, else assigned tasks OR tasks in projects they manage
+      if (!hasPermission(session, 'task', 'view')) {
+        whereClause = {
+          organizationId,
+          OR: [
+            { assignees: { some: { userId } } },
+            { project: { projectManagerId: userId } },
+          ],
+        };
+      }
       if (projectIdFilter) {
         whereClause.projectId = projectIdFilter;
       }
@@ -236,13 +238,13 @@ export async function createTaskAction(
 
     if (!project) return { error: 'Project not found.' };
 
-    const isOwner = session.role === 'OWNER';
+    const isOwner = session.role === 'OWNER' || session.role === 'MASTER_ADMIN';
     const isPM = project.projectManagerId === session.userId;
     const isClient = session.role === 'CLIENT' && project.clientId === session.userId;
-    const isMember = session.role === 'MEMBER';
+    const canCreate = isOwner || isPM || hasPermission(session, 'task', 'create');
 
-    if (!isOwner && !isPM && !isClient && !isMember) {
-      return { error: 'Unauthorized to create tasks in this project.' };
+    if (!canCreate && !isClient) {
+      return { error: 'Unauthorized to create tasks.' };
     }
 
     if (!title) return { error: 'Task title is required.' };
@@ -437,20 +439,21 @@ export async function updateTaskAction(
 
     if (!task) return { error: 'Task not found.' };
 
-    const isOwner = session.role === 'OWNER';
+    const isOwner = session.role === 'OWNER' || session.role === 'MASTER_ADMIN';
     const isPM = task.project.projectManagerId === session.userId;
     const isClient = session.role === 'CLIENT' && task.project.clientId === session.userId;
     const isAssigned = task.assignees.some(a => a.userId === session.userId);
+    const canEditAll = isOwner || isPM || hasPermission(session, 'task', 'edit');
 
     // Roles:
-    // Owner/PM can update everything.
+    // Owner/PM/task.edit permission can update everything.
     // Client can update basic details of tasks in their own project.
-    // Member (Assigned) can ONLY update status and trackedHours.
-    if (!isOwner && !isPM && !isClient && !isAssigned) {
+    // Member (Assigned without task.edit permission) can ONLY update status and trackedHours.
+    if (!canEditAll && !isClient && !isAssigned) {
       return { error: 'Unauthorized to update this task.' };
     }
 
-    if (!isOwner && !isPM && isAssigned) {
+    if (!canEditAll && isAssigned) {
       // Member can only update statusId and trackedHours
       const allowedData: any = {};
       if (data.statusId !== undefined) allowedData.statusId = data.statusId;
@@ -578,10 +581,11 @@ export async function deleteTaskAction(taskId: string) {
 
     if (!task) return { error: 'Task not found.' };
 
-    const isOwner = session.role === 'OWNER';
+    const isOwner = session.role === 'OWNER' || session.role === 'MASTER_ADMIN';
     const isPM = task.project.projectManagerId === session.userId;
+    const canDelete = isOwner || isPM || hasPermission(session, 'task', 'delete');
 
-    if (!isOwner && !isPM) {
+    if (!canDelete) {
       return { error: 'Unauthorized to delete this task.' };
     }
 
