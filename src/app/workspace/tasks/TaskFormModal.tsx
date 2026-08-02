@@ -208,9 +208,18 @@ export default function TaskFormModal({
   const [minimized, setMinimized] = useState(false);
   const [draftDocs, setDraftDocs] = useState<DraftDocument[]>([]);
 
-  // Attachments State & Ref (matching Project modal behavior)
+  // Attachments State & Ref
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  // Committed attachments (Cloudinary URL resolved)
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  // Pending previews shown immediately before upload completes
+  const [pendingAttachments, setPendingAttachments] = useState<{
+    id: string;
+    localUrl: string;
+    fileName: string;
+    fileSize: number;
+    fileType: string;
+  }[]>([]);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -218,50 +227,73 @@ export default function TaskFormModal({
     e.target.value = "";
     if (!files || files.length === 0) return;
 
+    // ── Step 1: show instant local previews ──────────────────────────────
+    const newPending = Array.from(files).map((file) => ({
+      id: `pending-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      localUrl: URL.createObjectURL(file),
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+    }));
+    setPendingAttachments((prev) => [...prev, ...newPending]);
     setUploadingAttachment(true);
+
+    // ── Step 2: upload each file and swap pending → committed ────────────
     try {
-      for (const file of Array.from(files)) {
-        const fd = new FormData();
-        fd.append("file", file);
-        const resp = await fetch("/api/upload/cloudinary", { method: "POST", body: fd });
-        const data = await resp.json();
-        if (!resp.ok || !data.success) {
-          toast.error(data.error || `Upload failed for ${file.name}`);
-          continue;
-        }
+      for (let i = 0; i < Array.from(files).length; i++) {
+        const file = Array.from(files)[i];
+        const pendingId = newPending[i].id;
+        try {
+          const fd = new FormData();
+          fd.append("file", file);
+          const resp = await fetch("/api/upload/cloudinary", { method: "POST", body: fd });
+          const data = await resp.json();
 
-        const newAttachmentItem: AttachmentItem = {
-          id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          fileUrl: data.url,
-          fileName: data.fileName,
-          fileSize: data.fileSize,
-          fileType: data.fileType,
-          uploadedAt: data.uploadedAt,
-          uploaderInitials: data.uploaderInitials,
-          uploaderName: data.uploaderName,
-        };
+          if (!resp.ok || !data.success) {
+            toast.error(data.error || `Upload failed for ${file.name}`);
+            // Remove failed pending
+            setPendingAttachments((prev) => prev.filter((p) => p.id !== pendingId));
+            URL.revokeObjectURL(newPending[i].localUrl);
+            continue;
+          }
 
-        setAttachments((prev) => [...prev, newAttachmentItem]);
-
-        // Also add to draftDocs so it persists to DB on save
-        setDraftDocs((prev) => [
-          ...prev,
-          {
-            tempId: newAttachmentItem.id || `draft-${Date.now()}`,
-            type: "FILE" as const,
-            title: data.fileName,
+          const newAttachmentItem: AttachmentItem = {
+            id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
             fileUrl: data.url,
-            fileName: data.fileName,
-            fileSize: data.fileSize,
+            fileName: data.fileName ?? file.name,
+            fileSize: data.fileSize ?? file.size,
+            fileType: data.fileType ?? file.type,
             uploadedAt: data.uploadedAt,
             uploaderInitials: data.uploaderInitials,
             uploaderName: data.uploaderName,
-          },
-        ]);
-        toast.success(`Attached ${data.fileName}`);
+          };
+
+          // Promote pending → committed and free blob memory
+          setPendingAttachments((prev) => prev.filter((p) => p.id !== pendingId));
+          URL.revokeObjectURL(newPending[i].localUrl);
+          setAttachments((prev) => [...prev, newAttachmentItem]);
+
+          // Also add to draftDocs so it persists to DB on save
+          setDraftDocs((prev) => [
+            ...prev,
+            {
+              tempId: newAttachmentItem.id || `draft-${Date.now()}`,
+              type: "FILE" as const,
+              title: data.fileName ?? file.name,
+              fileUrl: data.url,
+              fileName: data.fileName ?? file.name,
+              fileSize: data.fileSize ?? file.size,
+              uploadedAt: data.uploadedAt,
+              uploaderInitials: data.uploaderInitials,
+              uploaderName: data.uploaderName,
+            },
+          ]);
+        } catch {
+          toast.error(`Upload failed for ${file.name}`);
+          setPendingAttachments((prev) => prev.filter((p) => p.id !== pendingId));
+          URL.revokeObjectURL(newPending[i].localUrl);
+        }
       }
-    } catch (err) {
-      toast.error("File upload failed");
     } finally {
       setUploadingAttachment(false);
     }
@@ -1545,34 +1577,43 @@ export default function TaskFormModal({
                   )}
 
                   {/* ── Attachment Preview — below Fields section ── */}
-                  {(attachments.length > 0 || uploadingAttachment) && (
+                  {(attachments.length > 0 || pendingAttachments.length > 0) && (
                     <div className="mt-5 pt-5 border-t border-slate-100 dark:border-white/5">
                       <div className="flex items-center gap-1.5 mb-3">
                         <Paperclip size={12} className="text-slate-400" />
                         <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                          Attachments ({attachments.length})
+                          Attachments ({attachments.length + pendingAttachments.length})
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-2">
+
+                        {/* ── Committed attachments (Cloudinary URL) ── */}
                         {attachments.map((item, idx) => {
-                          const isImg = item.fileUrl?.match(/\.(jpeg|jpg|gif|png|webp|svg|avif)($|\?)/i) ||
+                          const isImg =
+                            item.fileUrl?.match(/\.(jpeg|jpg|gif|png|webp|svg|avif)($|\?)/i) ||
                             item.fileType?.startsWith('image/') ||
                             item.fileName?.match(/\.(jpeg|jpg|gif|png|webp|svg|avif)$/i);
                           return (
                             <div
                               key={item.id || idx}
-                              className="relative flex items-center gap-2 pl-2 pr-7 py-1.5 rounded-[8px] bg-slate-100 dark:bg-white/8 border border-slate-200 dark:border-white/10 group hover:border-slate-300 dark:hover:border-white/20 transition-all"
+                              className="relative flex items-center gap-2 pl-2 pr-7 py-1.5 rounded-[8px] bg-slate-100 dark:bg-white/8 border border-slate-200 dark:border-white/10 group hover:border-slate-300 dark:hover:border-white/20 transition-all min-w-0 max-w-[200px]"
                             >
                               {isImg ? (
-                                <img src={item.fileUrl} alt={item.fileName} className="w-8 h-8 rounded object-cover shrink-0" />
+                                <img
+                                  src={item.fileUrl}
+                                  alt={item.fileName}
+                                  className="w-9 h-9 rounded-[6px] object-cover shrink-0 border border-slate-200 dark:border-white/10"
+                                />
                               ) : (
-                                <div className="w-8 h-8 rounded bg-slate-200 dark:bg-white/10 flex items-center justify-center shrink-0">
+                                <div className="w-9 h-9 rounded-[6px] bg-slate-200 dark:bg-white/10 flex items-center justify-center shrink-0">
                                   <Paperclip size={14} className="text-slate-500" />
                                 </div>
                               )}
                               <div className="flex flex-col min-w-0">
-                                <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{item.fileName}</span>
-                                {item.fileSize && (
+                                <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[110px]" title={item.fileName}>
+                                  {item.fileName}
+                                </span>
+                                {item.fileSize != null && (
                                   <span className="text-[10px] text-slate-400">
                                     {item.fileSize < 1024 * 1024
                                       ? `${(item.fileSize / 1024).toFixed(1)} KB`
@@ -1584,9 +1625,9 @@ export default function TaskFormModal({
                                 type="button"
                                 onClick={() => {
                                   const removed = attachments[idx];
-                                  setAttachments(prev => prev.filter((_, pi) => pi !== idx));
+                                  setAttachments((prev) => prev.filter((_, pi) => pi !== idx));
                                   if (removed?.id) {
-                                    setDraftDocs(prev => prev.filter(d => d.tempId !== removed.id));
+                                    setDraftDocs((prev) => prev.filter((d) => d.tempId !== removed.id));
                                   }
                                 }}
                                 className="absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-slate-300 dark:bg-white/20 flex items-center justify-center text-slate-500 dark:text-slate-300 hover:bg-red-400 hover:text-white transition-all opacity-0 group-hover:opacity-100"
@@ -1596,14 +1637,49 @@ export default function TaskFormModal({
                             </div>
                           );
                         })}
-                        {uploadingAttachment && (
-                          <div className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-[8px] bg-slate-100 dark:bg-white/8 border border-dashed border-slate-300 dark:border-white/20">
-                            <div className="w-8 h-8 rounded bg-slate-200 dark:bg-white/10 flex items-center justify-center shrink-0 animate-pulse">
-                              <Paperclip size={14} className="text-slate-400" />
+
+                        {/* ── Pending attachments (local blob URL, uploading) ── */}
+                        {pendingAttachments.map((item) => {
+                          const isImg =
+                            item.localUrl.startsWith('blob:') ||
+                            item.fileType?.startsWith('image/') ||
+                            item.fileName?.match(/\.(jpeg|jpg|gif|png|webp|svg|avif)$/i);
+                          return (
+                            <div
+                              key={item.id}
+                              className="relative flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-[8px] bg-slate-100 dark:bg-white/8 border border-dashed border-slate-300 dark:border-white/20 min-w-0 max-w-[200px] opacity-75"
+                            >
+                              {/* Thumbnail */}
+                              <div className="relative w-9 h-9 rounded-[6px] overflow-hidden shrink-0 bg-slate-200 dark:bg-white/10">
+                                {isImg && item.fileType?.startsWith('image/') ? (
+                                  <img
+                                    src={item.localUrl}
+                                    alt={item.fileName}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <Paperclip size={14} className="text-slate-500" />
+                                  </div>
+                                )}
+                                {/* Upload spinner overlay */}
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-[6px]">
+                                  <svg className="animate-spin w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                                  </svg>
+                                </div>
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[110px]" title={item.fileName}>
+                                  {item.fileName}
+                                </span>
+                                <span className="text-[10px] text-slate-400">Uploading…</span>
+                              </div>
                             </div>
-                            <span className="text-[11px] text-slate-400 dark:text-slate-500">Uploading...</span>
-                          </div>
-                        )}
+                          );
+                        })}
+
                       </div>
                     </div>
                   )}
