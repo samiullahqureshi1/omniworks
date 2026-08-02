@@ -4,7 +4,7 @@ import React, { useState, useTransition, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, UserPlus, Users as UsersIcon, Mail, ShieldAlert, MoreHorizontal, Key, UserX, UserCheck, Pencil, Trash2, Table as TableIcon, LayoutGrid, List as ListIcon, ChevronDown } from 'lucide-react';
+import { Search, UserPlus, Users as UsersIcon, Mail, ShieldAlert, MoreHorizontal, Key, UserX, UserCheck, Pencil, Trash2, Table as TableIcon, LayoutGrid, List as ListIcon, ChevronDown, Shield, Check as CheckIcon } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -14,6 +14,7 @@ import { FormDialog, FormDialogCancelButton, FormDialogSubmitButton, FormRoleSel
 import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addUserAction, editUserAction, deactivateUserAction, activateUserAction, resetUserPasswordAction, deleteUserAction } from '@/app/actions/users';
+import { HiBriefcase, HiClipboardList, HiCalendar, HiUser, HiUserGroup } from 'react-icons/hi';
 
 export default function UsersClient({ initialUsers, currentUser }: { initialUsers: any[], currentUser: any }) {
   const [users, setUsers] = useState(initialUsers);
@@ -28,10 +29,72 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
   // Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAddFormValid, setIsAddFormValid] = useState(false);
+  const [addTab, setAddTab] = useState<'details' | 'permissions'>('details');
   const [editUser, setEditUser] = useState<any>(null);
+  const [editTab, setEditTab] = useState<'details' | 'permissions'>('details');
   const [resetUser, setResetUser] = useState<any>(null);
   const [deactivateUser, setDeactivateUser] = useState<any>(null);
   const [deleteUser, setDeleteUser] = useState<any>(null);
+
+  // Permissions state for edit modal
+  type PermAction = 'view' | 'edit' | 'create' | 'delete';
+  type PermResource = 'project' | 'task' | 'planner' | 'user' | 'client';
+  const PERM_RESOURCES: { key: PermResource; label: string; Icon: React.ElementType; color: string }[] = [
+    { key: 'project', label: 'Project', Icon: HiBriefcase,   color: 'text-violet-500' },
+    { key: 'task',    label: 'Task',    Icon: HiClipboardList, color: 'text-blue-500'   },
+    { key: 'planner', label: 'Planner', Icon: HiCalendar,    color: 'text-emerald-500' },
+    { key: 'user',    label: 'User',    Icon: HiUser,         color: 'text-amber-500'  },
+    { key: 'client',  label: 'Client',  Icon: HiUserGroup,   color: 'text-rose-500'   },
+  ];
+  const PERM_ACTIONS: PermAction[] = ['view', 'edit', 'create', 'delete'];
+  const defaultPerms = (): Record<PermResource, Record<PermAction, boolean>> => ({
+    project: { view: false, edit: false, create: false, delete: false },
+    task:    { view: false, edit: false, create: false, delete: false },
+    planner: { view: false, edit: false, create: false, delete: false },
+    user:    { view: false, edit: false, create: false, delete: false },
+    client:  { view: false, edit: false, create: false, delete: false },
+  });
+  // Edit modal permissions
+  const [permissions, setPermissions] = useState<Record<PermResource, Record<PermAction, boolean>>>(defaultPerms());
+
+  const togglePerm = (resource: PermResource, action: PermAction) => {
+    setPermissions(prev => ({
+      ...prev,
+      [resource]: { ...prev[resource], [action]: !prev[resource][action] },
+    }));
+  };
+
+  const toggleAllForResource = (resource: PermResource) => {
+    const allOn = PERM_ACTIONS.every(a => permissions[resource][a]);
+    setPermissions(prev => ({
+      ...prev,
+      [resource]: Object.fromEntries(PERM_ACTIONS.map(a => [a, !allOn])) as Record<PermAction, boolean>,
+    }));
+  };
+
+  // Add modal permissions (separate state)
+  const [addPermissions, setAddPermissions] = useState<Record<PermResource, Record<PermAction, boolean>>>(defaultPerms());
+
+  const toggleAddPerm = (resource: PermResource, action: PermAction) => {
+    setAddPermissions(prev => ({
+      ...prev,
+      [resource]: { ...prev[resource], [action]: !prev[resource][action] },
+    }));
+  };
+
+  const toggleAllForAddResource = (resource: PermResource) => {
+    const allOn = PERM_ACTIONS.every(a => addPermissions[resource][a]);
+    setAddPermissions(prev => ({
+      ...prev,
+      [resource]: Object.fromEntries(PERM_ACTIONS.map(a => [a, !allOn])) as Record<PermAction, boolean>,
+    }));
+  };
+
+  const openEditUser = (u: any) => {
+    setEditUser(u);
+    setEditTab('details');
+    setPermissions(defaultPerms());
+  };
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -416,7 +479,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onClick={() => setEditUser(u)} className="cursor-pointer">
+                          <DropdownMenuItem onClick={() => openEditUser(u)} className="cursor-pointer">
                             <Pencil className="mr-2 h-4 w-4 text-muted-foreground" /> Edit User
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => setResetUser(u)} className="cursor-pointer">
@@ -455,80 +518,419 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
       <FormDialog
         open={isAddModalOpen}
         onOpenChange={(open) => {
-          if (!open) setIsAddFormValid(false);
+          if (!open) {
+            setIsAddFormValid(false);
+            setAddTab('details');
+            setAddPermissions(defaultPerms());
+          }
           setIsAddModalOpen(open);
         }}
         title="Add New User"
         description="Send an invitation to join your workspace organization."
+        className="max-w-[520px]"
         footer={
           <>
             <FormDialogCancelButton onClick={() => {
               setIsAddFormValid(false);
+              setAddTab('details');
+              setAddPermissions(defaultPerms());
               setIsAddModalOpen(false);
             }} disabled={isPending}>Cancel</FormDialogCancelButton>
             <FormDialogSubmitButton type="submit" form="add-user-form" disabled={isPending || !isAddFormValid}>{isPending ? 'Adding...' : 'Add User'}</FormDialogSubmitButton>
           </>
         }
       >
+        {/* Tab switcher */}
+        <div className="flex gap-0 px-6 border-b border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#1f1f1f]">
+          <button
+            type="button"
+            onClick={() => setAddTab('details')}
+            className={`relative py-3 px-1 mr-6 text-[13px] font-semibold transition-colors outline-none ${
+              addTab === 'details'
+                ? 'text-slate-900 dark:text-white'
+                : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            Details
+            {addTab === 'details' && (
+              <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-slate-900 dark:bg-white" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setAddTab('permissions')}
+            className={`relative py-3 px-1 text-[13px] font-semibold transition-colors outline-none flex items-center gap-1.5 ${
+              addTab === 'permissions'
+                ? 'text-slate-900 dark:text-white'
+                : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            <Shield size={12} />
+            Permissions
+            {addTab === 'permissions' && (
+              <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-slate-900 dark:bg-white" />
+            )}
+          </button>
+        </div>
+
         <form
           id="add-user-form"
           onSubmit={handleAddSubmit}
           onInput={(event) => setIsAddFormValid(event.currentTarget.checkValidity())}
-          className="px-6 pt-7 pb-6 space-y-5"
         >
-          <div className="space-y-1.5">
-            <label htmlFor="add-user-name" className={formFieldLabel}>Name</label>
-            <Input id="add-user-name" name="name" required placeholder="e.g. John Doe" className={formInputClass} />
+          {/* ── Details Tab ── */}
+          <div className={`px-6 pt-7 pb-6 space-y-5 ${addTab === 'details' ? '' : 'hidden'}`}>
+            <div className="space-y-1.5">
+              <label htmlFor="add-user-name" className={formFieldLabel}>Name</label>
+              <Input id="add-user-name" name="name" required placeholder="e.g. John Doe" className={formInputClass} />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="add-user-email" className={formFieldLabel}>Email Address</label>
+              <Input id="add-user-email" name="email" type="email" required placeholder="e.g. john@example.com" className={formInputClass} />
+            </div>
+            <FormRoleSelect id="add-user-role" />
           </div>
-          <div className="space-y-1.5">
-            <label htmlFor="add-user-email" className={formFieldLabel}>Email Address</label>
-            <Input id="add-user-email" name="email" type="email" required placeholder="e.g. john@example.com" className={formInputClass} />
+
+          {/* ── Permissions Tab ── */}
+          <div className={`px-6 pt-5 pb-6 ${addTab === 'permissions' ? '' : 'hidden'}`}>
+            <p className="text-[12px] text-slate-400 dark:text-slate-500 mb-4">
+              Control what this user can do across each module.
+            </p>
+
+            {/* Column headers */}
+            <div className="grid grid-cols-[1fr_repeat(4,48px)] gap-x-1 mb-2 pr-1">
+              <div />
+              {PERM_ACTIONS.map(action => (
+                <div key={action} className="text-center text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  {action.charAt(0).toUpperCase() + action.slice(1)}
+                </div>
+              ))}
+            </div>
+
+            {/* Permission rows */}
+            <div className="space-y-1">
+              {PERM_RESOURCES.map(({ key, label, Icon, color }) => {
+                const allOn = PERM_ACTIONS.every(a => addPermissions[key][a]);
+                const someOn = PERM_ACTIONS.some(a => addPermissions[key][a]);
+                return (
+                  <div
+                    key={key}
+                    className={`grid grid-cols-[1fr_repeat(4,48px)] gap-x-1 items-center rounded-[8px] px-3 py-2.5 transition-colors ${
+                      someOn
+                        ? 'bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10'
+                        : 'border border-transparent hover:bg-slate-50/60 dark:hover:bg-white/[0.02]'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleAllForAddResource(key)}
+                      className="flex items-center gap-2.5 text-left group"
+                    >
+                      <span
+                        className={`flex items-center justify-center w-5 h-5 rounded-[4px] border-2 transition-all flex-shrink-0 ${
+                          allOn
+                            ? 'bg-slate-900 dark:bg-white border-slate-900 dark:border-white'
+                            : someOn
+                            ? 'bg-slate-300 dark:bg-slate-600 border-slate-300 dark:border-slate-600'
+                            : 'border-slate-300 dark:border-white/20 group-hover:border-slate-400'
+                        }`}
+                      >
+                        {(allOn || someOn) && <CheckIcon size={11} className={allOn ? 'text-white dark:text-slate-900' : 'text-white'} strokeWidth={3} />}
+                      </span>
+                      <span className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-700 dark:text-slate-200">
+                        <Icon className={`text-[15px] ${color}`} />
+                        {label}
+                      </span>
+                    </button>
+
+                    {PERM_ACTIONS.map(action => (
+                      <div key={action} className="flex items-center justify-center">
+                        <button
+                          type="button"
+                          onClick={() => toggleAddPerm(key, action)}
+                          className={`w-5 h-5 rounded-[4px] border-2 flex items-center justify-center transition-all ${
+                            addPermissions[key][action]
+                              ? 'bg-slate-900 dark:bg-white border-slate-900 dark:border-white'
+                              : 'border-slate-300 dark:border-white/20 hover:border-slate-500 dark:hover:border-white/40'
+                          }`}
+                        >
+                          {addPermissions[key][action] && (
+                            <CheckIcon size={11} className="text-white dark:text-slate-900" strokeWidth={3} />
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Quick preset buttons */}
+            <div className="flex items-center gap-2 mt-5 pt-4 border-t border-slate-100 dark:border-white/5">
+              <span className="text-[11.5px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Presets:</span>
+              <button
+                type="button"
+                onClick={() => setAddPermissions(defaultPerms())}
+                className="text-[11.5px] px-2.5 py-1 rounded-[6px] border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors font-medium"
+              >
+                None
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddPermissions({
+                  project: { view: true, edit: false, create: false, delete: false },
+                  task:    { view: true, edit: false, create: false, delete: false },
+                  planner: { view: true, edit: false, create: false, delete: false },
+                  user:    { view: true, edit: false, create: false, delete: false },
+                  client:  { view: true, edit: false, create: false, delete: false },
+                })}
+                className="text-[11.5px] px-2.5 py-1 rounded-[6px] border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors font-medium"
+              >
+                View Only
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddPermissions({
+                  project: { view: true, edit: true, create: true, delete: true },
+                  task:    { view: true, edit: true, create: true, delete: true },
+                  planner: { view: true, edit: true, create: true, delete: true },
+                  user:    { view: true, edit: true, create: true, delete: true },
+                  client:  { view: true, edit: true, create: true, delete: true },
+                })}
+                className="text-[11.5px] px-2.5 py-1 rounded-[6px] border border-slate-900 dark:border-white bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors font-bold"
+              >
+                Full Access
+              </button>
+            </div>
           </div>
-          <FormRoleSelect id="add-user-role" />
         </form>
       </FormDialog>
 
-      {/* Edit User Modal */}
-      <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Edit User</DialogTitle>
-            <DialogDescription>Update user details and roles.</DialogDescription>
-          </DialogHeader>
-          {editUser && (
-            <form onSubmit={handleEditSubmit} className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Name</label>
-                <Input name="name" defaultValue={editUser.name} required />
+      {/* Edit User Modal — tabbed, matches Add User style */}
+      <FormDialog
+        open={!!editUser}
+        onOpenChange={(open) => { if (!open) { setEditUser(null); setEditTab('details'); setPermissions(defaultPerms()); } }}
+        title={editUser?.name ?? 'Edit User'}
+        description="Manage user details and workspace permissions."
+        className="max-w-[520px]"
+        footer={
+          <>
+            <FormDialogCancelButton onClick={() => { setEditUser(null); setEditTab('details'); setPermissions(defaultPerms()); }} disabled={isPending}>
+              Cancel
+            </FormDialogCancelButton>
+            <FormDialogSubmitButton type="submit" form="edit-user-form" disabled={isPending}>
+              {isPending ? 'Saving…' : 'Save Changes'}
+            </FormDialogSubmitButton>
+          </>
+        }
+      >
+        {/* Tab switcher */}
+        <div className="flex gap-0 px-6 border-b border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#1f1f1f]">
+          <button
+            type="button"
+            onClick={() => setEditTab('details')}
+            className={`relative py-3 px-1 mr-6 text-[13px] font-semibold transition-colors outline-none ${
+              editTab === 'details'
+                ? 'text-slate-900 dark:text-white'
+                : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            Details
+            {editTab === 'details' && (
+              <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-slate-900 dark:bg-white" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditTab('permissions')}
+            className={`relative py-3 px-1 text-[13px] font-semibold transition-colors outline-none flex items-center gap-1.5 ${
+              editTab === 'permissions'
+                ? 'text-slate-900 dark:text-white'
+                : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            }`}
+          >
+            <Shield size={12} />
+            Permissions
+            {editTab === 'permissions' && (
+              <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-slate-900 dark:bg-white" />
+            )}
+          </button>
+        </div>
+
+        {editUser && (
+          <form id="edit-user-form" onSubmit={handleEditSubmit}>
+            {/* ── Details Tab ── */}
+            <div className={`px-6 pt-7 pb-6 space-y-5 ${editTab === 'details' ? '' : 'hidden'}`}>
+              <div className="space-y-1.5">
+                <label htmlFor="edit-user-name" className={formFieldLabel}>Name</label>
+                <Input
+                  id="edit-user-name"
+                  name="name"
+                  required
+                  defaultValue={editUser.name}
+                  placeholder="e.g. John Doe"
+                  className={formInputClass}
+                />
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Email</label>
-                <Input name="email" type="email" defaultValue={editUser.email} required />
+              <div className="space-y-1.5">
+                <label htmlFor="edit-user-email" className={formFieldLabel}>Email Address</label>
+                <Input
+                  id="edit-user-email"
+                  name="email"
+                  type="email"
+                  required
+                  defaultValue={editUser.email}
+                  placeholder="e.g. john@example.com"
+                  className={formInputClass}
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Role</label>
-                  <select name="role" defaultValue={editUser.role} required className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <div className="space-y-1.5">
+                  <label htmlFor="edit-user-role" className={formFieldLabel}>Role</label>
+                  <select
+                    id="edit-user-role"
+                    name="role"
+                    defaultValue={editUser.role}
+                    required
+                    className="flex h-[42px] w-full rounded-[8px] border border-slate-200 dark:border-white/10 bg-transparent px-3 text-[15px] text-slate-900 dark:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-700 dark:focus-visible:ring-slate-300"
+                  >
                     <option value="MEMBER">Member</option>
                     <option value="OWNER">Owner</option>
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Status</label>
-                  <select name="status" defaultValue={editUser.status} required className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <div className="space-y-1.5">
+                  <label htmlFor="edit-user-status" className={formFieldLabel}>Status</label>
+                  <select
+                    id="edit-user-status"
+                    name="status"
+                    defaultValue={editUser.status}
+                    required
+                    className="flex h-[42px] w-full rounded-[8px] border border-slate-200 dark:border-white/10 bg-transparent px-3 text-[15px] text-slate-900 dark:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-700 dark:focus-visible:ring-slate-300"
+                  >
                     <option value="ACTIVE">Active</option>
                     <option value="INACTIVE">Inactive</option>
                   </select>
                 </div>
               </div>
-              <DialogFooter className="pt-4">
-                <Button type="button" variant="outline" onClick={() => setEditUser(null)}>Cancel</Button>
-                <Button type="submit" disabled={isPending}>{isPending ? 'Saving...' : 'Save Changes'}</Button>
-              </DialogFooter>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
+            </div>
+
+            {/* ── Permissions Tab ── */}
+            <div className={`px-6 pt-5 pb-6 ${editTab === 'permissions' ? '' : 'hidden'}`}>
+              <p className="text-[12px] text-slate-400 dark:text-slate-500 mb-4">
+                Control what this user can do across each module.
+              </p>
+
+              {/* Column headers */}
+              <div className="grid grid-cols-[1fr_repeat(4,48px)] gap-x-1 mb-2 pr-1">
+                <div />
+                {PERM_ACTIONS.map(action => (
+                  <div key={action} className="text-center text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    {action.charAt(0).toUpperCase() + action.slice(1)}
+                  </div>
+                ))}
+              </div>
+
+              {/* Permission rows */}
+              <div className="space-y-1">
+                {PERM_RESOURCES.map(({ key, label, Icon, color }) => {
+                  const allOn = PERM_ACTIONS.every(a => permissions[key][a]);
+                  const someOn = PERM_ACTIONS.some(a => permissions[key][a]);
+                  return (
+                    <div
+                      key={key}
+                      className={`grid grid-cols-[1fr_repeat(4,48px)] gap-x-1 items-center rounded-[8px] px-3 py-2.5 transition-colors ${
+                        someOn
+                          ? 'bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10'
+                          : 'border border-transparent hover:bg-slate-50/60 dark:hover:bg-white/[0.02]'
+                      }`}
+                    >
+                      {/* Resource label with select-all toggle */}
+                      <button
+                        type="button"
+                        onClick={() => toggleAllForResource(key)}
+                        className="flex items-center gap-2.5 text-left group"
+                      >
+                        <span
+                          className={`flex items-center justify-center w-5 h-5 rounded-[4px] border-2 transition-all flex-shrink-0 ${
+                            allOn
+                              ? 'bg-slate-900 dark:bg-white border-slate-900 dark:border-white'
+                              : someOn
+                              ? 'bg-slate-300 dark:bg-slate-600 border-slate-300 dark:border-slate-600'
+                              : 'border-slate-300 dark:border-white/20 group-hover:border-slate-400'
+                          }`}
+                        >
+                          {(allOn || someOn) && <CheckIcon size={11} className={allOn ? 'text-white dark:text-slate-900' : 'text-white'} strokeWidth={3} />}
+                        </span>
+                        <span className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-700 dark:text-slate-200">
+                          <Icon className={`text-[15px] ${color}`} />
+                          {label}
+                        </span>
+                      </button>
+
+                      {/* Individual action checkboxes */}
+                      {PERM_ACTIONS.map(action => (
+                        <div key={action} className="flex items-center justify-center">
+                          <button
+                            type="button"
+                            onClick={() => togglePerm(key, action)}
+                            className={`w-5 h-5 rounded-[4px] border-2 flex items-center justify-center transition-all ${
+                              permissions[key][action]
+                                ? 'bg-slate-900 dark:bg-white border-slate-900 dark:border-white'
+                                : 'border-slate-300 dark:border-white/20 hover:border-slate-500 dark:hover:border-white/40'
+                            }`}
+                          >
+                            {permissions[key][action] && (
+                              <CheckIcon size={11} className="text-white dark:text-slate-900" strokeWidth={3} />
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Quick preset buttons */}
+              <div className="flex items-center gap-2 mt-5 pt-4 border-t border-slate-100 dark:border-white/5">
+                <span className="text-[11.5px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Presets:</span>
+                <button
+                  type="button"
+                  onClick={() => setPermissions(defaultPerms())}
+                  className="text-[11.5px] px-2.5 py-1 rounded-[6px] border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors font-medium"
+                >
+                  None
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPermissions({
+                    project: { view: true, edit: false, create: false, delete: false },
+                    task:    { view: true, edit: false, create: false, delete: false },
+                    planner: { view: true, edit: false, create: false, delete: false },
+                    user:    { view: true, edit: false, create: false, delete: false },
+                    client:  { view: true, edit: false, create: false, delete: false },
+                  })}
+                  className="text-[11.5px] px-2.5 py-1 rounded-[6px] border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors font-medium"
+                >
+                  View Only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPermissions({
+                    project: { view: true, edit: true, create: true, delete: true },
+                    task:    { view: true, edit: true, create: true, delete: true },
+                    planner: { view: true, edit: true, create: true, delete: true },
+                    user:    { view: true, edit: true, create: true, delete: true },
+                    client:  { view: true, edit: true, create: true, delete: true },
+                  })}
+                  className="text-[11.5px] px-2.5 py-1 rounded-[6px] border border-slate-900 dark:border-white bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors font-bold"
+                >
+                  Full Access
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+      </FormDialog>
 
       {/* Reset Password Modal */}
       <Dialog open={!!resetUser} onOpenChange={(open) => !open && setResetUser(null)}>
