@@ -1,20 +1,39 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FolderKanban, Clock, Activity, ListTodo, Search, ArrowUpDown, Filter, ChevronDown, CheckCircle2, AlertCircle, Clock3, MoreVertical } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { formatHours } from '@/lib/utils';
+import { useRealtime } from '@/hooks/useRealtime';
 
 import DashboardTaskModal from './DashboardTaskModal';
 
 export default function OwnerDashboard({ metrics }: { metrics: any }) {
+  const router = useRouter();
   const [taskSummaryMonth, setTaskSummaryMonth] = useState('2025-04');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: '', direction: '' });
   const [filterStatus, setFilterStatus] = useState('');
   const [selectedTask, setSelectedTask] = useState<any | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Auto-refresh metrics every 10 seconds or when timer events fire
+  useEffect(() => {
+    const interval = setInterval(() => {
+      router.refresh();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [router]);
+
+  const { lastEvent } = useRealtime([]);
+
+  useEffect(() => {
+    if (lastEvent) {
+      router.refresh();
+    }
+  }, [lastEvent, router]);
   
   const container = {
     hidden: { opacity: 0 },

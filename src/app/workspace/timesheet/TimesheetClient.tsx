@@ -59,15 +59,23 @@ export default function TimesheetClient({ currentUser, projects, users, tasks }:
     });
   };
 
+  const [nowMs, setNowMs] = useState<number>(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     fetchTimesheet();
   }, []);
 
-  const { lastEvent } = useRealtime([{ taskId: undefined, projectId: undefined }]);
+  const { lastEvent } = useRealtime([]);
 
   useEffect(() => {
     if (lastEvent) {
-      // Refresh timesheet automatically
       fetchTimesheet();
     }
   }, [lastEvent]);
@@ -86,22 +94,35 @@ export default function TimesheetClient({ currentUser, projects, users, tasks }:
     // We don't auto-fetch here to prevent double fetch, user can click apply
   };
 
+  // Process entries with live duration for running timers
+  const processedEntries = entries.map(e => {
+    if (e.isRunning || e.status === 'RUNNING' || !e.endTime) {
+      const elapsedSec = Math.max(0, Math.floor((nowMs - new Date(e.startTime).getTime()) / 1000) - (e.idleDuration || 0));
+      return {
+        ...e,
+        activeWorkedDuration: elapsedSec,
+        duration: elapsedSec / 3600,
+      };
+    }
+    return e;
+  });
+
   // Summaries
-  const totalSessionSec = entries.reduce((acc, e) => acc + (e.activeWorkedDuration + e.idleDuration), 0);
-  const totalActiveSec = entries.reduce((acc, e) => acc + e.activeWorkedDuration, 0);
-  const totalIdleSec = entries.reduce((acc, e) => acc + e.idleDuration, 0);
+  const totalSessionSec = processedEntries.reduce((acc, e) => acc + (e.activeWorkedDuration + (e.idleDuration || 0)), 0);
+  const totalActiveSec = processedEntries.reduce((acc, e) => acc + e.activeWorkedDuration, 0);
+  const totalIdleSec = processedEntries.reduce((acc, e) => acc + (e.idleDuration || 0), 0);
   const totalBillableHours = totalActiveSec / 3600;
 
-  const totalEntries = entries.length;
-  const uniqueProjects = new Set(entries.map(e => e.projectId)).size;
-  const uniqueTasks = new Set(entries.map(e => e.taskId)).size;
+  const totalEntries = processedEntries.length;
+  const uniqueProjects = new Set(processedEntries.map(e => e.projectId)).size;
+  const uniqueTasks = new Set(processedEntries.map(e => e.taskId)).size;
 
   const formatHours = (sec: number) => globalFormatHours(sec / 3600);
 
   // Grouping Logic
   let groupedData: Record<string, any[]> = {};
   if (groupBy !== 'NONE') {
-    entries.forEach(e => {
+    processedEntries.forEach(e => {
       let key = 'Other';
       if (groupBy === 'DATE') key = new Date(e.startTime).toLocaleDateString();
       else if (groupBy === 'MEMBER') key = e.member?.name || 'Unknown';
@@ -116,7 +137,7 @@ export default function TimesheetClient({ currentUser, projects, users, tasks }:
   // Exports
   const handleExportCSV = () => {
     const headers = ['Date', 'Project', 'Task', 'Member', 'Start Time', 'End Time', 'Total Session (hrs)', 'Active Worked (hrs)', 'Idle (hrs)', 'Type', 'Status', 'Notes'];
-    const rows = entries.map(e => [
+    const rows = processedEntries.map(e => [
       new Date(e.startTime).toLocaleDateString(),
       `"${e.project?.name || 'General'}"`,
       `"${e.task?.title || 'General'}"`,
@@ -268,7 +289,7 @@ export default function TimesheetClient({ currentUser, projects, users, tasks }:
         <h3 className="text-xl font-bold">Timesheet Report</h3>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={handleExportCSV} disabled={entries.length === 0}><Download className="w-4 h-4 mr-2" /> CSV</Button>
-          <Button variant="outline" onClick={handlePrint} disabled={entries.length === 0}><Printer className="w-4 h-4 mr-2" /> PDF / Print</Button>
+          <Button variant="outline" onClick={handlePrint} disabled={processedEntries.length === 0}><Printer className="w-4 h-4 mr-2" /> PDF / Print</Button>
         </div>
       </div>
 
@@ -282,7 +303,7 @@ export default function TimesheetClient({ currentUser, projects, users, tasks }:
           }
         `}} />
         
-        {entries.length === 0 ? (
+        {processedEntries.length === 0 ? (
           <div className="p-12 text-center text-muted-foreground flex flex-col items-center justify-center">
             <Search className="w-8 h-8 mb-4 text-slate-300 dark:text-slate-600" />
             <p className="text-lg font-medium">No time entries found</p>
@@ -303,7 +324,7 @@ export default function TimesheetClient({ currentUser, projects, users, tasks }:
             <TableBody>
               {groupBy === 'NONE' ? (
                 // Flat List
-                entries.map(e => (
+                processedEntries.map(e => (
                   <TableRow key={e.id} className="group">
                     <TableCell>
                       <div className="font-medium text-sm">{new Date(e.startTime).toLocaleDateString()}</div>

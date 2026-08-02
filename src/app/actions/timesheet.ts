@@ -86,23 +86,74 @@ export async function getTimesheetAction(filters: TimesheetFilters) {
       whereClause.memberId = memberId;
     }
 
-    const entries = await prisma.timeEntry.findMany({
-      where: whereClause,
-      include: {
-        project: {
-          select: { id: true, name: true, projectManagerId: true, clientId: true }
+    const activeTimerWhere: any = { organizationId: session.organizationId };
+    if (projectId) activeTimerWhere.projectId = projectId;
+    if (taskId) activeTimerWhere.taskId = taskId;
+    if (memberId) activeTimerWhere.memberId = memberId;
+
+    const [entries, activeTimers] = await Promise.all([
+      prisma.timeEntry.findMany({
+        where: whereClause,
+        include: {
+          project: {
+            select: { id: true, name: true, projectManagerId: true, clientId: true }
+          },
+          task: {
+            select: { id: true, title: true }
+          },
+          member: {
+            select: { id: true, name: true, email: true }
+          }
         },
-        task: {
-          select: { id: true, title: true }
-        },
-        member: {
-          select: { id: true, name: true, email: true }
+        orderBy: { startTime: 'desc' }
+      }),
+      prisma.activeTimer.findMany({
+        where: activeTimerWhere,
+        include: {
+          project: {
+            select: { id: true, name: true, projectManagerId: true, clientId: true }
+          },
+          task: {
+            select: { id: true, title: true }
+          },
+          member: {
+            select: { id: true, name: true, email: true }
+          }
         }
-      },
-      orderBy: { startTime: 'desc' }
+      })
+    ]);
+
+    const now = new Date();
+    const runningEntries = activeTimers.map((timer: any) => {
+      const elapsedSecs = Math.max(
+        0,
+        Math.floor((now.getTime() - new Date(timer.startTime).getTime()) / 1000) - (timer.idleDuration || 0)
+      );
+      const activeHours = elapsedSecs / 3600;
+      return {
+        id: `active-${timer.id}`,
+        organizationId: timer.organizationId,
+        projectId: timer.projectId,
+        taskId: timer.taskId,
+        memberId: timer.memberId,
+        startTime: timer.startTime,
+        endTime: null,
+        duration: activeHours,
+        activeWorkedDuration: elapsedSecs,
+        idleDuration: timer.idleDuration || 0,
+        entryType: 'TIMER',
+        status: 'RUNNING',
+        notes: 'Currently running timer...',
+        project: timer.project,
+        task: timer.task,
+        member: timer.member,
+        isRunning: true,
+      };
     });
 
-    return { success: true, entries };
+    const allEntries = [...runningEntries, ...entries];
+
+    return { success: true, entries: allEntries };
   } catch (error: any) {
     console.error('Failed to get timesheet:', error);
     return { error: error.message || 'Failed to retrieve timesheet data.' };

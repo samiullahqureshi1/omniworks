@@ -65,9 +65,9 @@ export async function getDashboardDataAction() {
           where: { organizationId },
           _sum: { duration: true },
         }),
-        prisma.activeTimer.aggregate({
+        prisma.activeTimer.findMany({
           where: { organizationId },
-          _sum: { activeWorkedDuration: true },
+          select: { startTime: true, idleDuration: true },
         }),
         prisma.timeEntry.findMany({
           where: { organizationId },
@@ -190,6 +190,16 @@ export async function getDashboardDataAction() {
         .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
         .slice(0, 5);
 
+      const now = new Date();
+      let activeTimersHours = 0;
+      (activeTimersHoursObj || []).forEach((timer: any) => {
+        const elapsedSecs = Math.max(
+          0,
+          Math.floor((now.getTime() - new Date(timer.startTime).getTime()) / 1000) - (timer.idleDuration || 0)
+        );
+        activeTimersHours += elapsedSecs / 3600;
+      });
+
       return {
         success: true,
         view: "OWNER",
@@ -198,8 +208,7 @@ export async function getDashboardDataAction() {
           totalTasks,
           totalAllocatedHours: allocatedHoursObj._sum.totalAllocatedHours || 0,
           totalHours:
-            (totalHoursObj._sum.duration || 0) +
-            (activeTimersHoursObj._sum.activeWorkedDuration || 0) / 3600,
+            Math.round(((totalHoursObj._sum.duration || 0) + activeTimersHours) * 100) / 100,
           projectStatusCounts,
           recentLogs,
           recentTasks,
@@ -459,21 +468,59 @@ export async function getReportsDataAction(filter: {
       }
     }
 
-    const logs = await prisma.timeEntry.findMany({
-      where: trackingWhereClause,
-      include: {
-        member: { select: { id: true, name: true, email: true } },
-        project: { select: { id: true, name: true } },
-        task: { select: { id: true, title: true } },
-      },
-      orderBy: { startTime: "desc" },
-    });
+    const [logs, activeTimers] = await Promise.all([
+      prisma.timeEntry.findMany({
+        where: trackingWhereClause,
+        include: {
+          member: { select: { id: true, name: true, email: true } },
+          project: { select: { id: true, name: true } },
+          task: { select: { id: true, title: true } },
+        },
+        orderBy: { startTime: "desc" },
+      }),
+      prisma.activeTimer.findMany({
+        where: trackingWhereClause,
+        include: {
+          member: { select: { id: true, name: true, email: true } },
+          project: { select: { id: true, name: true } },
+          task: { select: { id: true, title: true } },
+        },
+      }),
+    ]);
 
     const summaryByProject: Record<string, number> = {};
     const summaryByUser: Record<string, number> = {};
     let totalHours = 0;
 
-    // logs.forEach((log) => {
+    const allLogItems: any[] = [];
+
+    const now = new Date();
+    activeTimers.forEach((timer: any) => {
+      const elapsedSecs = Math.max(
+        0,
+        Math.floor((now.getTime() - new Date(timer.startTime).getTime()) / 1000) - (timer.idleDuration || 0)
+      );
+      const hours = elapsedSecs / 3600;
+      const pName = timer.project?.name || "Unknown";
+      const uName = timer.member?.name || "Unknown";
+
+      summaryByProject[pName] = (summaryByProject[pName] || 0) + hours;
+      summaryByUser[uName] = (summaryByUser[uName] || 0) + hours;
+      totalHours += hours;
+
+      allLogItems.push({
+        id: `active-${timer.id}`,
+        userName: timer.member?.name || "Unknown",
+        projectName: timer.project?.name || "Unknown",
+        taskName: timer.task?.title || "N/A",
+        startTime: timer.startTime,
+        endTime: null,
+        description: "Currently running timer...",
+        hours: Math.round(hours * 100) / 100,
+        isRunning: true,
+      });
+    });
+
     logs.forEach((log: any) => {
       const hours = log.duration || 0;
 
@@ -483,6 +530,18 @@ export async function getReportsDataAction(filter: {
       summaryByProject[pName] = (summaryByProject[pName] || 0) + hours;
       summaryByUser[uName] = (summaryByUser[uName] || 0) + hours;
       totalHours += hours;
+
+      allLogItems.push({
+        id: log.id,
+        userName: log.member?.name || "Unknown",
+        projectName: log.project?.name || "Unknown",
+        taskName: log.task?.title || "N/A",
+        startTime: log.startTime,
+        endTime: log.endTime,
+        description: log.notes || "",
+        hours: Math.round(hours * 100) / 100,
+        isRunning: false,
+      });
     });
 
     const projectSummary = Object.keys(summaryByProject).map((name) => ({
@@ -492,21 +551,7 @@ export async function getReportsDataAction(filter: {
 
     return {
       success: true,
-      // logs: logs.map((l) => {
-      logs: logs.map((l: any) => {
-        const h = l.duration || 0;
-        return {
-          id: l.id,
-          userName: l.member?.name || "Unknown",
-          // projectName: l.project.name,
-          projectName: l.project?.name || "Unknown",
-          taskName: l.task?.title || "N/A",
-          startTime: l.startTime,
-          endTime: l.endTime,
-          description: l.notes || "",
-          hours: Math.round(h * 100) / 100,
-        };
-      }),
+      logs: allLogItems,
       projectSummary,
       grandTotalHours: Math.round(totalHours * 100) / 100,
     };

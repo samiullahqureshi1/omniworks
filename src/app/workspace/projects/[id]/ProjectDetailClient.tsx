@@ -237,7 +237,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
   
   const conversationRef = useRef<ProjectConversationRef>(null);
 
-  const { lastEvent } = useRealtime([]);
+  const { lastEvent } = useRealtime([{ projectId: project.id }]);
 
   useEffect(() => {
     const initialPresence: Record<string, string> = {};
@@ -374,22 +374,42 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
   const isClient = currentUser.role === 'CLIENT';
   const canManageTasks = isOwner || isPM || isClient; // As per rules: Clients can create tasks in own projects.
 
+  const [nowMs, setNowMs] = useState<number>(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (lastEvent) {
+      router.refresh();
+    }
+  }, [lastEvent, router]);
+
+  const getTimerActiveSeconds = (t: any) => {
+    if (!t) return 0;
+    if (t.startTime) {
+      const startMs = new Date(t.startTime).getTime();
+      const elapsedSecs = Math.max(0, Math.floor((nowMs - startMs) / 1000) - (t.idleDuration || 0));
+      return elapsedSecs;
+    }
+    return t.activeWorkedDuration || 0;
+  };
+
   // Metrics
-  // NOTE: activeWorkedDuration on TimeEntry rows is stored in seconds, so we
-  // convert seconds -> ms (*1000) below before converting to hours. Live/
-  // in-progress timers (not yet stopped) live in the separate `activeTimers`
-  // relation and must be included too, otherwise a member who is actively
-  // tracking time but hasn't stopped the timer yet would show 0h logged.
   const getTaskTrackedHours = (taskId: string) => {
     const entryHours = project.timeEntries?.filter((t: any) => t.taskId === taskId).reduce((acc: number, t: any) => acc + (t.duration || 0), 0) || 0;
-    const activeSeconds = project.activeTimers?.filter((t: any) => t.taskId === taskId).reduce((acc: number, t: any) => acc + (t.activeWorkedDuration || 0), 0) || 0;
+    const activeSeconds = project.activeTimers?.filter((t: any) => t.taskId === taskId).reduce((acc: number, t: any) => acc + getTimerActiveSeconds(t), 0) || 0;
     const activeHours = activeSeconds / 3600;
     return Math.round((entryHours + activeHours) * 100) / 100;
   };
 
   const getMemberTrackedHours = (userId: string) => {
     const entryHours = project.timeEntries?.filter((t: any) => t.memberId === userId).reduce((acc: number, t: any) => acc + (t.duration || 0), 0) || 0;
-    const activeSeconds = project.activeTimers?.filter((t: any) => t.memberId === userId).reduce((acc: number, t: any) => acc + (t.activeWorkedDuration || 0), 0) || 0;
+    const activeSeconds = project.activeTimers?.filter((t: any) => t.memberId === userId).reduce((acc: number, t: any) => acc + getTimerActiveSeconds(t), 0) || 0;
     const activeHours = activeSeconds / 3600;
     return Math.round((entryHours + activeHours) * 100) / 100;
   };
@@ -418,7 +438,7 @@ export default function ProjectDetailClient({ project, currentUser, users = [], 
       : 0;
   } else {
     const entryHours = project.timeEntries?.reduce((acc: number, t: any) => acc + (t.duration || 0), 0) || 0;
-    const activeSeconds = project.activeTimers?.reduce((acc: number, t: any) => acc + (t.activeWorkedDuration || 0), 0) || 0;
+    const activeSeconds = project.activeTimers?.reduce((acc: number, t: any) => acc + getTimerActiveSeconds(t), 0) || 0;
     const activeHours = activeSeconds / 3600;
     displayTotalTrackedHours = Math.round((entryHours + activeHours) * 100) / 100;
     displayProgressPercent = project.totalAllocatedHours 

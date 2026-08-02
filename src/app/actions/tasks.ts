@@ -139,17 +139,41 @@ export async function getTasksAction(projectIdFilter?: string) {
       // Owner sees everything (whereClause remains only organizationId and optional project filter)
     }
 
-    const tasks = await prisma.task.findMany({
-      where: whereClause,
-      include: {
-        project: { select: { id: true, name: true, projectManagerId: true, clientId: true } },
-        status: true,
-        assignees: { include: { user: { select: { id: true, name: true, email: true, role: true } } } },
-      },
-      orderBy: { createdAt: 'desc' },
+    const [tasks, activeTimers] = await Promise.all([
+      prisma.task.findMany({
+        where: whereClause,
+        include: {
+          project: { select: { id: true, name: true, projectManagerId: true, clientId: true } },
+          status: true,
+          assignees: { include: { user: { select: { id: true, name: true, email: true, role: true } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.activeTimer.findMany({
+        where: { organizationId: session.organizationId },
+        select: { taskId: true, startTime: true, idleDuration: true },
+      }),
+    ]);
+
+    const now = new Date();
+    const tasksWithActiveHours = tasks.map((task: any) => {
+      const activeTimersForTask = activeTimers.filter((t: any) => t.taskId === task.id);
+      let activeHours = 0;
+      activeTimersForTask.forEach((t: any) => {
+        const elapsedSecs = Math.max(
+          0,
+          Math.floor((now.getTime() - new Date(t.startTime).getTime()) / 1000) - (t.idleDuration || 0)
+        );
+        activeHours += elapsedSecs / 3600;
+      });
+      return {
+        ...task,
+        trackedHours: Math.round(((task.trackedHours || 0) + activeHours) * 100) / 100,
+        hasActiveTimer: activeTimersForTask.length > 0,
+      };
     });
 
-    return { success: true, tasks };
+    return { success: true, tasks: tasksWithActiveHours };
   } catch (error: any) {
     return { error: error.message || 'Failed to fetch tasks.' };
   }

@@ -34,6 +34,7 @@ import { getActiveTimerAction, clearTrackedTimeAction } from '@/app/actions/trac
 import { getTaskHiddenColumnsAction, setTaskHiddenColumnsAction } from '@/app/actions/settings';
 import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useRealtime } from '@/hooks/useRealtime';
 import TaskFormModal from './TaskFormModal';
 import StatusManagementModal from './StatusManagementModal';
 import { DndContext, DragOverlay, useDraggable, useDroppable, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -943,6 +944,19 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
 }) {
   const router = useRouter();
   const [tasks, setTasks] = useState(initialTasks);
+
+  useEffect(() => {
+    setTasks(initialTasks);
+  }, [initialTasks]);
+
+  const { lastEvent } = useRealtime([]);
+
+  useEffect(() => {
+    if (lastEvent) {
+      router.refresh();
+    }
+  }, [lastEvent, router]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
   const [selectedStatusId, setSelectedStatusId] = useState<string>('all');
