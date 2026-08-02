@@ -223,12 +223,17 @@ export default function TaskFormModal({
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+    // Snapshot the FileList into a real array BEFORE clearing the input.
+    // `e.target.files` is a LIVE FileList — setting `e.target.value = ""`
+    // empties it, so we must copy the files out first or they vanish
+    // (this previously caused nothing to upload / show below the fields).
+    const files = Array.from(fileList);
     e.target.value = "";
-    if (!files || files.length === 0) return;
 
     // ── Step 1: show instant local previews ──────────────────────────────
-    const newPending = Array.from(files).map((file) => ({
+    const newPending = files.map((file) => ({
       id: `pending-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       localUrl: URL.createObjectURL(file),
       fileName: file.name,
@@ -240,8 +245,8 @@ export default function TaskFormModal({
 
     // ── Step 2: upload each file and swap pending → committed ────────────
     try {
-      for (let i = 0; i < Array.from(files).length; i++) {
-        const file = Array.from(files)[i];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
         const pendingId = newPending[i].id;
         try {
           const fd = new FormData();
@@ -249,6 +254,9 @@ export default function TaskFormModal({
           const resp = await fetch("/api/upload/cloudinary", { method: "POST", body: fd });
           const data = await resp.json();
 
+
+console.log("Upload status:", resp.status);
+console.log("Upload response:", data);
           if (!resp.ok || !data.success) {
             toast.error(data.error || `Upload failed for ${file.name}`);
             // Remove failed pending
@@ -1587,56 +1595,39 @@ export default function TaskFormModal({
                       </div>
                       <div className="flex flex-wrap gap-2">
 
-                        {/* ── Committed attachments (Cloudinary URL) ── */}
-                        {attachments.map((item, idx) => {
-                          const isImg =
-                            item.fileUrl?.match(/\.(jpeg|jpg|gif|png|webp|svg|avif)($|\?)/i) ||
-                            item.fileType?.startsWith('image/') ||
-                            item.fileName?.match(/\.(jpeg|jpg|gif|png|webp|svg|avif)$/i);
-                          return (
-                            <div
-                              key={item.id || idx}
-                              className="relative flex items-center gap-2 pl-2 pr-7 py-1.5 rounded-[8px] bg-slate-100 dark:bg-white/8 border border-slate-200 dark:border-white/10 group hover:border-slate-300 dark:hover:border-white/20 transition-all min-w-0 max-w-[200px]"
-                            >
-                              {isImg ? (
-                                <img
-                                  src={item.fileUrl}
-                                  alt={item.fileName}
-                                  className="w-9 h-9 rounded-[6px] object-cover shrink-0 border border-slate-200 dark:border-white/10"
-                                />
-                              ) : (
-                                <div className="w-9 h-9 rounded-[6px] bg-slate-200 dark:bg-white/10 flex items-center justify-center shrink-0">
-                                  <Paperclip size={14} className="text-slate-500" />
-                                </div>
-                              )}
-                              <div className="flex flex-col min-w-0">
-                                <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[110px]" title={item.fileName}>
-                                  {item.fileName}
-                                </span>
-                                {item.fileSize != null && (
-                                  <span className="text-[10px] text-slate-400">
-                                    {item.fileSize < 1024 * 1024
-                                      ? `${(item.fileSize / 1024).toFixed(1)} KB`
-                                      : `${(item.fileSize / (1024 * 1024)).toFixed(1)} MB`}
-                                  </span>
-                                )}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const removed = attachments[idx];
-                                  setAttachments((prev) => prev.filter((_, pi) => pi !== idx));
-                                  if (removed?.id) {
-                                    setDraftDocs((prev) => prev.filter((d) => d.tempId !== removed.id));
-                                  }
-                                }}
-                                className="absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-slate-300 dark:bg-white/20 flex items-center justify-center text-slate-500 dark:text-slate-300 hover:bg-red-400 hover:text-white transition-all opacity-0 group-hover:opacity-100"
-                              >
-                                <X size={9} />
-                              </button>
-                            </div>
-                          );
-                        })}
+                        {/* ── Committed attachments (Cloudinary URL) — rich card + hover menu ── */}
+                        {attachments.map((item, idx) => (
+                          <CloudinaryAttachmentCard
+                            key={item.id || idx}
+                            attachment={item}
+                            index={idx}
+                            // Rename: update the label locally and in the draft doc that persists on save
+                            onRename={(i, newName) => {
+                              const target = attachments[i];
+                              setAttachments((prev) =>
+                                prev.map((a, pi) => (pi === i ? { ...a, fileName: newName } : a)),
+                              );
+                              if (target?.id) {
+                                setDraftDocs((prev) =>
+                                  prev.map((d) =>
+                                    d.tempId === target.id
+                                      ? { ...d, title: newName, fileName: newName }
+                                      : d,
+                                  ),
+                                );
+                              }
+                            }}
+                            // Delete: drop the attachment and its pending draft doc
+                            onDelete={(i) => {
+                              const removed = attachments[i];
+                              setAttachments((prev) => prev.filter((_, pi) => pi !== i));
+                              if (removed?.id) {
+                                setDraftDocs((prev) => prev.filter((d) => d.tempId !== removed.id));
+                              }
+                            }}
+                            // NOTE: onSetCoverImage intentionally omitted → hides "Use as cover image"
+                          />
+                        ))}
 
                         {/* ── Pending attachments (local blob URL, uploading) ── */}
                         {pendingAttachments.map((item) => {
