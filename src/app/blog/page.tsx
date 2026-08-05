@@ -24,7 +24,7 @@ export default function Page() {
               This is the Blog page. Content is currently being updated and will be available soon.
             </p>
             <p>
-              Collabix is dedicated to providing the best tools and resources to help you manage your team, tasks, and projects in one place.
+              BridgeWorkspace is dedicated to providing the best tools and resources to help you manage your team, tasks, and projects in one place.
             </p>
           </div>
         </div>

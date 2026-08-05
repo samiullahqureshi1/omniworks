@@ -168,7 +168,7 @@ export default function CollaborationSection() {
 
           <img
             src="https://cdn.shopify.com/s/files/1/0732/4496/7128/files/Screenshot_1448-02-01_at_11.17.42_PM.png?v=1784139516"
-            alt="Omniwork Workspace"
+            alt="BridgeWorkspace"
             className="
             w-full
             object-cover

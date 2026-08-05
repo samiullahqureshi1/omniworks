@@ -505,7 +505,7 @@ export async function triggerEventRules(
 
               textBody = `Hello,\n\nA task has been ${eventType === 'create' ? 'created' : 'updated'} in project "${project?.name || ''}".\n\nTask Name: ${taskDetails.title}\nPriority: ${taskDetails.priority || 'MEDIUM'}\nDue Date: ${dueDateStr}\nAssigned To: ${assigneesList}\n\nYou can view the task here: ${viewUrl}`;
             } else {
-              emailSubject = `OmniWork Notification - ${project?.name || ''}`;
+              emailSubject = `BridgeWorkspace Notification - ${project?.name || ''}`;
               introText = `An event triggered a notification.`;
 
               tableRowsHtml = `
@@ -540,7 +540,7 @@ export async function triggerEventRules(
   <div style="width: 100%; background-color: #f8fafc; padding: 40px 20px; box-sizing: border-box;">
     <div style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
       <div style="background: linear-gradient(135deg, #4f46e5, #6366f1); padding: 24px; text-align: center;">
-        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.025em;">OmniWork</h1>
+        <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.025em;">BridgeWorkspace</h1>
       </div>
       <div style="padding: 32px 24px;">
         <p style="font-size: 16px; font-weight: 600; color: #0f172a; margin-top: 0; margin-bottom: 8px;">Hello ${u.name},</p>
@@ -557,7 +557,7 @@ export async function triggerEventRules(
         </div>
       </div>
       <div style="padding: 20px 24px; background-color: #f8fafc; border-top: 1px solid #f1f5f9; text-align: center; font-size: 12px; color: #94a3b8; line-height: 1.5;">
-        This notification was sent because this project matched an automation rule configured in OmniWork.<br>
+        This notification was sent because this project matched an automation rule configured in BridgeWorkspace.<br>
         <a href="${baseUrl}" style="color: #4f46e5; text-decoration: none; font-weight: 600;">Go to Dashboard</a>
       </div>
     </div>
@@ -567,7 +567,7 @@ export async function triggerEventRules(
               `;
 
               await transporter.sendMail({
-                from: `"OmniWork Notifications" <${process.env.EMAIL_USER}>`,
+                from: `"BridgeWorkspace Notifications" <${process.env.EMAIL_USER}>`,
                 to: u.email,
                 subject: emailSubject,
                 text: textBody,

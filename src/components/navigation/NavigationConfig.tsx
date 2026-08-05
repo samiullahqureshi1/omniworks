@@ -27,7 +27,6 @@ import {
   Activity,
   UserCheck,
   Shield,
-  LayoutGrid,
   Lock,
   Building2
 } from 'lucide-react';
@@ -67,7 +66,7 @@ export const mainSidebarItems: MainSidebarItem[] = [
   { id: 'planner', name: 'Planner', icon: CalendarDays },
   { id: 'calendar', name: 'Calendar', icon: Calendar },
   { id: 'conversations', name: 'Chat', icon: MessageSquare },
-  { id: 'more', name: 'More', icon: LayoutGrid },
+  { id: 'rules', name: 'Rules', icon: Cpu },
 ];
 
 export const bottomSidebarItems: MainSidebarItem[] = [

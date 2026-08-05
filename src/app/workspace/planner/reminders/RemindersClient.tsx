@@ -38,8 +38,8 @@ type Reminder = {
   href: string | null;
 };
 
-const DISMISS_KEY = 'omniwork_reminders_dismissed'; // { [id]: timestamp (until) | 'done' }
-const CUSTOM_REMINDERS_KEY = 'omniwork_custom_reminders';
+const DISMISS_KEY = 'bridgeworkspace_reminders_dismissed'; // { [id]: timestamp (until) | 'done' }
+const CUSTOM_REMINDERS_KEY = 'bridgeworkspace_custom_reminders';
 
 function loadState(): Record<string, number | 'done'> {
   if (typeof window === 'undefined') return {};

@@ -13,6 +13,7 @@ import {
   requireMembershipCreate,
   toErrorResponse,
 } from '@/lib/permissions';
+import { invalidateUserPermissions } from '@/lib/permission-cache';
 import { revalidatePath } from 'next/cache';
 
 // Fetch all users for the organization
@@ -189,22 +190,22 @@ export async function addUserAction(formData: FormData) {
         });
 
         await transporter.sendMail({
-          from: `"OmniWork Support" <${process.env.EMAIL_USER}>`,
+          from: `"BridgeWorkspace Support" <${process.env.EMAIL_USER}>`,
           to: email,
           replyTo: process.env.EMAIL_USER,
-          subject: 'Your OmniWork Account Credentials',
-          text: `Hi ${name},\n\nAn account has been created for you at OmniWork. Here are your login credentials:\n\nEmail: ${email}\nPassword: ${rawPassword}\n\nPlease log in and change your password from the security page as soon as possible.\n\nBest,\nThe OmniWork Team`,
+          subject: 'Your BridgeWorkspace Account Credentials',
+          text: `Hi ${name},\n\nAn account has been created for you at BridgeWorkspace. Here are your login credentials:\n\nEmail: ${email}\nPassword: ${rawPassword}\n\nPlease log in and change your password from the security page as soon as possible.\n\nBest,\nThe BridgeWorkspace Team`,
           html: `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your OmniWork Account Credentials</title>
+  <title>Your BridgeWorkspace Account Credentials</title>
 </head>
 <body style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 20px;">
   <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-    <h2 style="color: #333333; margin-top: 0;">Welcome to OmniWork!</h2>
+    <h2 style="color: #333333; margin-top: 0;">Welcome to BridgeWorkspace!</h2>
     <p style="color: #555555; font-size: 16px;">Hi ${name},</p>
     <p style="color: #555555; font-size: 16px;">An account has been created for you. Here are your login credentials:</p>
     <div style="background-color: #f5f5f5; padding: 20px; border-radius: 6px; margin: 25px 0; border: 1px solid #eeeeee;">
@@ -216,7 +217,7 @@ export async function addUserAction(formData: FormData) {
     </p>
     <hr style="border: none; border-top: 1px solid #eeeeee; margin: 30px 0 20px 0;" />
     <p style="color: #999999; font-size: 12px; text-align: center; margin: 0;">
-      © ${new Date().getFullYear()} OmniWork. All rights reserved.
+      © ${new Date().getFullYear()} BridgeWorkspace. All rights reserved.
     </p>
   </div>
 </body>
@@ -302,6 +303,10 @@ export async function editUserAction(id: string, formData: FormData) {
       },
     });
 
+    // Role/permission/status changed — drop the cached membership so the
+    // next request re-reads it instead of serving a stale grant.
+    invalidateUserPermissions(targetUser.id);
+
     revalidatePath('/workspace/users');
     revalidatePath('/workspace/clients');
     return { success: true, message: 'User updated successfully.' };
@@ -330,6 +335,10 @@ export async function deactivateUserAction(id: string) {
       data: { status: 'INACTIVE' }
     });
 
+    // Role/permission/status changed — drop the cached membership so the
+    // next request re-reads it instead of serving a stale grant.
+    invalidateUserPermissions(targetUser.id);
+
     revalidatePath('/workspace/users');
     revalidatePath('/workspace/clients');
     return { success: true, message: 'User deactivated successfully.' };
@@ -349,6 +358,10 @@ export async function activateUserAction(id: string) {
       where: { id: targetUser.id },
       data: { status: 'ACTIVE' }
     });
+
+    // Role/permission/status changed — drop the cached membership so the
+    // next request re-reads it instead of serving a stale grant.
+    invalidateUserPermissions(targetUser.id);
 
     revalidatePath('/workspace/users');
     revalidatePath('/workspace/clients');
@@ -377,6 +390,10 @@ export async function resetUserPasswordAction(id: string, formData: FormData) {
       where: { id: targetUser.id },
       data: { passwordHash }
     });
+
+    // Role/permission/status changed — drop the cached membership so the
+    // next request re-reads it instead of serving a stale grant.
+    invalidateUserPermissions(targetUser.id);
 
     return { success: true, message: 'Password reset successfully.' };
   } catch (error: any) {
@@ -416,6 +433,10 @@ export async function deleteUserAction(id: string) {
       where: { id: targetUser.id },
       data: { status: 'INACTIVE' },
     });
+
+    // Role/permission/status changed — drop the cached membership so the
+    // next request re-reads it instead of serving a stale grant.
+    invalidateUserPermissions(targetUser.id);
 
     revalidatePath('/workspace/users');
     revalidatePath('/workspace/clients');

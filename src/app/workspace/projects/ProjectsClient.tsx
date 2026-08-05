@@ -1697,7 +1697,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
           setTemplates(templates.filter((t) => t.id !== deleteTemplateId));
           setPinnedTemplateIds((prev) => {
             const next = prev.filter((id) => id !== deleteTemplateId);
-            localStorage.setItem("omniwork_pinned_templates", JSON.stringify(next));
+            localStorage.setItem("bridgeworkspace_pinned_templates", JSON.stringify(next));
             return next;
           });
         }
@@ -1714,10 +1714,10 @@ const [isPMOpen, setIsPMOpen] = useState(false);
       const newDefault = defaultTemplateId === templateId ? null : templateId;
       setDefaultTemplateId(newDefault);
       if (newDefault) {
-        localStorage.setItem("omniwork_default_project_template_id", newDefault);
+        localStorage.setItem("bridgeworkspace_default_project_template_id", newDefault);
         toast.success("Template set as default");
       } else {
-        localStorage.removeItem("omniwork_default_project_template_id");
+        localStorage.removeItem("bridgeworkspace_default_project_template_id");
         toast.success("Default template removed");
       }
     };
@@ -1729,7 +1729,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
         const next = isPinned
           ? prev.filter((id) => id !== templateId)
           : [...prev, templateId];
-        localStorage.setItem("omniwork_pinned_templates", JSON.stringify(next));
+        localStorage.setItem("bridgeworkspace_pinned_templates", JSON.stringify(next));
         return next;
       });
     };
@@ -1825,17 +1825,17 @@ const [isPMOpen, setIsPMOpen] = useState(false);
     };
 
     useEffect(() => {
-      const savedView = localStorage.getItem("omniwork_project_view");
+      const savedView = localStorage.getItem("bridgeworkspace_project_view");
       if (savedView === "TABLE" || savedView === "KANBAN" || savedView === "LIST" || savedView === "DISCUSSION" || savedView === "CALENDAR") {
         setViewMode(savedView as any);
       }
-      const savedPinned = localStorage.getItem("omniwork_pinned_templates");
+      const savedPinned = localStorage.getItem("bridgeworkspace_pinned_templates");
       if (savedPinned) {
         try {
           setPinnedTemplateIds(JSON.parse(savedPinned));
         } catch (e) {}
       }
-      const savedDefault = localStorage.getItem("omniwork_default_project_template_id");
+      const savedDefault = localStorage.getItem("bridgeworkspace_default_project_template_id");
       if (savedDefault) {
         setDefaultTemplateId(savedDefault);
       }
@@ -1844,7 +1844,7 @@ const [isPMOpen, setIsPMOpen] = useState(false);
 
     const handleSetViewMode = (mode: "TABLE" | "KANBAN" | "LIST" | "DISCUSSION" | "CALENDAR") => {
       setViewMode(mode);
-      localStorage.setItem("omniwork_project_view", mode);
+      localStorage.setItem("bridgeworkspace_project_view", mode);
     };
 
     // DND State
@@ -5691,11 +5691,11 @@ const [isPMOpen, setIsPMOpen] = useState(false);
         <DialogPrimitive.Root open={isFieldsDrawerOpen} onOpenChange={setIsFieldsDrawerOpen}>
           <DialogPrimitive.Portal>
             <DialogPrimitive.Overlay 
-              id="omniwork-fields-drawer-overlay"
+              id="bridgeworkspace-fields-drawer-overlay"
               className={`fixed inset-0 z-[9999] transition-opacity ${fieldsDrawerTarget === "FORM" ? "bg-black/50 backdrop-blur-sm" : "bg-black/10"}`} 
             />
             <DialogPrimitive.Content 
-              id="omniwork-fields-drawer"
+              id="bridgeworkspace-fields-drawer"
               onInteractOutside={(e) => {
                 e.preventDefault(); // Stop Radix from bubbling the outside click to the Project Modal
                 setIsFieldsDrawerOpen(false); // Only close the Add Field modal

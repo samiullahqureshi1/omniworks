@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import NotificationsClient from './NotificationsClient';
 import { prisma } from '@/lib/db';
 
-export const metadata = { title: 'Notifications - OmniTrack' };
+export const metadata = { title: 'Notifications - BridgeWorkspace' };
 
 export default async function NotificationsPage() {
   const session = await getSession();

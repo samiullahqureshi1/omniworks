@@ -4,55 +4,16 @@ import { prisma } from '@/lib/db';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import { cookies } from 'next/headers';
-import { hashPassword, verifyPassword, createSession, destroySession, getSession } from '@/lib/auth';
+import { checkRateLimit, retryAfterMessage } from '@/lib/rate-limit';
+import {
+  hashPassword,
+  verifyPassword,
+  createSession,
+  destroySession,
+  getSession,
+  establishSessionWithLastOrg,
+} from '@/lib/auth';
 
-/**
- * Create the session for a freshly authenticated user, but restore the org they
- * last switched to (persisted in the `omniwork_last_org` cookie) when they still
- * have access to it:
- *   - member/shared org  -> re-issue the session as that org's user identity
- *   - child/owned org     -> base identity + active-org override cookie
- * Falls back to the user's own org.
- */
-async function establishSessionWithLastOrg(baseUser: {
-  id: string; email: string; name: string; role: any; organizationId: string;
-}) {
-  const cookieStore = await cookies();
-  const lastOrg = cookieStore.get('omniwork_last_org')?.value;
-
-  if (lastOrg && lastOrg !== baseUser.organizationId) {
-    const membership = await prisma.user.findFirst({
-      where: { email: baseUser.email, organizationId: lastOrg, status: 'ACTIVE' },
-      select: { id: true, email: true, name: true, role: true, organizationId: true },
-    });
-    if (membership) {
-      await createSession(membership);
-      cookieStore.delete('omniwork_active_org');
-      return;
-    }
-
-    const child = await prisma.organization.findFirst({
-      where: {
-        id: lastOrg,
-        OR: [{ ownerUserId: baseUser.id }, { parentOrganizationId: baseUser.organizationId }],
-      },
-      select: { id: true },
-    });
-    if (child) {
-      await createSession(baseUser);
-      cookieStore.set('omniwork_active_org', lastOrg, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 7,
-        path: '/',
-      });
-      return;
-    }
-  }
-
-  await createSession(baseUser);
-}
 
 export async function signupAction(formData: FormData) {
   try {
@@ -64,6 +25,12 @@ export async function signupAction(formData: FormData) {
     if (!name || !email || !password || !companyName) {
       return { error: 'All fields are required.' };
     }
+    // Rate limit before touching the database — brute force must not be cheap.
+    const rl = await checkRateLimit('SIGNUP', email);
+    if (!rl.ok) {
+      return { error: `Too many attempts. ${retryAfterMessage(rl.retryAfterMs)}` };
+    }
+
 
     // Check if user already exists as an owner of any organization?
     // Wait, if they sign up again with same email, we shouldn't let them if they already exist globally
@@ -143,6 +110,12 @@ export async function loginAction(formData: FormData) {
     if (!email || !password) {
       return { error: 'Email and password are required.' };
     }
+    // Rate limit before touching the database — brute force must not be cheap.
+    const rl = await checkRateLimit('LOGIN', email);
+    if (!rl.ok) {
+      return { error: `Too many attempts. ${retryAfterMessage(rl.retryAfterMs)}` };
+    }
+
 
     // Find User (pick the first active one)
     const users = await prisma.user.findMany({
@@ -176,8 +149,32 @@ export async function loginAction(formData: FormData) {
   }
 }
 
+/**
+ * Returns the user id parked by the Google callback when that account has 2FA on.
+ * The id lives in a short-lived httpOnly cookie rather than the URL so it is never
+ * exposed in browser history, referrers or logs.
+ */
+export async function getPendingTwoFactorUserAction() {
+  const cookieStore = await cookies();
+  const userId = cookieStore.get('pending_2fa_user')?.value;
+  if (!userId) return { userId: null };
+
+  const user = await prisma.user.findFirst({
+    where: { id: userId, status: 'ACTIVE', twoFactorEnabled: true },
+    select: { id: true },
+  });
+
+  return { userId: user?.id ?? null };
+}
+
 export async function verifyTwoFactorLoginAction(userId: string, token: string) {
   try {
+    // A 6-digit TOTP is only ~1e6 possibilities; without a limit it is guessable.
+    const rl = await checkRateLimit('TWO_FACTOR', userId);
+    if (!rl.ok) {
+      return { error: `Too many attempts. ${retryAfterMessage(rl.retryAfterMs)}` };
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: userId }
     });
@@ -199,6 +196,10 @@ export async function verifyTwoFactorLoginAction(userId: string, token: string) 
     }
 
     await establishSessionWithLastOrg(user);
+
+    // Challenge satisfied — drop the Google-flow handoff cookie.
+    (await cookies()).delete('pending_2fa_user');
+
     return { success: true };
   } catch (error: any) {
     return { error: error.message || 'Failed to verify 2FA' };
@@ -327,6 +328,12 @@ export async function forgotPasswordAction(formData: FormData) {
   try {
     const email = formData.get('email') as string;
     if (!email) return { error: 'Email is required' };
+    // Rate limit before touching the database — brute force must not be cheap.
+    const rl = await checkRateLimit('PASSWORD_RESET', email);
+    if (!rl.ok) {
+      return { error: `Too many attempts. ${retryAfterMessage(rl.retryAfterMs)}` };
+    }
+
 
     // Find all users with this email (might be multiple if in different orgs, but we just update one or all)
     // Actually, usually users have the same password across orgs in this setup if they were added, 
@@ -365,10 +372,10 @@ export async function forgotPasswordAction(formData: FormData) {
       // Note: In production, use the actual domain from env
 
       await transporter.sendMail({
-        from: `"OmniWork Support" <${process.env.EMAIL_USER}>`,
+        from: `"BridgeWorkspace Support" <${process.env.EMAIL_USER}>`,
         to: email,
         replyTo: process.env.EMAIL_USER,
-        subject: 'Reset Your OmniWork Password',
+        subject: 'Reset Your BridgeWorkspace Password',
         text: `You requested a password reset. Click the link to reset your password: ${resetLink}`,
         html: `
 <!DOCTYPE html>
@@ -390,7 +397,7 @@ export async function forgotPasswordAction(formData: FormData) {
     </p>
     <hr style="border: none; border-top: 1px solid #eeeeee; margin: 30px 0 20px 0;" />
     <p style="color: #999999; font-size: 12px; text-align: center; margin: 0;">
-      © ${new Date().getFullYear()} OmniWork. All rights reserved.
+      © ${new Date().getFullYear()} BridgeWorkspace. All rights reserved.
     </p>
   </div>
 </body>
@@ -414,6 +421,12 @@ export async function resetPasswordAction(formData: FormData) {
     if (!token || !password) {
       return { error: 'Token and new password are required.' };
     }
+    // Rate limit before touching the database — brute force must not be cheap.
+    const rl = await checkRateLimit('PASSWORD_RESET', token);
+    if (!rl.ok) {
+      return { error: `Too many attempts. ${retryAfterMessage(rl.retryAfterMs)}` };
+    }
+
 
     const users = await prisma.user.findMany({
       where: {

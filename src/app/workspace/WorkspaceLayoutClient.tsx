@@ -75,11 +75,11 @@ export default function WorkspaceLayoutClient({
       setSelectedTemplate(null);
       setBrowseTemplatesSignal((n) => n + 1);
     };
-    window.addEventListener('omniwork_open_create_project', handleOpenProjectModal);
-    window.addEventListener('omniwork_browse_templates', handleBrowseTemplates);
+    window.addEventListener('bridgeworkspace_open_create_project', handleOpenProjectModal);
+    window.addEventListener('bridgeworkspace_browse_templates', handleBrowseTemplates);
     return () => {
-      window.removeEventListener('omniwork_open_create_project', handleOpenProjectModal);
-      window.removeEventListener('omniwork_browse_templates', handleBrowseTemplates);
+      window.removeEventListener('bridgeworkspace_open_create_project', handleOpenProjectModal);
+      window.removeEventListener('bridgeworkspace_browse_templates', handleBrowseTemplates);
     };
   }, []);
 
@@ -652,7 +652,7 @@ function PlaceholderView({ name, icon: Icon }: { name: string, icon: any }) {
       <div className="flex items-center gap-4 text-xs font-semibold text-slate-400">
         <span>ClickUp Layout Redesign</span>
         <span>•</span>
-        <span>OmniWork AI</span>
+        <span>BridgeWorkspace AI</span>
       </div>
     </div>
   );

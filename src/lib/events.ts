@@ -7,8 +7,21 @@ const globalForEvents = global as unknown as { eventEmitter: EventEmitter };
 export const appEventEmitter =
   globalForEvents.eventEmitter || new EventEmitter();
 
-// Increase MaxListeners if we expect many open browser tabs
-appEventEmitter.setMaxListeners(50);
+/**
+ * Node warns once more than N listeners are attached to the SAME event name.
+ * Every open SSE stream attaches one listener per (channel, event) pair, and all
+ * users in an organization share the `organization:<id>:*` event names — so the old
+ * limit of 50 began emitting MaxListenersExceededWarning at roughly 50 concurrent
+ * users in one org, well under the 100–150 target.
+ *
+ * Listeners are removed on stream abort (see /api/realtime), so a higher ceiling is
+ * safe: the limit exists to catch leaks, not to cap capacity.
+ *
+ * NOTE: this emitter is per-process and does not fan out across instances.
+ * Moving to Redis pub/sub is the follow-up (checklist 2.2).
+ */
+const MAX_EVENT_LISTENERS = Number(process.env.SSE_MAX_LISTENERS) || 2000;
+appEventEmitter.setMaxListeners(MAX_EVENT_LISTENERS);
 
 if (process.env.NODE_ENV !== 'production') {
   globalForEvents.eventEmitter = appEventEmitter;

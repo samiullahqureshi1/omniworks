@@ -1080,7 +1080,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   };
 
   React.useEffect(() => {
-    const savedView = localStorage.getItem("omniwork_task_view");
+    const savedView = localStorage.getItem("bridgeworkspace_task_view");
     if (savedView === "table" || savedView === "kanban") {
       setViewMode(savedView as any);
     }
@@ -1117,8 +1117,8 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
       loadPinnedIds();
     };
 
-    window.addEventListener('omniwork_pins_changed', handlePinsChanged);
-    return () => window.removeEventListener('omniwork_pins_changed', handlePinsChanged);
+    window.addEventListener('bridgeworkspace_pins_changed', handlePinsChanged);
+    return () => window.removeEventListener('bridgeworkspace_pins_changed', handlePinsChanged);
   }, []);
 
   const handleTogglePinTask = (taskId: string) => {
@@ -1134,7 +1134,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
     const targetTask = tasks.find((t: any) => t.id === taskId) || { id: taskId, title: 'Task' };
 
     window.dispatchEvent(
-      new CustomEvent('omniwork_pins_changed', {
+      new CustomEvent('bridgeworkspace_pins_changed', {
         detail: { type: 'task', item: targetTask, pinned: nextPinned },
       })
     );
@@ -1152,7 +1152,7 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
 
   const handleSetViewMode = (mode: 'table' | 'kanban') => {
     setViewMode(mode);
-    localStorage.setItem("omniwork_task_view", mode);
+    localStorage.setItem("bridgeworkspace_task_view", mode);
   };
 
   const [isPending, startTransition] = useTransition();
@@ -1396,8 +1396,11 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
   };
 
   const isClient = currentUser.role === 'CLIENT';
-  const canCreateTask = currentUser.role === 'OWNER' || currentUser.role === 'MASTER_ADMIN' || currentUser.permissions?.task?.create === true ||
-    (currentUser.role === 'MEMBER' && projects.some((p: any) => p.projectManagerId === currentUser.userId));
+  // Clients can never create tasks, regardless of their permission matrix.
+  // (Mirrors the server-side rule in hasPermission — the server re-checks anyway.)
+  const canCreateTask = !isClient && (
+    currentUser.role === 'OWNER' || currentUser.role === 'MASTER_ADMIN' || currentUser.permissions?.task?.create === true ||
+    (currentUser.role === 'MEMBER' && projects.some((p: any) => p.projectManagerId === currentUser.userId)));
   const canManageStatuses = currentUser.role === 'OWNER';
 
   const availableUsers = (isClient
@@ -2309,11 +2312,11 @@ export default function TasksClient({ initialTasks, taskStatuses, projects, user
       <DialogPrimitive.Root open={isFieldsDrawerOpen} onOpenChange={setIsFieldsDrawerOpen}>
         <DialogPrimitive.Portal>
           <DialogPrimitive.Overlay
-            id="omniwork-task-fields-drawer-overlay"
+            id="bridgeworkspace-task-fields-drawer-overlay"
             className="fixed inset-0 z-[9999] transition-opacity bg-black/10"
           />
           <DialogPrimitive.Content
-            id="omniwork-task-fields-drawer"
+            id="bridgeworkspace-task-fields-drawer"
             onInteractOutside={(e) => {
               e.preventDefault();
               setIsFieldsDrawerOpen(false);

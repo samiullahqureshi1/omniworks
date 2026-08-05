@@ -11,7 +11,7 @@ if (globalForPrisma.prisma && ('pinnedChat' in globalForPrisma.prisma) && ('pinn
 } else {
   const connectionString =
     process.env.DATABASE_URL ||
-    'postgresql://postgres:postgres@localhost:5432/omnitrack?schema=public';
+    'postgresql://postgres:postgres@localhost:5432/bridgeworkspace?schema=public';
 
   // Strip sslmode from the connection string and handle it explicitly in pool
   // options to avoid the pg deprecation warning about sslmode=require.
@@ -23,9 +23,25 @@ if (globalForPrisma.prisma && ('pinnedChat' in globalForPrisma.prisma) && ('pinn
     connectionString.includes('cloud') ||
     process.env.NODE_ENV === 'production';
 
+  // Whether we're talking to a connection pooler (Neon's `-pooler` endpoint or
+  // PgBouncer) rather than straight to Postgres.
+  const isPooled =
+    connectionString.includes('-pooler.') || connectionString.includes('pgbouncer=true');
+
+  /**
+   * Connections held PER APP INSTANCE.
+   *
+   * Without a pooler this had to stay small, because every serverless instance
+   * opened its own connections and N instances × 20 exhausted Postgres. Behind a
+   * pooler the pooler does the multiplexing, so each instance only needs enough
+   * sockets to keep its own concurrent queries moving — a smaller pool actually
+   * reduces contention and queueing.
+   */
+  const poolMax = Number(process.env.DB_POOL_MAX) || (isPooled ? 10 : 20);
+
   const pool = new pg.Pool({
     connectionString,
-    max: 20,
+    max: poolMax,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 30000,
     // Explicitly set ssl in pool options instead of sslmode= in the URL.

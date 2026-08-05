@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
         <h2 style="margin:0 0 8px">Reminder: ${title}</h2>
         <p style="margin:0 0 4px"><strong>When:</strong> ${when}</p>
         ${meetLinkHtml}
-        <p style="color:#64748b;margin-top:16px">This is an automated reminder from OmniWork.</p>
+        <p style="color:#64748b;margin-top:16px">This is an automated reminder from BridgeWorkspace.</p>
       </div>`;
 
     const recipients = [m.pm?.email, guestEmail].filter(Boolean) as string[];

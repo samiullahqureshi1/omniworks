@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { rateLimitShared, RATE_LIMITS, getClientIpFromRequest, retryAfterMessage } from '@/lib/rate-limit';
 import { prisma } from '@/lib/db';
 import { verifyPassword } from '@/lib/auth';
 import jwt from 'jsonwebtoken';
@@ -8,6 +9,15 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-desktop-secret-key-123';
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json();
+
+    const ip = getClientIpFromRequest(request);
+    const rl = await rateLimitShared(`desktop-login:${ip}:${String(email || '').toLowerCase()}`, RATE_LIMITS.LOGIN);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: `Too many attempts. ${retryAfterMessage(rl.retryAfterMs)}` },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } }
+      );
+    }
 
     if (!email || !password) {
       return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });

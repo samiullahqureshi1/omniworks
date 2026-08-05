@@ -16,7 +16,7 @@ export default function MemberTimeTracker({ timeEntries, assignedTasks }: any) {
             <Monitor size={32} />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-foreground">OmniWork Desktop Tracker</h2>
+            <h2 className="text-xl font-bold text-foreground">BridgeWorkspace Desktop Tracker</h2>
             <p className="text-muted-foreground mt-2 max-w-lg text-sm">
               To track time silently without browser interruptions, please use the desktop tracker. 
               The desktop app supports automatic silent screenshots and idle detection.

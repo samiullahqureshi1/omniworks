@@ -15,7 +15,7 @@ export default function DownloadPage() {
                 <span key={i} className="h-1.5 w-1.5 rounded-full bg-black" />
               ))}
             </div>
-            Collabix
+            BridgeWorkspace
           </Link>
 
           <nav className="hidden items-center gap-12 text-[15px] text-black/70 md:flex">

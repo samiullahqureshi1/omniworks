@@ -1,6 +1,11 @@
 import { NextRequest } from 'next/server';
 import { appEventEmitter } from '@/lib/events';
 import { getSession } from '@/lib/auth';
+import {
+  registerPresenceConnection,
+  releasePresenceConnection,
+  touchPresence,
+} from '@/lib/presence';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,10 +42,16 @@ export async function GET(req: NextRequest) {
     start(controller) {
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: 'connected' })}\n\n`));
 
-      // Send a heartbeat comment every 30 seconds to keep the connection alive
+      // This open stream IS the presence signal — no client-side heartbeat needed.
+      registerPresenceConnection(userId, organizationId).catch(() => {});
+
+      // Send a heartbeat comment every 30 seconds to keep the connection alive.
+      // touchPresence is internally rate-limited, so this refreshes `lastSeen`
+      // roughly every 5 minutes rather than on every tick.
       const heartbeatInterval = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(`:\n\n`));
+          touchPresence(userId, organizationId).catch(() => {});
         } catch (e) {
           clearInterval(heartbeatInterval);
         }
@@ -80,6 +91,8 @@ export async function GET(req: NextRequest) {
       req.signal.addEventListener('abort', () => {
         clearInterval(heartbeatInterval);
         boundListeners.forEach(bl => appEventEmitter.off(bl.name, bl.fn));
+        // Marks the user offline only when their LAST stream closes.
+        releasePresenceConnection(userId).catch(() => {});
         try {
           controller.close();
         } catch (e) {

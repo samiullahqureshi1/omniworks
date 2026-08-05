@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { can } from '@/lib/permissions';
+import { processMeetingTranscript } from '@/lib/meetings/transcript';
 import { revalidatePath } from 'next/cache';
 import { createCalendarMeetEvent } from '@/lib/google/calendar';
 import { renewGoogleMeetWorkspaceSubscription } from '@/lib/google/workspaceEvents';
@@ -48,16 +49,26 @@ export async function getPlannerMeetingsAction() {
 
     // Auto-update past SCHEDULED meetings to COMPLETED if endTime has passed
     const now = new Date();
-    await prisma.meeting.updateMany({
-      where: {
-        organizationId,
-        status: 'SCHEDULED',
-        endTime: { lt: now },
-      },
-      data: {
-        status: 'COMPLETED',
-      },
+    const justEnded = await prisma.meeting.findMany({
+      where: { organizationId, status: 'SCHEDULED', endTime: { lt: now } },
+      select: { id: true },
     });
+
+    if (justEnded.length > 0) {
+      await prisma.meeting.updateMany({
+        where: { id: { in: justEnded.map((m) => m.id) } },
+        data: { status: 'COMPLETED' },
+      });
+
+      // A meeting has just completed → pull its transcript and generate notes.
+      // Deliberately not awaited: the page must not block on Google + the model.
+      // The cron re-runs anything that doesn't finish here.
+      for (const m of justEnded) {
+        processMeetingTranscript(m.id).catch((e) =>
+          console.error('[planner] transcript processing failed for', m.id, e)
+        );
+      }
+    }
 
     const meetings = await prisma.meeting.findMany({
       where,
@@ -157,7 +168,7 @@ export async function createScheduledMeetingAction(input: CreateScheduledMeeting
         const googleRes = await createCalendarMeetEvent({
           refreshToken: orgSettings.googleRefreshToken,
           summary: input.title?.trim() || `Meeting: ${input.leadName?.trim() || 'Scheduled Call'}`,
-          description: input.leadNote?.trim() || 'Scheduled via OmniWork Workspace',
+          description: input.leadNote?.trim() || 'Scheduled via BridgeWorkspace',
           startIso: start.toISOString(),
           endIso: end.toISOString(),
           timezone: orgSettings.timezone || 'UTC',
@@ -232,7 +243,7 @@ export async function createScheduledMeetingAction(input: CreateScheduledMeeting
             <h2 style="margin-top: 0; color: #0f172a; font-size: 20px;">Meeting Scheduled</h2>
             <p style="font-size: 14px; color: #475569;">Hello ${input.leadName?.trim() || 'Participant'},</p>
             <p style="font-size: 14px; color: #475569;">
-              A new meeting has been scheduled ${projectName ? `for project <strong>${projectName}</strong>` : 'with OmniWork Workspace'}.
+              A new meeting has been scheduled ${projectName ? `for project <strong>${projectName}</strong>` : 'with BridgeWorkspace'}.
             </p>
             
             <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">

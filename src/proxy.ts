@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import * as jwt from 'jsonwebtoken';
 
 const COOKIE_NAME = 'omnitrack_session';
-const JWT_SECRET = process.env.JWT_SECRET || 'omnitrack-super-secret-jwt-key-2026';
 
+/**
+ * This proxy is a UX gate, not a security boundary: it only checks whether a
+ * session cookie is PRESENT, so unauthenticated visitors get bounced to /login
+ * instead of flashing an empty workspace. The token is never verified here — no
+ * signing secret is needed (and none is imported, so it can't leak into the edge
+ * bundle). Every page, server action and API route independently verifies the
+ * session via getSession(), which is where authentication is actually enforced.
+ */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 

@@ -1,7 +1,7 @@
 import { getAccessTokenFromRefresh, fetchGoogleUserInfo } from './calendar';
 import { prisma } from '@/lib/db';
 
-const PUB_SUB_TOPIC = 'projects/email-syncing-472610/topics/omniwork-meet-events';
+const PUB_SUB_TOPIC = 'projects/email-syncing-472610/topics/bridgeworkspace-meet-events';
 
 const VALID_MEET_EVENT_TYPES = [
   'google.workspace.meet.conference.v2.ended',
@@ -12,7 +12,7 @@ const VALID_MEET_EVENT_TYPES = [
 /**
  * Creates a Google Workspace Event subscription for Google Meet conference lifecycle events.
  * If a subscription already exists (409), saves the existing ID and does not throw.
- * Target Topic: projects/email-syncing-472610/topics/omniwork-meet-events
+ * Target Topic: projects/email-syncing-472610/topics/bridgeworkspace-meet-events
  */
 export async function createGoogleMeetWorkspaceSubscription(
   organizationId: string,

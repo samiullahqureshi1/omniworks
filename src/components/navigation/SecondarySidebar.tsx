@@ -61,7 +61,7 @@ export function SecondarySidebar({
         const { getProjectTemplatesAction } = await import('@/app/actions/projects');
         const res = await getProjectTemplatesAction();
         if (res.success && res.templates) {
-          const savedPinned = localStorage.getItem("omniwork_pinned_templates");
+          const savedPinned = localStorage.getItem("bridgeworkspace_pinned_templates");
           const pinnedIds: string[] = savedPinned ? JSON.parse(savedPinned) : [];
           const filtered = res.templates.filter((t: any) => pinnedIds.includes(t.id)).slice(0, 5);
           setPinnedTemplates(filtered);
@@ -144,14 +144,14 @@ export function SecondarySidebar({
     };
 
     window.addEventListener('storage', handleSync);
-    window.addEventListener('omniwork_templates_pinned_changed', handleSync);
-    window.addEventListener('omniwork_browse_templates', handleSync);
-    window.addEventListener('omniwork_pins_changed', handleSync);
+    window.addEventListener('bridgeworkspace_templates_pinned_changed', handleSync);
+    window.addEventListener('bridgeworkspace_browse_templates', handleSync);
+    window.addEventListener('bridgeworkspace_pins_changed', handleSync);
     return () => {
       window.removeEventListener('storage', handleSync);
-      window.removeEventListener('omniwork_templates_pinned_changed', handleSync);
-      window.removeEventListener('omniwork_browse_templates', handleSync);
-      window.removeEventListener('omniwork_pins_changed', handleSync);
+      window.removeEventListener('bridgeworkspace_templates_pinned_changed', handleSync);
+      window.removeEventListener('bridgeworkspace_browse_templates', handleSync);
+      window.removeEventListener('bridgeworkspace_pins_changed', handleSync);
     };
   }, [activeTab]);
 
@@ -159,7 +159,7 @@ export function SecondarySidebar({
     // 0ms Optimistic unpin
     setPinnedTasks((prev) => prev.filter((t) => t.id !== taskId));
     window.dispatchEvent(
-      new CustomEvent('omniwork_pins_changed', {
+      new CustomEvent('bridgeworkspace_pins_changed', {
         detail: { type: 'task', item: { id: taskId }, pinned: false },
       })
     );
@@ -176,7 +176,7 @@ export function SecondarySidebar({
     // 0ms Optimistic unpin
     setPinnedChats((prev) => prev.filter((c) => c.id !== chat.id));
     window.dispatchEvent(
-      new CustomEvent('omniwork_pins_changed', {
+      new CustomEvent('bridgeworkspace_pins_changed', {
         detail: { type: 'chat', item: chat, pinned: false },
       })
     );

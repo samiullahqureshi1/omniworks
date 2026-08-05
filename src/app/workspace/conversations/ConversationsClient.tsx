@@ -330,7 +330,7 @@ export default function ConversationsClient({
         const n = new Notification(title, {
           body: body || 'New Message',
           icon: '/favicon.ico',
-          tag: 'omniwork-chat'
+          tag: 'bridgeworkspace-chat'
         });
         n.onclick = () => {
           window.focus();

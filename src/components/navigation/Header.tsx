@@ -10,6 +10,7 @@ import { getMyAssignedTasksAction } from '@/app/actions/tasks';
 import { startTimerAction, stopTimerAction, getActiveTimerAction, reportActivityAction, uploadScreenshotAction, clearTrackedTimeAction } from '@/app/actions/tracking';
 import { requestAdditionalHoursAction } from '@/app/actions/hoursRequests';
 import { getMyNotificationsAction, markNotificationReadAction } from '@/app/actions/notifications';
+import { useRealtime } from '@/hooks/useRealtime';
 import { toast } from 'sonner';
 
 interface HeaderProps {
@@ -71,7 +72,8 @@ export function Header({
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [isNotifOpen, setIsNotifOpen] = React.useState(false);
   const [isLoadingNotifs, setIsLoadingNotifs] = React.useState(false);
-  const notifPollingRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  // Shares the workspace layout's existing SSE stream (see useRealtime).
+  const { lastEvent } = useRealtime([]);
 
   // Activity listeners to track real-time user interaction
   React.useEffect(() => {
@@ -129,14 +131,16 @@ export function Header({
     }
   }, []);
 
-  // Poll notifications every 30s
+  // Notifications are pushed, not polled. This shares the SSE stream the workspace
+  // layout already holds open, so it costs no extra connection. The previous 30s
+  // poll cost one session lookup + one query per user per 30s.
   React.useEffect(() => {
     fetchNotifications();
-    notifPollingRef.current = setInterval(fetchNotifications, 30000);
-    return () => {
-      if (notifPollingRef.current) clearInterval(notifPollingRef.current);
-    };
   }, [fetchNotifications]);
+
+  React.useEffect(() => {
+    if (lastEvent) fetchNotifications();
+  }, [lastEvent, fetchNotifications]);
 
   // Fetch active timer on mount
   React.useEffect(() => {
@@ -185,7 +189,7 @@ export function Header({
         clearInterval(check);
         handleStopTimer('Auto-stopped after 1 hour of continuous tracking.');
         toast.info('⏱ Timer auto-stopped after 1 hour. Please restart to continue.', { duration: 10000 });
-        fireOSNotification('OmniWork — Timer Auto-Stopped', 'Your 1-hour tracking session has ended. Restart to continue tracking.');
+        fireOSNotification('BridgeWorkspace — Timer Auto-Stopped', 'Your 1-hour tracking session has ended. Restart to continue tracking.');
       }
     }, 10000);
     return () => clearInterval(check);
@@ -207,7 +211,7 @@ export function Header({
         setIsTimerSleeping(false);
         const msg = `⏱ Timer auto-stopped: allocated hours reached for "${res.taskTitle || 'task'}".`;
         toast.warning(msg, { duration: 10000 });
-        fireOSNotification('OmniWork — Allocated Hours Reached', `Your timer was stopped. Allocated hours for "${res.taskTitle || 'the task'}" have been used up.`);
+        fireOSNotification('BridgeWorkspace — Allocated Hours Reached', `Your timer was stopped. Allocated hours for "${res.taskTitle || 'the task'}" have been used up.`);
         // Refresh notifications
         fetchNotifications();
         return;
@@ -216,7 +220,7 @@ export function Header({
       if (res?.isSleeping && !isTimerSleeping) {
         setIsTimerSleeping(true);
         toast.info('😴 Tracker sleeping — no activity detected for 5 minutes. Idle time won\'t be saved.', { duration: 6000 });
-        fireOSNotification('OmniWork — Tracker Sleeping', 'No activity for 5 minutes. Move your mouse to wake it up.');
+        fireOSNotification('BridgeWorkspace — Tracker Sleeping', 'No activity for 5 minutes. Move your mouse to wake it up.');
       } else if (res?.wokeUp && isTimerSleeping) {
         setIsTimerSleeping(false);
         toast.success('✅ Tracker resumed!', { duration: 3000 });
@@ -247,7 +251,7 @@ export function Header({
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = '#38bdf8';
         ctx.font = 'bold 22px sans-serif';
-        ctx.fillText(`OmniWork Realtime Screenshot Log - ${new Date().toLocaleTimeString()}`, 30, 50);
+        ctx.fillText(`BridgeWorkspace Realtime Screenshot Log - ${new Date().toLocaleTimeString()}`, 30, 50);
         ctx.fillStyle = '#94a3b8';
         ctx.font = '14px sans-serif';
         ctx.fillText(`User: ${user?.name || 'Member'} | Page: ${window.location.pathname}`, 30, 85);
@@ -360,7 +364,7 @@ export function Header({
     } else {
       setIsHoursRequestModalOpen(false);
       toast.success(`Request for ${hrs}h submitted! Owner/PM will be notified.`, { duration: 6000 });
-      fireOSNotification('OmniWork — Request Submitted', `Your request for ${hrs}h on "${hoursRequestTask.title}" was sent to your Owner/PM.`);
+      fireOSNotification('BridgeWorkspace — Request Submitted', `Your request for ${hrs}h on "${hoursRequestTask.title}" was sent to your Owner/PM.`);
     }
   };
 

@@ -128,8 +128,8 @@ export function ConversationsSidebarPanel({
       loadPins();
     };
 
-    window.addEventListener('omniwork_pins_changed', handlePinsChanged);
-    return () => window.removeEventListener('omniwork_pins_changed', handlePinsChanged);
+    window.addEventListener('bridgeworkspace_pins_changed', handlePinsChanged);
+    return () => window.removeEventListener('bridgeworkspace_pins_changed', handlePinsChanged);
   }, []);
 
   const handleTogglePinProject = (e: React.MouseEvent, project: any) => {
@@ -151,7 +151,7 @@ export function ConversationsSidebarPanel({
 
     // Dispatch 0ms event payload to instantly update SecondarySidebar
     window.dispatchEvent(
-      new CustomEvent('omniwork_pins_changed', {
+      new CustomEvent('bridgeworkspace_pins_changed', {
         detail: { type: 'chat', item: chatItem, pinned: nextPinned },
       })
     );
@@ -197,7 +197,7 @@ export function ConversationsSidebarPanel({
 
     // Dispatch 0ms event payload to instantly update SecondarySidebar
     window.dispatchEvent(
-      new CustomEvent('omniwork_pins_changed', {
+      new CustomEvent('bridgeworkspace_pins_changed', {
         detail: { type: 'chat', item: chatItem, pinned: nextPinned },
       })
     );

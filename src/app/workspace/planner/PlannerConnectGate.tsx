@@ -135,7 +135,7 @@ export default function PlannerConnectGate({ isOwner }: { isOwner: boolean }) {
         <p>
           Connect your calendar to manage events, time<br className={styles.desktopBreak} />
           block your work, and take meeting notes -<br className={styles.desktopBreak} />
-          powered by OmniWork AI.
+          powered by BridgeWorkspace AI.
         </p>
       </div>
 

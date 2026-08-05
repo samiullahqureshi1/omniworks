@@ -48,3 +48,7 @@ desktop/node_modules/
 test_query.js
 test_sync.js
 desktop/dist/
+
+# Turbopack's persistent dev cache grows without bound (it reached 26 GB here).
+# Clear it with `rm -rf .next` if compiles start crawling.
+.next/dev/cache/

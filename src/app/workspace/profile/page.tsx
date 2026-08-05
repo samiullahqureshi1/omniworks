@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Building2, Mail, Shield, CircleUserRound, Clock, CheckCircle2 } from 'lucide-react';
 
 export const metadata = {
-  title: 'My Profile - Omniwork',
+  title: 'My Profile - BridgeWorkspace',
   description: 'Manage your profile and account settings',
 };
 

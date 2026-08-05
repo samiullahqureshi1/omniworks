@@ -514,7 +514,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
         }}
         title="Add New User"
         description="Send an invitation to join your workspace organization."
-        className="max-w-[520px]"
+        className="sm:max-w-[520px]"
         footer={
           <>
             <FormDialogCancelButton onClick={() => {
@@ -528,7 +528,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
         }
       >
         {/* Tab switcher */}
-        <div className="flex gap-0 px-6 border-b border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#1f1f1f]">
+        <div className="flex gap-0 px-6 border-b border-slate-200/80 dark:border-white/10 bg-white dark:bg-[#1f1f1f] shrink-0">
           <button
             type="button"
             onClick={() => setAddTab('details')}
@@ -579,7 +579,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
           </div>
 
           {/* ── Permissions Tab ── */}
-          <div className={`px-6 pt-5 pb-6 ${addTab === 'permissions' ? '' : 'hidden'}`}>
+          <div className={`px-4 sm:px-6 pt-5 pb-6 overflow-y-auto ${addTab === 'permissions' ? '' : 'hidden'}`}>
             <p className="text-[12px] text-slate-400 dark:text-slate-500 mb-4">
               Control what this user can do across each module.
             </p>
@@ -727,7 +727,7 @@ export default function UsersClient({ initialUsers, currentUser }: { initialUser
             </div>
 
             {/* ── Permissions Tab ── */}
-            <div className={`px-6 pt-5 pb-6 ${editTab === 'permissions' ? '' : 'hidden'}`}>
+            <div className={`px-4 sm:px-6 pt-5 pb-6 overflow-y-auto ${editTab === 'permissions' ? '' : 'hidden'}`}>
               <p className="text-[12px] text-slate-400 dark:text-slate-500 mb-4">
                 Control what this user can do across each module.
               </p>

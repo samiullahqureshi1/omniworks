@@ -61,8 +61,8 @@ async function resolveMeetingCodeFromConferenceRecord(
 
 /**
  * Google Cloud Pub/Sub Webhook Handler for Google Meet Events
- * Topic: projects/email-syncing-472610/topics/omniwork-meet-events
- * Subscription: projects/email-syncing-472610/subscriptions/omniwork-meet-events-sub
+ * Topic: projects/email-syncing-472610/topics/bridgeworkspace-meet-events
+ * Subscription: projects/email-syncing-472610/subscriptions/bridgeworkspace-meet-events-sub
  */
 export async function POST(req: NextRequest) {
   const timestamp = new Date().toISOString();
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
 
     const subscriptionName =
       body?.subscription ||
-      'projects/email-syncing-472610/subscriptions/omniwork-meet-events-sub';
+      'projects/email-syncing-472610/subscriptions/bridgeworkspace-meet-events-sub';
 
     console.log(`[Google Meet Webhook] Subscription: ${subscriptionName}`);
     console.log(`[Google Meet Webhook] Raw Payload Body:`, JSON.stringify(body, null, 2));
@@ -294,9 +294,9 @@ export async function GET() {
   return NextResponse.json(
     {
       status: 'Operational',
-      topic: 'projects/email-syncing-472610/topics/omniwork-meet-events',
+      topic: 'projects/email-syncing-472610/topics/bridgeworkspace-meet-events',
       subscription:
-        'projects/email-syncing-472610/subscriptions/omniwork-meet-events-sub',
+        'projects/email-syncing-472610/subscriptions/bridgeworkspace-meet-events-sub',
       timestamp: new Date().toISOString(),
     },
     { status: 200 }

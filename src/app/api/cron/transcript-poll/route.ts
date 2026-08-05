@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { fetchMeetTranscriptText } from '@/lib/google/meet';
-import { analyzeTranscript, geminiConfigured } from '@/lib/google/gemini';
+import { processMeetingTranscript } from '@/lib/meetings/transcript';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,87 +24,42 @@ export async function GET(req: NextRequest) {
   const giveUpBefore = new Date(now.getTime() - giveUpMinutes * 60 * 1000);
 
   // Ended meetings that haven't reached a terminal transcript state yet.
+  //
+  // COMPLETED is included deliberately: the meetings page auto-flips SCHEDULED →
+  // COMPLETED once the end time passes, so a previous version of this query (which
+  // only matched SCHEDULED) skipped every meeting the user had already looked at —
+  // meaning their transcript was never fetched.
   const meetings = await prisma.meeting.findMany({
     where: {
-      status: 'SCHEDULED',
+      status: { in: ['SCHEDULED', 'COMPLETED'] },
       endTime: { lt: now, gt: lookback },
       OR: [{ note: { is: null } }, { note: { transcriptStatus: 'PENDING' } }],
     },
-    select: {
-      id: true,
-      organizationId: true,
-      startTime: true,
-      endTime: true,
-      meetLink: true,
-    },
+    select: { id: true, endTime: true },
     take: 25,
   });
 
-  // Cache org refresh tokens for this run.
-  const tokenCache = new Map<string, string | null>();
-  async function orgToken(orgId: string): Promise<string | null> {
-    if (tokenCache.has(orgId)) return tokenCache.get(orgId)!;
-    const s = await prisma.organizationSettings.findUnique({
-      where: { organizationId: orgId },
-      select: { googleRefreshToken: true },
-    });
-    const t = s?.googleRefreshToken || null;
-    tokenCache.set(orgId, t);
-    return t;
-  }
-
-  const outcomes: Array<{ meetingId: string; status: string }> = [];
+  const outcomes: Array<{ meetingId: string; status: string; error?: string }> = [];
 
   for (const m of meetings) {
-    // Ensure a PENDING note row exists so this meeting is tracked.
-    await prisma.meetingNote.upsert({
-      where: { meetingId: m.id },
-      create: { meetingId: m.id, transcriptStatus: 'PENDING' },
-      update: {},
-    });
+    const { outcome, error } = await processMeetingTranscript(m.id);
 
-    const refreshToken = await orgToken(m.organizationId);
-    let transcript: string | null = null;
-    if (refreshToken) {
-      transcript = await fetchMeetTranscriptText({
-        refreshToken,
-        startTime: m.startTime,
-        meetLink: m.meetLink,
-      });
+    if (outcome === 'analyzed' || outcome === 'saved_only') {
+      await prisma.meeting.update({ where: { id: m.id }, data: { status: 'COMPLETED' } });
+      outcomes.push({ meetingId: m.id, status: outcome, ...(error ? { error } : {}) });
+      continue;
     }
 
-    if (transcript && geminiConfigured()) {
-      try {
-        const analysis = await analyzeTranscript(transcript);
-        await prisma.meetingNote.update({
-          where: { meetingId: m.id },
-          data: {
-            summary: analysis.summary,
-            keyPoints: analysis.key_points,
-            actionItems: analysis.action_items as any,
-            notes: analysis.notes,
-            transcriptStatus: 'AVAILABLE',
-          },
-        });
-        await prisma.meeting.update({ where: { id: m.id }, data: { status: 'COMPLETED' } });
-        outcomes.push({ meetingId: m.id, status: 'analyzed' });
-        continue;
-      } catch (e: any) {
-        console.error('[transcript-poll] analysis failed:', e?.message || e);
-        // fall through — will retry next run (or give up below)
-      }
-    }
-
-    // No transcript yet (or analysis failed): give up after the window.
+    // Nothing available yet: give up once the window has elapsed.
     if (m.endTime < giveUpBefore) {
       await prisma.meetingNote.update({
         where: { meetingId: m.id },
         data: { transcriptStatus: 'UNAVAILABLE' },
-      });
+      }).catch(() => {});
       await prisma.meeting.update({ where: { id: m.id }, data: { status: 'COMPLETED' } });
-      outcomes.push({ meetingId: m.id, status: 'unavailable' });
+      outcomes.push({ meetingId: m.id, status: 'unavailable', ...(error ? { error } : {}) });
     } else {
-      outcomes.push({ meetingId: m.id, status: 'pending' });
+      outcomes.push({ meetingId: m.id, status: outcome, ...(error ? { error } : {}) });
     }
   }
 

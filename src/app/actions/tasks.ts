@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/db';
 import { getSession, hasPermission } from '@/lib/auth';
+import { buildPage, toPrismaPageArgs, type PageParams } from '@/lib/pagination';
 import { Priority, Role } from '@prisma/client';
 import { createNotification } from './notifications';
 import { triggerEventRules } from './rules';
@@ -107,7 +108,7 @@ export async function getTaskByIdAction(taskId: string) {
   }
 }
 
-export async function getTasksAction(projectIdFilter?: string) {
+export async function getTasksAction(projectIdFilter?: string, page?: PageParams) {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
@@ -141,6 +142,8 @@ export async function getTasksAction(projectIdFilter?: string) {
       // Owner sees everything (whereClause remains only organizationId and optional project filter)
     }
 
+    const pageArgs = toPrismaPageArgs(page);
+
     const [tasks, activeTimers] = await Promise.all([
       prisma.task.findMany({
         where: whereClause,
@@ -151,6 +154,7 @@ export async function getTasksAction(projectIdFilter?: string) {
           timeEntries: { select: { duration: true } },
         },
         orderBy: { createdAt: 'desc' },
+        ...pageArgs.args,
       }),
       prisma.activeTimer.findMany({
         where: { organizationId: session.organizationId },
@@ -180,7 +184,14 @@ export async function getTasksAction(projectIdFilter?: string) {
       };
     });
 
-    return { success: true, tasks: tasksWithActiveHours };
+    // `tasks` stays an array for existing callers; the cursor fields are additive.
+    const paged = buildPage(tasksWithActiveHours, pageArgs.take);
+    return {
+      success: true,
+      tasks: paged.items,
+      nextCursor: paged.nextCursor,
+      hasMore: paged.hasMore,
+    };
   } catch (error: any) {
     return { error: error.message || 'Failed to fetch tasks.' };
   }

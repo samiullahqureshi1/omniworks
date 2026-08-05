@@ -5,7 +5,7 @@ import SecurityFormsClient from './SecurityFormsClient';
 import { SettingsTabsClient } from '@/components/settings/SettingsTabsClient';
 
 export const metadata = {
-  title: 'Security Settings - Omniwork',
+  title: 'Security Settings - BridgeWorkspace',
   description: 'Manage your security settings',
 };
 

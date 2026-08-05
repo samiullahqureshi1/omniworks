@@ -125,6 +125,9 @@ export const mergeStoredPerms = (stored: unknown): PermissionState => {
 
 // ─── UI ─────────────────────────────────────────────────────────────────────
 
+/** Shared responsive grid: narrower action columns on small screens. */
+const GRID = "grid grid-cols-[1fr_repeat(4,38px)] sm:grid-cols-[1fr_repeat(4,48px)]";
+
 function Checkbox({
   state,
   onClick,
@@ -179,7 +182,7 @@ function ResourceRow({
 
   return (
     <div
-      className={`grid grid-cols-[1fr_repeat(4,48px)] gap-x-1 items-center rounded-[8px] px-3 py-2.5 transition-colors ${
+      className={`${GRID} gap-x-1 items-center rounded-[8px] px-2 sm:px-3 py-2.5 transition-colors ${
         someOn
           ? "bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10"
           : "border border-transparent hover:bg-slate-50/60 dark:hover:bg-white/[0.02]"
@@ -188,12 +191,12 @@ function ResourceRow({
       <button
         type="button"
         onClick={() => onToggleAll(def.key)}
-        className={`flex items-center gap-2.5 text-left group ${indent ? "pl-5" : ""}`}
+        className={`flex items-center gap-2 sm:gap-2.5 text-left group min-w-0 ${indent ? "pl-3 sm:pl-5" : ""}`}
       >
         <Checkbox state={allOn ? "on" : someOn ? "partial" : "off"} onClick={() => onToggleAll(def.key)} />
-        <span className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-700 dark:text-slate-200">
-          <Icon className={`text-[15px] ${def.color}`} />
-          {def.label}
+        <span className="flex items-center gap-1.5 text-[12.5px] sm:text-[13px] font-semibold text-slate-700 dark:text-slate-200 min-w-0">
+          <Icon className={`text-[15px] ${def.color} shrink-0`} />
+          <span className="truncate">{def.label}</span>
         </span>
       </button>
 
@@ -254,63 +257,68 @@ export function PermissionMatrix({
   };
 
   return (
-    <>
-      {/* Column headers */}
-      <div className="grid grid-cols-[1fr_repeat(4,48px)] gap-x-1 mb-2 pr-1">
-        <div />
-        {PERM_ACTIONS.map((action) => (
-          <div
-            key={action}
-            className="text-center text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500"
-          >
-            {action.charAt(0).toUpperCase() + action.slice(1)}
-          </div>
-        ))}
-      </div>
-
-      <div className="space-y-1">
-        {CORE_RESOURCES.map((def) => (
-          <ResourceRow
-            key={def.key}
-            def={def}
-            value={value}
-            onToggleAction={toggleAction}
-            onToggleAll={toggleAll}
-          />
-        ))}
-
-        {/* ── Planner group ── */}
-        <div className="pt-2">
-          <div className="grid grid-cols-[1fr_repeat(4,48px)] gap-x-1 items-center rounded-[8px] px-3 py-2.5 bg-slate-100/70 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10">
-            <button type="button" onClick={toggleAllPlanner} className="flex items-center gap-2.5 text-left">
-              <Checkbox
-                state={plannerAllOn ? "on" : plannerSomeOn ? "partial" : "off"}
-                onClick={toggleAllPlanner}
-              />
-              <span className="flex items-center gap-1.5 text-[13px] font-bold text-slate-800 dark:text-slate-100">
-                <HiCalendar className="text-[15px] text-emerald-500" />
-                Planner
-              </span>
-            </button>
-            <div className="col-span-4 text-[10.5px] text-slate-400 dark:text-slate-500 text-right pr-1">
-              all planner modules
+    // Horizontal scroll on narrow screens keeps the 4 action columns usable instead
+    // of crushing the label column; the inner min-width preserves the grid.
+    <div className="-mx-1 overflow-x-auto">
+      <div className="min-w-[340px] px-1">
+        {/* Column headers — stay visible while the rows below scroll. */}
+        <div className={`${GRID} gap-x-1 mb-2 pr-1 sticky top-0 z-10 bg-white dark:bg-[#1f1f1f] pb-1`}>
+          <div />
+          {PERM_ACTIONS.map((action) => (
+            <div
+              key={action}
+              className="text-center text-[10.5px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500"
+            >
+              {action.charAt(0).toUpperCase() + action.slice(1)}
             </div>
-          </div>
+          ))}
+        </div>
 
-          <div className="space-y-1 mt-1">
-            {PLANNER_RESOURCES.map((def) => (
-              <ResourceRow
-                key={def.key}
-                def={def}
-                value={value}
-                onToggleAction={toggleAction}
-                onToggleAll={toggleAll}
-                indent
-              />
-            ))}
+        {/* Vertical scroller — caps the matrix height so the modal always fits. */}
+        <div className="space-y-1 max-h-[46vh] sm:max-h-[380px] overflow-y-auto custom-scrollbar pr-1">
+          {CORE_RESOURCES.map((def) => (
+            <ResourceRow
+              key={def.key}
+              def={def}
+              value={value}
+              onToggleAction={toggleAction}
+              onToggleAll={toggleAll}
+            />
+          ))}
+
+          {/* ── Planner group ── */}
+          <div className="pt-2">
+            <div className={`${GRID} gap-x-1 items-center rounded-[8px] px-3 py-2.5 bg-slate-100/70 dark:bg-white/[0.06] border border-slate-200 dark:border-white/10`}>
+              <button type="button" onClick={toggleAllPlanner} className="flex items-center gap-2.5 text-left min-w-0">
+                <Checkbox
+                  state={plannerAllOn ? "on" : plannerSomeOn ? "partial" : "off"}
+                  onClick={toggleAllPlanner}
+                />
+                <span className="flex items-center gap-1.5 text-[13px] font-bold text-slate-800 dark:text-slate-100 truncate">
+                  <HiCalendar className="text-[15px] text-emerald-500 shrink-0" />
+                  Planner
+                </span>
+              </button>
+              <div className="col-span-4 text-[10.5px] text-slate-400 dark:text-slate-500 text-right pr-1 hidden sm:block">
+                all planner modules
+              </div>
+            </div>
+
+            <div className="space-y-1 mt-1">
+              {PLANNER_RESOURCES.map((def) => (
+                <ResourceRow
+                  key={def.key}
+                  def={def}
+                  value={value}
+                  onToggleAction={toggleAction}
+                  onToggleAll={toggleAll}
+                  indent
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

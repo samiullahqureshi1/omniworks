@@ -2059,11 +2059,11 @@ console.log("Upload response:", data);
       <DialogPrimitive.Root open={isFieldsDrawerOpen} onOpenChange={setIsFieldsDrawerOpen}>
         <DialogPrimitive.Portal>
           <DialogPrimitive.Overlay 
-            id="omniwork-task-form-fields-drawer-overlay"
+            id="bridgeworkspace-task-form-fields-drawer-overlay"
             className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm transition-opacity" 
           />
           <DialogPrimitive.Content 
-            id="omniwork-task-form-fields-drawer"
+            id="bridgeworkspace-task-form-fields-drawer"
             onInteractOutside={(e) => {
               e.preventDefault(); // Stop Radix from bubbling the outside click to the task Modal
               setIsFieldsDrawerOpen(false); // Only close the Add Field modal

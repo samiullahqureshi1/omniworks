@@ -20,7 +20,7 @@ export async function sendMail(opts: {
       },
     });
     await transporter.sendMail({
-      from: `"OmniWork" <${process.env.EMAIL_USER}>`,
+      from: `"BridgeWorkspace" <${process.env.EMAIL_USER}>`,
       to: Array.isArray(opts.to) ? opts.to.join(', ') : opts.to,
       replyTo: process.env.EMAIL_USER,
       subject: opts.subject,

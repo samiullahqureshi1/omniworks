@@ -4,7 +4,9 @@ import { prisma } from '@/lib/db';
 import { getSession, type UserSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { analyzeTranscript, geminiConfigured } from '@/lib/google/gemini';
+import { analyzeTranscriptWithOpenRouter, openRouterConfigured } from '@/lib/ai/openrouter';
 import { fetchMeetTranscriptText } from '@/lib/google/meet';
+import { processMeetingTranscript } from '@/lib/meetings/transcript';
 import { createTaskAction } from './tasks';
 
 type MeetingRow = {
@@ -61,7 +63,9 @@ export async function analyzeMeetingAction(input: { meetingId: string; transcrip
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
-    if (!geminiConfigured()) return { error: 'Gemini is not configured on the server (GEMINI_API_KEY).' };
+    if (!openRouterConfigured() && !geminiConfigured()) {
+      return { error: 'No AI provider configured on the server (set OPENROUTER_API_KEY).' };
+    }
 
     const meeting = await prisma.meeting.findUnique({
       where: { id: input.meetingId },
@@ -101,23 +105,27 @@ export async function analyzeMeetingAction(input: { meetingId: string; transcrip
       return { error: 'No transcript available yet. Paste the meeting notes/transcript to analyze manually.' };
     }
 
-    const analysis = await analyzeTranscript(transcript);
-
-    const note = await prisma.meetingNote.upsert({
+    // Save the full discussion BEFORE analysing, so the transcript survives even if
+    // the model call fails. (It was previously discarded entirely.)
+    await prisma.meetingNote.upsert({
       where: { meetingId: meeting.id },
-      create: {
-        meetingId: meeting.id,
+      create: { meetingId: meeting.id, rawTranscript: transcript, transcriptStatus: 'PENDING' },
+      update: { rawTranscript: transcript },
+    });
+
+    // OpenRouter is the configured provider; Gemini remains as a fallback.
+    const analysis = openRouterConfigured()
+      ? await analyzeTranscriptWithOpenRouter(transcript)
+      : await analyzeTranscript(transcript);
+
+    const note = await prisma.meetingNote.update({
+      where: { meetingId: meeting.id },
+      data: {
         summary: analysis.summary,
         keyPoints: analysis.key_points,
         actionItems: analysis.action_items as any,
         notes: analysis.notes,
-        transcriptStatus: source,
-      },
-      update: {
-        summary: analysis.summary,
-        keyPoints: analysis.key_points,
-        actionItems: analysis.action_items as any,
-        notes: analysis.notes,
+        rawTranscript: transcript,
         transcriptStatus: source,
       },
     });

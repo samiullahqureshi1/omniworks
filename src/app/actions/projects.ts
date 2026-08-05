@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/db';
 import { getSession, hasPermission } from '@/lib/auth';
 import { requireMembershipCreate, toErrorResponse } from '@/lib/permissions';
+import { buildPage, toPrismaPageArgs, type PageParams } from '@/lib/pagination';
 import { createNotification } from './notifications';
 import {  Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
@@ -59,29 +60,29 @@ export async function quickCreateClientAction(name: string, email: string) {
         });
 
         await transporter.sendMail({
-          from: `"OmniWork" <${process.env.EMAIL_USER}>`,
+          from: `"BridgeWorkspace" <${process.env.EMAIL_USER}>`,
           to: email,
           replyTo: process.env.EMAIL_USER,
-          subject: 'Welcome to OmniWork - Your Client Account Details',
+          subject: 'Welcome to BridgeWorkspace - Your Client Account Details',
           html: `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Welcome to OmniWork</title>
+  <title>Welcome to BridgeWorkspace</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f7f6; padding: 40px 20px; margin: 0; color: #333;">
   <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); overflow: hidden;">
     <div style="background-color: #2563eb; padding: 30px; text-align: center;">
-      <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">OmniWork</h1>
+      <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">BridgeWorkspace</h1>
       <p style="color: #bfdbfe; margin-top: 5px; font-size: 16px;">Client Portal Access</p>
     </div>
     
     <div style="padding: 40px 30px;">
       <h2 style="color: #1e293b; margin-top: 0; font-size: 22px;">Hello ${name},</h2>
       <p style="font-size: 16px; line-height: 1.6; color: #475569;">
-        A client account has been created for you on OmniWork. You can now log in to view project updates, track progress, and communicate directly with the team.
+        A client account has been created for you on BridgeWorkspace. You can now log in to view project updates, track progress, and communicate directly with the team.
       </p>
       
       <div style="background-color: #f8fafc; padding: 25px; border-radius: 8px; margin: 30px 0; border: 1px solid #e2e8f0;">
@@ -101,7 +102,7 @@ export async function quickCreateClientAction(name: string, email: string) {
     
     <div style="background-color: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #e2e8f0;">
       <p style="color: #94a3b8; font-size: 13px; margin: 0;">
-        &copy; ${new Date().getFullYear()} OmniWork. All rights reserved.
+        &copy; ${new Date().getFullYear()} BridgeWorkspace. All rights reserved.
       </p>
     </div>
   </div>
@@ -610,7 +611,7 @@ export async function deleteProjectAction(projectId: string) {
   }
 }
 
-export async function getProjectsAction() {
+export async function getProjectsAction(page?: PageParams) {
   try {
     const session = await getSession();
     if (!session) return { error: 'Unauthorized' };
@@ -633,6 +634,8 @@ export async function getProjectsAction() {
         ];
       }
     }
+
+    const pageArgs = toPrismaPageArgs(page);
 
     const projects = await prisma.project.findMany({
       where: whereClause,
@@ -671,9 +674,18 @@ export async function getProjectsAction() {
         },
       },
       orderBy: { createdAt: 'desc' },
+      ...pageArgs.args,
     });
 
-    return { success: true, projects };
+    // `projects` stays an array so existing callers are unaffected; nextCursor/hasMore
+    // are additive for callers that want to page.
+    const paged = buildPage(projects, pageArgs.take);
+    return {
+      success: true,
+      projects: paged.items,
+      nextCursor: paged.nextCursor,
+      hasMore: paged.hasMore,
+    };
   } catch (error: any) {
     return { error: error.message || 'Failed to fetch projects.' };
   }

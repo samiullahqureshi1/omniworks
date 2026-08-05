@@ -146,7 +146,7 @@ export default function BookingWidget({
             <span>{timeFmt.format(new Date(selected.start))}–{timeFmt.format(new Date(selected.end))}</span>
             <span><Video size={18} /> Web conferencing details to follow.</span>
           </div>
-          <div className={styles.brandFooter}>Powered by <b>OmniWork</b></div>
+          <div className={styles.brandFooter}>Powered by <b>BridgeWorkspace</b></div>
         </section>
       </main>
     );
@@ -159,14 +159,14 @@ export default function BookingWidget({
   return (
     <main className={styles.pageShell}>
       <section className={`${styles.bookingCard} ${selectedDate && !showForm ? styles.withTimes : ''} ${showForm ? styles.withForm : ''}`}>
-        <div className={styles.poweredRibbon} aria-label="Powered by OmniWork">
+        <div className={styles.poweredRibbon} aria-label="Powered by BridgeWorkspace">
           <small>POWERED BY</small>
-          <strong>OmniWork</strong>
+          <strong>BridgeWorkspace</strong>
         </div>
 
         <aside className={styles.eventPanel}>
           <div>
-            <div className={styles.hostName}>{attendeeName || 'OmniWork'}</div>
+            <div className={styles.hostName}>{attendeeName || 'BridgeWorkspace'}</div>
             <h1>{title}</h1>
             <div className={styles.eventMeta}>
               <div><Clock3 /><span>{slotDurationMinutes} min</span></div>

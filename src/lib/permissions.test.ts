@@ -359,6 +359,51 @@ describe('Privilege escalation guards', () => {
   });
 });
 
+// ─── CLIENT creation lockout ───────────────────────────────────────────────
+describe('CLIENT cannot create projects or tasks', () => {
+  it('denies PROJECT_CREATE and TASK_CREATE even when explicitly granted', () => {
+    // A client whose matrix wrongly grants create on both modules.
+    const client = session({
+      role: 'CLIENT',
+      permissions: {
+        project: { view: true, create: true, edit: true, delete: true },
+        task: { view: true, create: true, edit: true, delete: true },
+      },
+    });
+
+    expect(can(client, 'PROJECT_CREATE')).toBe(false);
+    expect(can(client, 'TASK_CREATE')).toBe(false);
+  });
+
+  it('rejects a direct create request from a client with 403', async () => {
+    useSession(session({ role: 'CLIENT', permissions: { project: { create: true }, task: { create: true } } }));
+    await expect(requirePermission('PROJECT_CREATE')).rejects.toBeInstanceOf(PermissionError);
+    await expect(requirePermission('TASK_CREATE')).rejects.toBeInstanceOf(PermissionError);
+  });
+
+  it('blocks a client from planting a task in a project via requireMembershipCreate-style guards', async () => {
+    useSession(session({ role: 'CLIENT', permissions: { task: { create: true } } }));
+    mockedPrisma.task.findFirst.mockResolvedValue({
+      id: 't1', organizationId: ORG_A, projectId: 'p1', assignees: [],
+      project: { id: 'p1', organizationId: ORG_A, projectManagerId: null, clientId: 'user-1' },
+    });
+    await expect(requireTaskAccess('t1', 'TASK_CREATE')).rejects.toBeInstanceOf(PermissionError);
+  });
+
+  it('still lets a client VIEW the work shared with them', () => {
+    const client = session({ role: 'CLIENT', permissions: { project: { view: true }, task: { view: true } } });
+    expect(can(client, 'PROJECT_VIEW')).toBe(true);
+    expect(can(client, 'TASK_VIEW')).toBe(true);
+  });
+
+  it('does not affect non-client roles', () => {
+    const member = session({ role: 'MEMBER', permissions: { project: { create: true }, task: { create: true } } });
+    expect(can(member, 'PROJECT_CREATE')).toBe(true);
+    expect(can(member, 'TASK_CREATE')).toBe(true);
+    expect(can(session({ role: 'OWNER', permissions: {} }), 'PROJECT_CREATE')).toBe(true);
+  });
+});
+
 // ─── Planner sub-modules ───────────────────────────────────────────────────
 describe('Planner sub-modules', () => {
   const planner = [

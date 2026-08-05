@@ -85,7 +85,7 @@ export default function ContactsClient({
     }
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem('omniwork_contacts_columns');
+        const saved = localStorage.getItem('bridgeworkspace_contacts_columns');
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
@@ -149,7 +149,7 @@ export default function ContactsClient({
     const colsArray = Array.from(next);
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem('omniwork_contacts_columns', JSON.stringify(colsArray));
+        localStorage.setItem('bridgeworkspace_contacts_columns', JSON.stringify(colsArray));
       } catch (e) {}
     }
     // Save to Database so preference persists across logins/sessions

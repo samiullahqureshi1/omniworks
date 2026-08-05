@@ -116,7 +116,7 @@ export async function createCalendarMeetEvent(
     attendees: input.attendeeEmails.filter(Boolean).map((email) => ({ email })),
     conferenceData: {
       createRequest: {
-        requestId: `omniwork-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        requestId: `bridgeworkspace-${Date.now()}-${Math.random().toString(16).slice(2)}`,
         conferenceSolutionKey: { type: 'hangoutsMeet' },
       },
     },

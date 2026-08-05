@@ -73,7 +73,7 @@ tracking-tight
 >
 
 
-{/* Omniwork SVG Logo */}
+{/* BridgeWorkspace SVG Logo */}
 
 <svg
 width="30"
@@ -109,7 +109,7 @@ fill="white"
 </svg>
 
 
-Omniwork
+BridgeWorkspace
 
 
 </Link>
@@ -253,7 +253,7 @@ text-sm
 text-black/60
 ">
 
-© 2026 Omniwork. All rights reserved.
+© 2026 BridgeWorkspace. All rights reserved.
 
 </p>
 

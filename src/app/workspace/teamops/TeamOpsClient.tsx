@@ -241,17 +241,17 @@ export default function TeamOpsClient({
   useEffect(() => {
     fetchTemplates();
     fetchRules();
-    const savedPinned = localStorage.getItem("omniwork_pinned_teamops_templates");
+    const savedPinned = localStorage.getItem("bridgeworkspace_pinned_teamops_templates");
     if (savedPinned) {
       try {
         setPinnedTemplateIds(JSON.parse(savedPinned));
       } catch (e) {}
     }
-    const savedDefault = localStorage.getItem("omniwork_default_teamops_template_id");
+    const savedDefault = localStorage.getItem("bridgeworkspace_default_teamops_template_id");
     if (savedDefault) {
       setDefaultTemplateId(savedDefault);
     }
-    const savedView = localStorage.getItem("omniwork_teamops_view");
+    const savedView = localStorage.getItem("bridgeworkspace_teamops_view");
     if (savedView === "TABLE" || savedView === "KANBAN" || savedView === "LIST") {
       setViewMode(savedView);
     }
@@ -262,10 +262,10 @@ export default function TeamOpsClient({
     const newDefault = defaultTemplateId === templateId ? null : templateId;
     setDefaultTemplateId(newDefault);
     if (newDefault) {
-      localStorage.setItem("omniwork_default_teamops_template_id", newDefault);
+      localStorage.setItem("bridgeworkspace_default_teamops_template_id", newDefault);
       toast.success("Template set as default");
     } else {
-      localStorage.removeItem("omniwork_default_teamops_template_id");
+      localStorage.removeItem("bridgeworkspace_default_teamops_template_id");
       toast.success("Default template removed");
     }
   };
@@ -277,9 +277,9 @@ export default function TeamOpsClient({
       const next = isPinned
         ? prev.filter((id) => id !== templateId)
         : [...prev, templateId];
-      localStorage.setItem("omniwork_pinned_teamops_templates", JSON.stringify(next));
+      localStorage.setItem("bridgeworkspace_pinned_teamops_templates", JSON.stringify(next));
       setTimeout(() => {
-        window.dispatchEvent(new Event('omniwork_templates_pinned_changed'));
+        window.dispatchEvent(new Event('bridgeworkspace_templates_pinned_changed'));
       }, 50);
       return next;
     });
@@ -296,9 +296,9 @@ export default function TeamOpsClient({
       setTemplates(templates.filter((t) => t.id !== templateId));
       setPinnedTemplateIds((prev) => {
         const next = prev.filter((id) => id !== templateId);
-        localStorage.setItem("omniwork_pinned_teamops_templates", JSON.stringify(next));
+        localStorage.setItem("bridgeworkspace_pinned_teamops_templates", JSON.stringify(next));
         setTimeout(() => {
-          window.dispatchEvent(new Event('omniwork_templates_pinned_changed'));
+          window.dispatchEvent(new Event('bridgeworkspace_templates_pinned_changed'));
         }, 50);
         return next;
       });

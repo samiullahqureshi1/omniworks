@@ -315,7 +315,7 @@ export default function GlobalCreateProjectModal({
         // Remove from pinned list if deleted
         setPinnedTemplateIds((prev) => {
           const next = prev.filter((id) => id !== templateId);
-          localStorage.setItem("omniwork_pinned_templates", JSON.stringify(next));
+          localStorage.setItem("bridgeworkspace_pinned_templates", JSON.stringify(next));
           return next;
         });
       }
@@ -329,10 +329,10 @@ export default function GlobalCreateProjectModal({
     const newDefault = defaultTemplateId === templateId ? null : templateId;
     setDefaultTemplateId(newDefault);
     if (newDefault) {
-      localStorage.setItem("omniwork_default_project_template_id", newDefault);
+      localStorage.setItem("bridgeworkspace_default_project_template_id", newDefault);
       toast.success("Template set as default");
     } else {
-      localStorage.removeItem("omniwork_default_project_template_id");
+      localStorage.removeItem("bridgeworkspace_default_project_template_id");
       toast.success("Default template removed");
     }
   };
@@ -344,7 +344,7 @@ export default function GlobalCreateProjectModal({
       const next = isPinned
         ? prev.filter((id) => id !== templateId)
         : [...prev, templateId];
-      localStorage.setItem("omniwork_pinned_templates", JSON.stringify(next));
+      localStorage.setItem("bridgeworkspace_pinned_templates", JSON.stringify(next));
       return next;
     });
   };

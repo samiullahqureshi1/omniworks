@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BridgeWorkspaceLogo } from '@/components/brand/Logo';
 import {
   ArrowRight,
   Bell,
@@ -15,7 +16,7 @@ import PricingSection from "@/components/dashboard/PricingSection";
 import TrialSection from "@/components/dashboard/TrialSection";
 import Footer from "@/components/dashboard/Footer";
 
-export default function CollabixHero() {
+export default function BridgeWorkspaceHero() {
   return (
     <>
 <header className="sticky top-4 z-50 mx-auto w-full max-w-[1180px] px-4 pointer-events-none">
@@ -37,44 +38,7 @@ export default function CollabixHero() {
 
 
     {/* Logo */}
-    <div className="flex items-center gap-2 text-[17px] font-semibold tracking-tight">
-
-      {/* Omniwork SVG Logo */}
-      <svg
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className="rounded-[6px]"
-      >
-        <rect
-          width="24"
-          height="24"
-          rx="6"
-          fill="black"
-        />
-
-        <path
-          d="M7 12C7 9.23858 9.23858 7 12 7C14.7614 7 17 9.23858 17 12C17 14.7614 14.7614 17 12 17"
-          stroke="white"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-
-        <circle
-          cx="12"
-          cy="12"
-          r="2"
-          fill="white"
-        />
-
-      </svg>
-
-
-      Omniwork
-
-    </div>
+    <BridgeWorkspaceLogo size={26} className="text-black" />
 
 
 
@@ -175,7 +139,7 @@ export default function CollabixHero() {
 ">
   Boost Your Team's Performance
   <br />
-  with Omniwork
+  with BridgeWorkspace
 </h1>
 
 
@@ -234,7 +198,7 @@ export default function CollabixHero() {
 
       <img
         src="https://cdn.shopify.com/s/files/1/0732/4496/7128/files/Screenshot_1448-02-01_at_10.46.59_PM.png?v=1784138544"
-        alt="Omniwork Dashboard"
+        alt="BridgeWorkspace Dashboard"
         className="
         relative
         z-10
@@ -269,7 +233,7 @@ export default function CollabixHero() {
             ))}
 
             <span className="ml-3 text-sm text-black/70">
-              Join the 10,000+ users trusting Omniwork
+              Join the 10,000+ users trusting BridgeWorkspace
             </span>
 
           </div>

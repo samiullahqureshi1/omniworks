@@ -217,7 +217,7 @@ export default function FeaturesSection() {
 
               <img
                 src="https://cdn.shopify.com/s/files/1/0732/4496/7128/files/Screenshot_1448-02-01_at_10.46.59_PM.png?v=1784138544"
-                alt="Omniwork Dashboard"
+                alt="BridgeWorkspace Dashboard"
                 className="w-full"
               />
 
@@ -272,7 +272,7 @@ items-center
 
       <img
         src="https://cdn.shopify.com/s/files/1/0732/4496/7128/files/Screenshot_1448-02-01_at_11.13.46_PM.png?v=1784139283"
-        alt="Omniwork Team Dashboard"
+        alt="BridgeWorkspace Team Dashboard"
         className="w-full"
       />
 

@@ -3,8 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { mainSidebarItems, bottomSidebarItems, MainSidebarItem } from './NavigationConfig';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Cpu, Video, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 interface MainSidebarProps {
   activeTab: string;
@@ -39,9 +38,10 @@ export function MainSidebar({
     teams: '/workspace/teamops?tab=dashboard',
     conversations: '/workspace/conversations',
     calendar: '/workspace/calendar',
+    rules: '/workspace/rules',
   };
 
-  const activeMainIconTab = ['rules', 'meeting', 'more'].includes(activeTab) ? 'more' : activeTab;
+  const activeMainIconTab = activeTab;
 
   // Custom ClickUp active glow gradient style
   const activeGlowStyle = {
@@ -75,50 +75,6 @@ export function MainSidebar({
         <nav className="flex flex-col items-center gap-1.5 w-full px-0.5">
           {mainSidebarItems.map((item) => {
             const isActive = activeMainIconTab === item.id;
-
-            if (item.id === 'more') {
-              return (
-                <DropdownMenu key={item.id}>
-                  <DropdownMenuTrigger asChild>
-                    <button className="group relative flex flex-col items-center justify-center w-full py-0.5 outline-none">
-                      <div 
-                        className={`w-9 h-9 rounded-full flex items-center justify-center relative transition-all duration-300 ${
-                          isActive ? '' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                        }`}
-                        style={isActive ? activeGlowStyle : undefined}
-                      >
-                        <item.icon size={16} className={isActive ? "text-white scale-110 drop-shadow-[0_2px_8px_rgba(255,255,255,0.4)]" : "transition-colors"} />
-                      </div>
-                      <span className={`text-[8px] mt-0.5 font-bold transition-colors ${
-                        isActive ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'
-                      }`}>
-                        {item.name}
-                      </span>
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="center" side="right" className="w-48 bg-[#18181c] dark:bg-[#151518] text-slate-200 rounded-xl border border-white/10 p-1.5 ml-2 z-50 shadow-xl">
-                    <DropdownMenuItem 
-                      onClick={() => setActiveTab('rules')}
-                      className={`cursor-pointer rounded-lg px-2.5 py-2 text-xs font-semibold flex items-center gap-2 hover:bg-white/5 focus:bg-white/5 ${
-                        activeTab === 'rules' ? 'text-violet-400 font-bold bg-white/5' : 'text-slate-300'
-                      }`}
-                    >
-                      <Cpu size={14} className="shrink-0" />
-                      <span>Automation Rules</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      onClick={() => setActiveTab('meeting')}
-                      className={`cursor-pointer rounded-lg px-2.5 py-2 text-xs font-semibold flex items-center gap-2 hover:bg-white/5 focus:bg-white/5 ${
-                        activeTab === 'meeting' ? 'text-violet-400 font-bold bg-white/5' : 'text-slate-300'
-                      }`}
-                    >
-                      <Video size={14} className="shrink-0" />
-                      <span>Collaboration Space</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              );
-            }
 
             const itemContent = (
               <div

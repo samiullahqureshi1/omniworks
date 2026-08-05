@@ -13,6 +13,13 @@ import {
 import AddManualTimeModal from '@/components/modals/AddManualTimeModal';
 import { formatHours } from '@/lib/utils';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { toast } from 'sonner';
+import {
+  saveReportAction,
+  getSavedReportsAction,
+  deleteSavedReportAction,
+  type ReportConfig,
+} from '@/app/actions/reports';
 
 export default function OwnerTimeDashboard({ initialActiveTimer, timeEntries = [], allUsers = [], allProjects = [], allTasks = [], userRole, currentUserId }: any) {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'timesheet' | 'reports'>('dashboard');
@@ -74,6 +81,165 @@ export default function OwnerTimeDashboard({ initialActiveTimer, timeEntries = [
   const [reportTask, setReportTask] = useState('all');
   const [reportFromDate, setReportFromDate] = useState('2026-07-27');
   const [reportToDate, setReportToDate] = useState('2026-08-02');
+
+  // Saved reports (persisted). Generate alone never writes to the DB — only
+  // "Generate and Save" and "Share Link" do.
+  const [savedReports, setSavedReports] = useState<any[]>([]);
+  const [loadingSaved, setLoadingSaved] = useState(false);
+  const [isSavingReport, setIsSavingReport] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveDialogName, setSaveDialogName] = useState('');
+  const [activeReportName, setActiveReportName] = useState<string | null>(null);
+
+  const currentReportConfig = (): ReportConfig => ({
+    project: reportProject,
+    user: reportUser,
+    task: reportTask,
+    fromDate: reportFromDate,
+    toDate: reportToDate,
+    timePeriod: reportTimePeriod,
+  });
+
+  const applyReportConfig = (cfg: ReportConfig | null) => {
+    if (!cfg) return;
+    setReportProject(cfg.project || 'all');
+    setReportUser(cfg.user || 'all');
+    setReportTask(cfg.task || 'all');
+    if (cfg.fromDate) setReportFromDate(cfg.fromDate);
+    if (cfg.toDate) setReportToDate(cfg.toDate);
+    if (cfg.timePeriod) setReportTimePeriod(cfg.timePeriod);
+  };
+
+  const refreshSavedReports = React.useCallback(async () => {
+    setLoadingSaved(true);
+    const res = await getSavedReportsAction();
+    setLoadingSaved(false);
+    if (res.success && res.reports) setSavedReports(res.reports);
+  }, []);
+
+  // Load once so the Saved Reports badge shows a real count immediately.
+  useEffect(() => {
+    refreshSavedReports();
+  }, [refreshSavedReports]);
+
+  // Open a shared report link: /workspace/time?tab=reports&reportId=...
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const reportId = params.get('reportId');
+    if (!reportId || savedReports.length === 0) return;
+    const match = savedReports.find((r) => r.id === reportId);
+    if (!match) return;
+    setActiveTab('reports');
+    setReportSubTab('quick');
+    applyReportConfig(match.config);
+    setActiveReportName(match.name);
+    setReportGenerated(true);
+  }, [savedReports]);
+
+  const persistReport = async (name: string) => {
+    const res = await saveReportAction({ name, config: currentReportConfig() });
+    if (res.error || !res.success || !res.report) {
+      toast.error(res.error || 'Failed to save report.');
+      return null;
+    }
+    await refreshSavedReports();
+    return res.report;
+  };
+
+  const handleGenerateAndSave = async () => {
+    setReportGenerated(true);
+    setSaveDialogName(`Time Report ${new Date().toLocaleDateString()}`);
+    setSaveDialogOpen(true);
+  };
+
+  const confirmSaveReport = async () => {
+    const name = saveDialogName.trim();
+    if (!name) {
+      toast.error('Please enter a report name.');
+      return;
+    }
+    setIsSavingReport(true);
+    const report = await persistReport(name);
+    setIsSavingReport(false);
+    if (report) {
+      setActiveReportName(report.name);
+      setSaveDialogOpen(false);
+      toast.success('Report saved.');
+    }
+  };
+
+  /** Share Link: persists the report, then copies a shareable URL to the clipboard. */
+  const handleShareLink = async () => {
+    setIsSavingReport(true);
+    const name = activeReportName || `Shared Report ${new Date().toLocaleDateString()}`;
+    const report = await persistReport(name);
+    setIsSavingReport(false);
+    if (!report) return;
+
+    setActiveReportName(report.name);
+    const url = `${window.location.origin}/workspace/time?tab=reports&reportId=${report.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Report saved — share link copied to clipboard.');
+    } catch {
+      // Clipboard can be blocked (insecure context); still give the user the URL.
+      window.prompt('Copy this share link:', url);
+    }
+  };
+
+  const handlePrintReport = () => {
+    if (typeof window !== 'undefined') window.print();
+  };
+
+  const handleExportCsv = () => {
+    const rows: string[][] = [['Project', 'User', 'Task', 'Date', 'Type', 'Minutes']];
+    generatedReportData.projectList.forEach((pGroup: any) => {
+      Object.values(pGroup.userGroups).forEach((uGroup: any) => {
+        uGroup.entries.forEach((e: any) => {
+          rows.push([
+            pGroup.project.name ?? '',
+            uGroup.user.name ?? '',
+            e.taskTitle ?? '',
+            e.dateStr ?? '',
+            e.type ?? '',
+            String(e.mins ?? 0),
+          ]);
+        });
+      });
+    });
+    rows.push(['', '', '', '', 'Grand Total', String(generatedReportData.totalMins)]);
+
+    const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+    const csv = rows.map((r) => r.map(esc).join(',')).join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', `time-report-${reportFromDate}_to_${reportToDate}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+    toast.success('Report exported as CSV.');
+  };
+
+  const handleOpenSavedReport = (r: any) => {
+    applyReportConfig(r.config);
+    setActiveReportName(r.name);
+    setReportSubTab('quick');
+    setReportGenerated(true);
+  };
+
+  const handleDeleteSavedReport = async (id: string) => {
+    const res = await deleteSavedReportAction(id);
+    if (res.error) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success('Report deleted.');
+    refreshSavedReports();
+  };
 
   const [screenshots, setScreenshots] = useState<any[]>([]);
   const [dailyEntries, setDailyEntries] = useState<any[]>([]);
@@ -950,17 +1116,96 @@ export default function OwnerTimeDashboard({ initialActiveTimer, timeEntries = [
             <button
               type="button"
               onClick={() => setReportSubTab('saved')}
-              className="flex items-center gap-1.5 text-sky-600 dark:text-sky-400 hover:underline cursor-pointer py-2"
+              className={`flex items-center gap-1.5 cursor-pointer py-2 ${
+                reportSubTab === 'saved'
+                  ? 'text-slate-900 dark:text-white font-bold'
+                  : 'text-sky-600 dark:text-sky-400 hover:underline'
+              }`}
             >
               <span>Saved Reports</span>
-              <span className="bg-sky-100 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                10
+              {/* Real count from the database, not a placeholder. */}
+              <span className="bg-sky-100 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                {loadingSaved ? '…' : savedReports.length}
               </span>
             </button>
           </div>
 
+          {/* ── SAVED REPORTS SUB-TAB ── */}
+          {reportSubTab === 'saved' && (
+            <div className="-mx-6 bg-white dark:bg-[#1f1f1f] border-b border-slate-200 dark:border-white/10 rounded-none shadow-2xs">
+              {loadingSaved ? (
+                <div className="p-10 text-center text-sm text-slate-400">Loading saved reports…</div>
+              ) : savedReports.length === 0 ? (
+                <div className="p-12 flex flex-col items-center justify-center text-center space-y-3">
+                  <div className="p-3 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full">
+                    <FileText size={28} className="text-slate-400" />
+                  </div>
+                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400 max-w-sm">
+                    No saved reports yet. Use <span className="font-bold">Generate and Save</span> or{' '}
+                    <span className="font-bold">Share Link</span> to save one.
+                  </p>
+                </div>
+              ) : (
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10 font-bold text-slate-700 dark:text-slate-300">
+                    <tr>
+                      <th className="py-2.5 px-4">Report Name</th>
+                      <th className="py-2.5 px-4">Range</th>
+                      <th className="py-2.5 px-4">Saved</th>
+                      <th className="py-2.5 px-4 text-right pr-6">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                    {savedReports.map((r) => (
+                      <tr key={r.id} className="hover:bg-slate-50/60 dark:hover:bg-white/[0.02] text-slate-700 dark:text-slate-300">
+                        <td className="py-2.5 px-4 font-semibold text-slate-900 dark:text-white">{r.name}</td>
+                        <td className="py-2.5 px-4">
+                          {r.config?.fromDate || '—'} → {r.config?.toDate || '—'}
+                        </td>
+                        <td className="py-2.5 px-4">{new Date(r.createdAt).toLocaleDateString()}</td>
+                        <td className="py-2.5 px-4 text-right pr-6">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenSavedReport(r)}
+                              className="border border-slate-300 dark:border-white/10 rounded-[6px] px-2.5 py-1 font-semibold hover:bg-slate-50 dark:hover:bg-white/5"
+                            >
+                              Open
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const url = `${window.location.origin}/workspace/time?tab=reports&reportId=${r.id}`;
+                                try {
+                                  await navigator.clipboard.writeText(url);
+                                  toast.success('Share link copied to clipboard.');
+                                } catch {
+                                  window.prompt('Copy this share link:', url);
+                                }
+                              }}
+                              className="border border-slate-300 dark:border-white/10 rounded-[6px] px-2.5 py-1 font-semibold hover:bg-slate-50 dark:hover:bg-white/5"
+                            >
+                              Copy link
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSavedReport(r.id)}
+                              className="border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 rounded-[6px] px-2.5 py-1 font-semibold hover:bg-red-50 dark:hover:bg-red-950/20"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
           {/* Filter Card Container (Attached edge-to-edge, rounded-none) */}
-          <div className="-mx-6 bg-white dark:bg-[#1f1f1f] border-b border-slate-200 dark:border-white/10 rounded-none p-4 space-y-3 shadow-2xs">
+          <div className={`-mx-6 bg-white dark:bg-[#1f1f1f] border-b border-slate-200 dark:border-white/10 rounded-none p-4 space-y-3 shadow-2xs ${reportSubTab === 'quick' ? '' : 'hidden'}`}>
             {/* Gray Week Navigation Box */}
             <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-[8px] p-3 flex justify-between items-center">
               <div className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100">
@@ -1091,17 +1336,18 @@ export default function OwnerTimeDashboard({ initialActiveTimer, timeEntries = [
 
               <button
                 type="button"
-                onClick={() => setReportGenerated(true)}
-                className="bg-[#0088CC] hover:bg-[#0077B3] text-white font-semibold text-xs px-4 py-2 rounded-[8px] flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all"
+                onClick={handleGenerateAndSave}
+                disabled={isSavingReport}
+                className="bg-[#0088CC] hover:bg-[#0077B3] disabled:opacity-60 text-white font-semibold text-xs px-4 py-2 rounded-[8px] flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all"
               >
                 <Save size={13} />
-                <span>Generate and Save</span>
+                <span>{isSavingReport ? 'Saving…' : 'Generate and Save'}</span>
               </button>
             </div>
           </div>
 
           {/* Results Area */}
-          {!reportGenerated ? (
+          {reportSubTab !== 'quick' ? null : !reportGenerated ? (
             /* Initial State: Funnel Placeholder Box (Attached edge-to-edge, rounded-none) */
             <div className="-mx-6 border border-dashed border-slate-300 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.02] rounded-none p-16 flex flex-col items-center justify-center text-center space-y-3">
               <div className="p-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full shadow-2xs">
@@ -1120,14 +1366,28 @@ export default function OwnerTimeDashboard({ initialActiveTimer, timeEntries = [
                   Grand Total: {generatedReportData.totalMins} mins
                 </span>
 
-                <div className="flex items-center gap-2">
-                  <button type="button" className="border border-slate-300 dark:border-white/10 bg-white dark:bg-[#1f1f1f] text-slate-700 dark:text-slate-200 rounded-[8px] text-xs font-semibold px-3 py-1.5 flex items-center gap-1.5 shadow-2xs hover:bg-slate-50">
-                    <Share2 size={13} /> Share Link
+                <div className="flex items-center gap-2 print:hidden">
+                  <button
+                    type="button"
+                    onClick={handleShareLink}
+                    disabled={isSavingReport}
+                    title="Saves the report and copies a shareable link"
+                    className="border border-slate-300 dark:border-white/10 bg-white dark:bg-[#1f1f1f] text-slate-700 dark:text-slate-200 rounded-[8px] text-xs font-semibold px-3 py-1.5 flex items-center gap-1.5 shadow-2xs hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    <Share2 size={13} /> {isSavingReport ? 'Saving…' : 'Share Link'}
                   </button>
-                  <button type="button" className="border border-slate-300 dark:border-white/10 bg-white dark:bg-[#1f1f1f] text-slate-700 dark:text-slate-200 rounded-[8px] text-xs font-semibold px-3 py-1.5 flex items-center gap-1.5 shadow-2xs hover:bg-slate-50">
+                  <button
+                    type="button"
+                    onClick={handlePrintReport}
+                    className="border border-slate-300 dark:border-white/10 bg-white dark:bg-[#1f1f1f] text-slate-700 dark:text-slate-200 rounded-[8px] text-xs font-semibold px-3 py-1.5 flex items-center gap-1.5 shadow-2xs hover:bg-slate-50"
+                  >
                     <Printer size={13} /> Print
                   </button>
-                  <button type="button" className="border border-slate-300 dark:border-white/10 bg-white dark:bg-[#1f1f1f] text-slate-700 dark:text-slate-200 rounded-[8px] text-xs font-semibold px-3 py-1.5 flex items-center gap-1.5 shadow-2xs hover:bg-slate-50">
+                  <button
+                    type="button"
+                    onClick={handleExportCsv}
+                    className="border border-slate-300 dark:border-white/10 bg-white dark:bg-[#1f1f1f] text-slate-700 dark:text-slate-200 rounded-[8px] text-xs font-semibold px-3 py-1.5 flex items-center gap-1.5 shadow-2xs hover:bg-slate-50"
+                  >
                     <Download size={13} /> Export as CSV
                   </button>
                 </div>
@@ -1198,6 +1458,57 @@ export default function OwnerTimeDashboard({ initialActiveTimer, timeEntries = [
               </div>
             </div>
           )}
+
+          {/* Save-report name dialog (only shown for "Generate and Save") */}
+          {saveDialogOpen && (
+            <div
+              className="fixed inset-0 z-[9999] bg-slate-950/45 backdrop-blur-[1px] flex items-center justify-center p-4 print:hidden"
+              onClick={() => setSaveDialogOpen(false)}
+            >
+              <div
+                className="w-full max-w-sm bg-white dark:bg-[#1f1f1f] border border-slate-200 dark:border-white/10 rounded-[10px] shadow-2xl overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="px-5 py-4 border-b border-slate-200/80 dark:border-white/10">
+                  <h3 className="text-[15px] font-bold text-slate-900 dark:text-white">Save report</h3>
+                  <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    Saved reports keep your filters and re-run against current data.
+                  </p>
+                </div>
+                <div className="px-5 py-4">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
+                    Report name
+                  </label>
+                  <input
+                    autoFocus
+                    value={saveDialogName}
+                    onChange={(e) => setSaveDialogName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') confirmSaveReport(); }}
+                    placeholder="e.g. August client hours"
+                    className="w-full border border-slate-300 dark:border-white/10 dark:bg-[#151518] dark:text-white rounded-[8px] text-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  />
+                </div>
+                <div className="px-5 py-3 border-t border-slate-200/80 dark:border-white/10 bg-slate-50/60 dark:bg-[#19191c] flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSaveDialogOpen(false)}
+                    disabled={isSavingReport}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-[8px] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmSaveReport}
+                    disabled={isSavingReport}
+                    className="bg-[#0088CC] hover:bg-[#0077B3] disabled:opacity-60 text-white font-semibold text-xs px-4 py-1.5 rounded-[8px]"
+                  >
+                    {isSavingReport ? 'Saving…' : 'Save report'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1218,6 +1529,57 @@ export default function OwnerTimeDashboard({ initialActiveTimer, timeEntries = [
           defaultDate={selectedDate.toISOString().split('T')[0]}
           defaultUserId={filterUser}
         />
+      )}
+
+      {/* Name-the-report dialog (shown by "Generate and Save") */}
+      {saveDialogOpen && (
+        <div
+          className="fixed inset-0 z-[9999] bg-slate-950/45 backdrop-blur-[1px] flex items-center justify-center p-4 print:hidden"
+          onClick={() => !isSavingReport && setSaveDialogOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm bg-white dark:bg-[#1f1f1f] border border-slate-200 dark:border-white/10 rounded-[10px] shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b border-slate-200/80 dark:border-white/10">
+              <h3 className="text-[15px] font-bold text-slate-900 dark:text-white">Save report</h3>
+              <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Saved reports keep their filters and re-run against current time entries.
+              </p>
+            </div>
+            <div className="px-5 py-4">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
+                Report name
+              </label>
+              <input
+                autoFocus
+                value={saveDialogName}
+                onChange={(e) => setSaveDialogName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') confirmSaveReport(); }}
+                placeholder="e.g. August client hours"
+                className="w-full border border-slate-300 dark:border-white/10 dark:bg-[#151518] dark:text-white rounded-[8px] text-sm px-3 py-2 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              />
+            </div>
+            <div className="px-5 py-3 border-t border-slate-200/80 dark:border-white/10 bg-slate-50/60 dark:bg-[#19191c] flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={isSavingReport}
+                onClick={() => setSaveDialogOpen(false)}
+                className="text-xs font-semibold px-3 py-2 rounded-[8px] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSavingReport}
+                onClick={confirmSaveReport}
+                className="bg-[#0088CC] hover:bg-[#0077B3] text-white text-xs font-semibold px-4 py-2 rounded-[8px] disabled:opacity-60"
+              >
+                {isSavingReport ? 'Saving…' : 'Save report'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

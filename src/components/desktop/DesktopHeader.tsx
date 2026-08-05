@@ -177,7 +177,7 @@ export default function DesktopHeader() {
           <Zap className="w-4 h-4 text-white fill-white" />
         </div>
         <div>
-          <h1 className="text-sm font-black tracking-tight leading-none text-white">OmniWork</h1>
+          <h1 className="text-sm font-black tracking-tight leading-none text-white">BridgeWorkspace</h1>
           <span className="text-[10px] font-bold text-slate-400">Desktop Client</span>
         </div>
       </div>

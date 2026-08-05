@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { rateLimitShared, RATE_LIMITS, retryAfterMessage } from '@/lib/rate-limit';
 import { getSession } from '@/lib/auth';
 
 export async function POST(req: Request) {
@@ -8,6 +9,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const rl = await rateLimitShared(`upload:${session.userId}`, RATE_LIMITS.UPLOAD);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: `Too many uploads. ${retryAfterMessage(rl.retryAfterMs)}` },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } }
+      );
+    }
+
     const formData = await req.formData();
     const file = formData.get('file') as File;
     if (!file) {
@@ -15,7 +24,7 @@ export async function POST(req: Request) {
     }
 
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'dqywiw0x2';
-    const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET || 'omniwork_preset';
+    const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET || 'bridgeworkspace_preset';
     const apiKey = process.env.CLOUDINARY_API_KEY;
 
     // Build form data for Cloudinary Upload API
@@ -25,7 +34,7 @@ export async function POST(req: Request) {
     if (apiKey) {
       cloudinaryFormData.append('api_key', apiKey);
     }
-    cloudinaryFormData.append('folder', 'omniwork_attachments');
+    cloudinaryFormData.append('folder', 'bridgeworkspace_attachments');
 
     const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
       method: 'POST',

@@ -47,7 +47,7 @@ export async function generateTwoFactorSecretAction() {
     if (!user) return { error: 'User not found' };
 
     // Generate secret
-    const secretInfo = speakeasy.generateSecret({ name: `Omniwork (${user.email})` });
+    const secretInfo = speakeasy.generateSecret({ name: `BridgeWorkspace (${user.email})` });
     const secret = secretInfo.base32;
     
     // Save secret temporarily in DB (or overwrite existing if they restart setup)

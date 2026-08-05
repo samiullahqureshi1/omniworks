@@ -40,7 +40,9 @@ export function FormDialog({
         overlayClassName="bg-slate-950/45 backdrop-blur-[1px]"
         onPointerDownOutside={(event) => event.preventDefault()}
         className={cn(
-          "w-[calc(100%-2rem)] max-w-md p-0 gap-0 flex flex-col rounded-[8px] sm:rounded-[8px] overflow-hidden border-slate-200 dark:border-white/10 bg-white dark:bg-[#1f1f1f] shadow-[0_24px_70px_rgba(0,0,0,0.28)] [&>button]:right-5 [&>button]:top-5 [&>button]:text-slate-400 [&>button]:opacity-100 [&>button_svg]:size-5",
+          // max-h + flex-col keeps the header and footer pinned while the body scrolls,
+          // so the dialog never overflows short viewports on any screen size.
+          "w-[calc(100%-2rem)] max-w-md max-h-[90dvh] p-0 gap-0 flex flex-col rounded-[8px] sm:rounded-[8px] overflow-hidden border-slate-200 dark:border-white/10 bg-white dark:bg-[#1f1f1f] shadow-[0_24px_70px_rgba(0,0,0,0.28)] [&>button]:right-5 [&>button]:top-5 [&>button]:text-slate-400 [&>button]:opacity-100 [&>button_svg]:size-5",
           className
         )}
       >
