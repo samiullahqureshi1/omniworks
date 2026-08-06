@@ -14,6 +14,7 @@ import CollaborationSection from "@/components/dashboard/CollaborationSection";
 import ToolsSection from "@/components/dashboard/ToolsSection";
 import PricingSection from "@/components/dashboard/PricingSection";
 import TrialSection from "@/components/dashboard/TrialSection";
+import PrivacySection from "@/components/dashboard/PrivacySection";
 import Footer from "@/components/dashboard/Footer";
 
 export default function BridgeWorkspaceHero() {
@@ -52,21 +53,16 @@ export default function BridgeWorkspaceHero() {
       md:flex
     ">
 
-      <Link href="#product" className="hover:text-black">
-        Product
+      <Link href="#features" className="hover:text-black">
+        Features
       </Link>
 
-      <Link href="#changelog" className="hover:text-black">
-        Changelog
-      </Link>
-
-      <Link href="#customers" className="hover:text-black">
-        Customers
-      </Link>
-
-      <Link href="#pricing" className="flex items-center gap-1 hover:text-black">
+      <Link href="#pricing" className="hover:text-black">
         Pricing
-        <span className="text-[10px]">⌄</span>
+      </Link>
+
+      <Link href="#privacy" className="hover:text-black">
+        Privacy
       </Link>
 
     </nav>
@@ -266,9 +262,7 @@ export default function BridgeWorkspaceHero() {
 <div id="features"><FeaturesSection/></div>
 <CollaborationSection/>
 <div id="pricing"><PricingSection/></div>
-{/* <div id="tools"><ToolsSection/></div> */}
-
-{/* <TrialSection/> */}
+<PrivacySection/>
 <Footer/>
     </>
     
