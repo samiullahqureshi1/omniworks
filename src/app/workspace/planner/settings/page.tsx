@@ -33,7 +33,7 @@ export default async function PlannerSettingsPage({
     );
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://bridgeworkspace.com';
 
   return (
     <AvailabilitySettingsClient

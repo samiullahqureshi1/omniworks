@@ -258,7 +258,10 @@ export default function AvailabilitySettingsClient({
     return () => clearTimeout(timer);
   }, [s]);
 
-  const generalBookingUrl = `${appUrl || ''}/book?org=${encodeURIComponent(orgParam)}`;
+  const baseUrl = (appUrl && appUrl !== 'http://localhost:3000')
+    ? appUrl
+    : (typeof window !== 'undefined' ? window.location.origin : (appUrl || 'https://bridgeworkspace.com'));
+  const generalBookingUrl = `${baseUrl}/book?org=${encodeURIComponent(orgParam)}`;
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-16">

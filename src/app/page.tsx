@@ -15,6 +15,7 @@ import ToolsSection from "@/components/dashboard/ToolsSection";
 import PricingSection from "@/components/dashboard/PricingSection";
 import TrialSection from "@/components/dashboard/TrialSection";
 import PrivacySection from "@/components/dashboard/PrivacySection";
+import AppPurposeSection from "@/components/dashboard/AppPurposeSection";
 import Footer from "@/components/dashboard/Footer";
 
 export default function BridgeWorkspaceHero() {
@@ -52,6 +53,10 @@ export default function BridgeWorkspaceHero() {
       text-black/60
       md:flex
     ">
+
+      <Link href="#about-app" className="hover:text-black">
+        About
+      </Link>
 
       <Link href="#features" className="hover:text-black">
         Features
@@ -259,6 +264,7 @@ export default function BridgeWorkspaceHero() {
 
 </section>
 
+<AppPurposeSection/>
 <div id="features"><FeaturesSection/></div>
 <CollaborationSection/>
 <div id="pricing"><PricingSection/></div>
