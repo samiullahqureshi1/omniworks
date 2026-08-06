@@ -291,7 +291,7 @@ Privacy Policy
 </Link>
 
 
-<Link href="/terms">
+<Link href="/terms-and-conditions">
 Terms & Conditions
 </Link>
 
